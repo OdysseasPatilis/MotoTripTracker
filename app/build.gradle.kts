@@ -2,6 +2,8 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.kotlin.serialization)
+    id("io.objectbox")
 }
 
 android {
@@ -49,6 +51,26 @@ dependencies {
     implementation(libs.androidx.compose.ui.graphics)
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.compose.material3)
+    implementation(libs.ktor.client.core)
+    implementation(libs.ktor.client.android)
+    implementation(libs.ktor.serialization.kotlinx.json)
+    implementation(libs.ktor.client.logging.jvm)
+    implementation(libs.ktor.client.okhttp.jvm)
+    implementation(libs.ktor.client.content.negotiation)
+    implementation(libs.ktor.network)
+    implementation(libs.realm) {
+        exclude(group = "org.jetbrains", module = "annotations")
+    }
+    implementation(libs.androidx.lifecycle.viewmodel.compose)
+// Dependency Injection - Koin
+    implementation(libs.koin.android)
+    implementation(libs.koin.core.viewmodel)
+
+    // KotlinX serialization
+    implementation(libs.kotlinx.serialization.json)
+    implementation(libs.play.services.location)
+    implementation(libs.androidx.lifecycle.service)
+    implementation(libs.androidx.compose.runtime)
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
