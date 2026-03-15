@@ -3,6 +3,8 @@ package com.odys.mototriptracker.domain
 import android.location.Location
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlin.math.max
 
 class TripManager(
@@ -11,55 +13,70 @@ class TripManager(
 ) {
 
     private val _tripStats = MutableStateFlow(TripStats())
-    val tripStats: StateFlow<TripStats> = _tripStats
+    val tripStats: StateFlow<TripStats> = _tripStats.asStateFlow()
 
     private var lastLocation: Location? = null
-    private var lastUpdateTime: Long = 0
+    private var isTracking = false
 
     fun startTrip() {
+        isTracking = true
+        lastLocation = null
         _tripStats.value = TripStats(
             tripStartTime = System.currentTimeMillis()
         )
-        lastLocation = null
-        lastUpdateTime = System.currentTimeMillis()
     }
 
     fun onLocationUpdate(location: Location) {
+        if (!isTracking) return
 
-        val filteredSpeed = speedFilter.filter(location.speed * 3.6f)
+        // 1. Run it through the new SpeedFilter's bouncer
+        if (!speedFilter.isValid(location)) {
+            // Accuracy is too poor, throw this location away entirely
+            return
+        }
 
-        val now = System.currentTimeMillis()
-        val deltaTime = (now - lastUpdateTime) / 1000
+        // 2. Extract the cleaned speed using the new method (returns meters/second)
+        val currentSpeedMps = speedFilter.getProcessedSpeed(location)
+        val currentSpeedKmh = currentSpeedMps * 3.6f
 
-        val stats = _tripStats.value
+        // 3. Calculate distance (only if we are actually moving)
+        var addedDistanceMeters = 0f
+        lastLocation?.let { prevLoc ->
+            if (currentSpeedMps > 0f) {
+                addedDistanceMeters = prevLoc.distanceTo(location)
+            }
+        }
 
-        val moving = stopDetector.isMoving(filteredSpeed)
+        // 4. Thread-safe atomic update
+        _tripStats.update { currentStats ->
 
-        val newMovingTime =
-            if (moving) stats.movingTime + deltaTime else stats.movingTime
+            var newMoving = currentStats.movingTime
+            var newStopped = currentStats.stoppedTime
 
-        val newStoppedTime =
-            if (!moving) stats.stoppedTime + deltaTime else stats.stoppedTime
+            // 5. Let the new StopDetector handle the time math internally
+            stopDetector.updateTimes(currentSpeedMps, location.time) { movingDeltaMs, stoppedDeltaMs ->
+                // Assuming movingTime/stoppedTime are stored as Long (seconds) in your TripStats
+                newMoving += (movingDeltaMs / 1000L)
+                newStopped += (stoppedDeltaMs / 1000L)
+            }
 
-        val distance = lastLocation?.distanceTo(location) ?: 0f
+            val newDistance = currentStats.distanceMeters + addedDistanceMeters
+            val newMaxSpeed = maxOf(currentStats.maxSpeed, currentSpeedKmh)
 
-        val newDistance = stats.distanceMeters + distance
+            currentStats.copy(
+                speed = currentSpeedKmh,
+                movingTime = newMoving,
+                stoppedTime = newStopped,
+                distanceMeters = newDistance,
+                maxSpeed = newMaxSpeed
+            )
+        }
 
-        val newMaxSpeed = max(stats.maxSpeed, filteredSpeed)
-
-        _tripStats.value = stats.copy(
-            speed = filteredSpeed,
-            movingTime = newMovingTime,
-            stoppedTime = newStoppedTime,
-            distanceMeters = newDistance,
-            maxSpeed = newMaxSpeed
-        )
-
+        // 6. Store data for the next update calculation
         lastLocation = location
-        lastUpdateTime = now
     }
 
     fun stopTrip() {
-        // nothing special for now
+        isTracking = false
     }
 }

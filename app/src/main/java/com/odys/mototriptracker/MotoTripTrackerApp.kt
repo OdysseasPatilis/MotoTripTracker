@@ -2,6 +2,10 @@ package com.odys.mototriptracker
 
 import android.app.Application
 import com.odys.mototriptracker.data.trip.MyObjectBox
+import com.odys.mototriptracker.data.trip.TripRepository
+import com.odys.mototriptracker.domain.SpeedFilter
+import com.odys.mototriptracker.domain.StopDetector
+import com.odys.mototriptracker.domain.TripManager
 import io.objectbox.BoxStore
 
 class MotoTripTrackerApp : Application() {
@@ -9,11 +13,25 @@ class MotoTripTrackerApp : Application() {
     lateinit var boxStore: BoxStore
         private set
 
+    lateinit var tripManager: TripManager
+        private set
+
+    lateinit var tripRepository: TripRepository
+        private set
+
     override fun onCreate() {
         super.onCreate()
 
-        boxStore = MyObjectBox.builder()
-            .androidContext(this)
-            .build()
+        // 1. Initialize ObjectBox
+        boxStore = MyObjectBox.builder().androidContext(this).build()
+
+        // 2. Initialize the shared managers
+        val speedFilter = SpeedFilter()
+        val stopDetector = StopDetector()
+
+        tripManager = TripManager(speedFilter, stopDetector)
+
+        // Now boxStore actually exists when we pass it in!
+        tripRepository = TripRepository(boxStore)
     }
 }

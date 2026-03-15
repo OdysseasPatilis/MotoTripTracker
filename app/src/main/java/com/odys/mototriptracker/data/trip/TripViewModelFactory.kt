@@ -8,29 +8,21 @@ import com.odys.mototriptracker.domain.TripManager
 import io.objectbox.BoxStore
 
 class TripViewModelFactory(
-    private val boxStore: BoxStore
+    private val tripManager: TripManager,
+    private val tripRepository: TripRepository,
+    private val serviceController: TripServiceController
 ) : ViewModelProvider.Factory {
 
+    @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
-
         if (modelClass.isAssignableFrom(TripViewModel::class.java)) {
-
-            val speedFilter = SpeedFilter()
-            val stopDetector = StopDetector()
-
-            val tripManager = TripManager(
-                speedFilter,
-                stopDetector
-            )
-
-            val tripRepository = TripRepository(boxStore)
-
+            // Pass the shared instances directly to the ViewModel
             return TripViewModel(
                 tripManager,
-                tripRepository
+                tripRepository,
+                serviceController
             ) as T
         }
-
         throw IllegalArgumentException("Unknown ViewModel class")
     }
 }

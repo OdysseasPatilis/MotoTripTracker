@@ -21,9 +21,15 @@ class TripRepository(
         )
 
         tripBox.put(entity)
+        println("TripRepository: Ride saved successfully! Distance: ${entity.distanceMeters}m")
     }
 
     fun getTrips(): List<TripEntity> {
         return tripBox.all
+    }
+
+    fun deleteTrip(id: Long) {
+        tripBox.remove(id)
+        println("TripRepository: Deleted trip with ID $id")
     }
 }

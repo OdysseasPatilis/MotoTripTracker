@@ -20,9 +20,9 @@ import kotlin.math.sin
 @Composable
 fun SpeedGauge(
     speed: Float,
-    maxSpeed: Float
+    maxSpeed: Float,
+    gaugeMaxSpeed: Float = 150f // Default max gauge value
 ) {
-
     Box(
         modifier = Modifier.size(260.dp),
         contentAlignment = Alignment.Center
@@ -34,6 +34,7 @@ fun SpeedGauge(
             val totalSweep = 270f
             val strokeWidth = 22f
 
+            // 1. Draw the background track
             drawArc(
                 color = Color.DarkGray,
                 startAngle = startAngle,
@@ -45,8 +46,11 @@ fun SpeedGauge(
                 )
             )
 
-            val speedSweep = (speed / 150f) * totalSweep
+            // Safely clamp the speed so it doesn't break the gauge boundaries
+            val safeSpeed = speed.coerceIn(0f, gaugeMaxSpeed)
+            val speedSweep = (safeSpeed / gaugeMaxSpeed) * totalSweep
 
+            // 2. Draw the current speed arc
             drawArc(
                 color = Color.Cyan,
                 startAngle = startAngle,
@@ -58,16 +62,20 @@ fun SpeedGauge(
                 )
             )
 
-            val maxSweep = (maxSpeed / 150f) * totalSweep
+            // Safely clamp the max speed marker
+            val safeMaxSpeed = maxSpeed.coerceIn(0f, gaugeMaxSpeed)
+            val maxSweep = (safeMaxSpeed / gaugeMaxSpeed) * totalSweep
             val angle = Math.toRadians((startAngle + maxSweep).toDouble())
 
             val radius = size.minDimension / 2 - strokeWidth
             val cx = size.width / 2
             val cy = size.height / 2
 
+            // Calculate x and y for the max speed indicator
             val x = cx + radius * cos(angle).toFloat()
             val y = cy + radius * sin(angle).toFloat()
 
+            // 3. Draw the max speed indicator dot
             drawCircle(
                 color = Color.Yellow,
                 radius = 8f,
@@ -75,6 +83,7 @@ fun SpeedGauge(
             )
         }
 
+        // Display the text in the center
         Text(
             text = "${speed.toInt()} km/h",
             color = Color.White,
