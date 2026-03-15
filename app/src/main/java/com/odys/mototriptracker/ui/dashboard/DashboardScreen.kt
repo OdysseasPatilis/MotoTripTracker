@@ -81,6 +81,7 @@ fun DashboardScreen() {
 
     // Simple state to toggle between Dashboard and History views
     var showHistory by remember { mutableStateOf(false) }
+    val isLocationEnabled by rememberLocationEnabledState(context)
 
     if (showHistory) {
         TripHistoryScreen(
@@ -94,6 +95,7 @@ fun DashboardScreen() {
         MotorcycleDashboardAnimated(
             stats = stats,
             isTracking = isTracking,
+            isLocationEnabled = isLocationEnabled,
             onStartRide = {
                 // Quick sanity check before starting the service
                 val hasLocation = ContextCompat.checkSelfPermission(

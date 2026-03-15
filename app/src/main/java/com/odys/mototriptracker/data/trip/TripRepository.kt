@@ -17,7 +17,10 @@ class TripRepository(
             distanceMeters = stats.distanceMeters,
             movingTime = stats.movingTime,
             stoppedTime = stats.stoppedTime,
-            maxSpeed = stats.maxSpeed
+            maxSpeed = stats.maxSpeed,
+            maxGForce = stats.maxGForce,
+            elevationGain = stats.totalElevationGain,
+            avgSpeed = stats.avgSpeed // The avgSpeed we calculated in TripManager
         )
 
         tripBox.put(entity)

@@ -30,6 +30,7 @@ import java.util.Locale
 fun MotorcycleDashboardAnimated(
     stats: TripStats,
     isTracking: Boolean,
+    isLocationEnabled: Boolean,
     onStartRide: () -> Unit,
     onStopRide: () -> Unit,
     onViewHistory: () -> Unit // New callback for navigation
@@ -58,12 +59,17 @@ fun MotorcycleDashboardAnimated(
         Spacer(modifier = Modifier.weight(1f)) // Pushes content to center
 
         SpeedGauge(speed = animatedSpeed, maxSpeed = stats.maxSpeed)
+        GForceMeter(
+            currentG = stats.currentGForce,
+            maxG = stats.maxGForce,
+            modifier = Modifier.padding(vertical = 16.dp)
+        )
 
-        Spacer(modifier = Modifier.height(30.dp))
+        Spacer(modifier = Modifier.height(10.dp))
 
         RideStats(stats)
 
-        Spacer(modifier = Modifier.height(20.dp))
+        Spacer(modifier = Modifier.height(10.dp))
 
         MovingStoppedBar(stats)
 
@@ -90,12 +96,24 @@ fun MotorcycleDashboardAnimated(
             onClick = {
                 if (isTracking) onStopRide() else onStartRide()
             },
-            modifier = Modifier.fillMaxWidth().height(60.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(60.dp),
+            enabled = isLocationEnabled || isTracking,
             colors = ButtonDefaults.buttonColors(
-                containerColor = if (isTracking) Color.Red else Color.DarkGray
+                containerColor = if (isTracking) Color.Red else Color.DarkGray,
+                disabledContainerColor = Color.DarkGray.copy(alpha = 0.5f)
             )
         ) {
-            Text(text = if (isTracking) "STOP RIDE" else "START RIDE", fontSize = 20.sp, color = Color.White)
+            Text(
+                text = when {
+                    isTracking -> "STOP RIDE"
+                    !isLocationEnabled -> "ENABLE GPS TO START"
+                    else -> "START RIDE"
+                },
+                fontSize = 20.sp,
+                color = if (isLocationEnabled || isTracking) Color.White else Color.Gray
+            )
         }
     }
 }

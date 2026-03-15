@@ -6,7 +6,12 @@ data class TripStats(
     val tripStartTime: Long = 0L,
     val movingTime: Long = 0L,
     val stoppedTime: Long = 0L,
-    val maxSpeed: Float = 0f
+    val maxSpeed: Float = 0f,
+    val currentGForce: Float = 0f,
+    val maxGForce: Float = 0f,
+    val elevation: Float = 0f,
+    val avgSpeed: Float = 0f,
+    val totalElevationGain: Float = 0f
 ) {
     val tripTime: Long
         get() = movingTime + stoppedTime
