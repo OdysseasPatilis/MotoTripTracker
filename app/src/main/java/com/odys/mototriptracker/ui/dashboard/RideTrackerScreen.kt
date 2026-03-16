@@ -1,5 +1,7 @@
 package com.odys.mototriptracker.ui.dashboard
 
+import android.app.Activity
+import android.view.WindowManager
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -25,6 +27,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -34,7 +37,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.platform.LocalWindowInfo
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -55,7 +58,6 @@ val NeonGreen   = Color(0xFF00E5A0)
 val NeonBlue    = Color(0xFF00B4FF)
 val NeonRed     = Color(0xFFFF4A6A)
 
-val GradientArcColors  = listOf(NeonGreen, NeonBlue)
 val GradientButton     = Brush.horizontalGradient(listOf(NeonGreen, NeonBlue))
 
 
@@ -68,6 +70,7 @@ fun RideTrackerScreen(
     onStopRide: () -> Unit,
     onViewHistory: () -> Unit // New callback for navigation
 ) {
+    KeepScreenOn()
     Scaffold(
         containerColor = BgDeep,
         bottomBar = {
@@ -200,7 +203,7 @@ fun StatCard(
 @Composable
 fun SpeedometerArc(speedKmh: Float, maxSpeedKmh: Float = 200f) {
     val speedPercent = (speedKmh  / maxSpeedKmh ).coerceIn(0f, 1f)
-    val arcBg = Color(0xFF1A1A30)
+    val arcBg = Color(0xFF252547)
     val dotColor = NeonGreen
 
     // Outer box: fixed square so the arc always has room
@@ -294,7 +297,7 @@ fun GForceBar(value: Float, maxValue: Float) {
                 .fillMaxWidth(0.72f)
                 .height(6.dp)
                 .clip(RoundedCornerShape(3.dp))
-                .background(Color(0xFF1A1A30))
+                .background(Color(0xFF252547))
         ) {
             if (fillFraction > 0f) {
                 Box(
@@ -317,6 +320,23 @@ fun GForceBar(value: Float, maxValue: Float) {
         Spacer(Modifier.height(6.dp))
         Text("MAX: ${String.format("%.2f", maxValue)} G",
             color = TextMuted, fontSize = 11.sp)
+    }
+}
+
+@Composable
+fun KeepScreenOn() {
+    val context = LocalContext.current
+
+    DisposableEffect(Unit) {
+        val window = (context as? Activity)?.window
+
+        // 1. Add the flag when this Composable enters the screen
+        window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+
+        onDispose {
+            // 2. Safely clear the flag when the user navigates away
+            window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        }
     }
 }
 
