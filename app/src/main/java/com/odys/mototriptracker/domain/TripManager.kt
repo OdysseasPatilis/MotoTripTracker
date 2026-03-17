@@ -5,7 +5,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
-import kotlin.math.max
 
 class TripManager(
     private val speedFilter: SpeedFilter,
@@ -14,11 +13,14 @@ class TripManager(
 
     private val _tripStats = MutableStateFlow(TripStats())
     val tripStats: StateFlow<TripStats> = _tripStats.asStateFlow()
-
     private var lastLocation: Location? = null
+
     private var isTracking = false
     private var lastLocationTime: Long = 0L
     private var lastSpeedMps: Float = 0f
+    val speedSmoother = SpeedSmoother()
+
+    var sessionMaxSpeedKmh = 0
     fun startTrip() {
         isTracking = true
         lastLocation = null
@@ -38,8 +40,14 @@ class TripManager(
         // 2. Extract Data
         val currentSpeedMps = speedFilter.getProcessedSpeed(location)
         val currentSpeedKmh = currentSpeedMps * 3.6f
+        //val currentSpeedKmh = speedSmoother.getSmoothedSpeedKmh(currentSpeedMps).toFloat()
         val currentTime = location.time
 
+        val rawSpeedKmh = (location.speed * 3.6f).toInt()
+        if (rawSpeedKmh > sessionMaxSpeedKmh) {
+            sessionMaxSpeedKmh = rawSpeedKmh
+            println("New Top Speed Hit! $sessionMaxSpeedKmh km/h")
+        }
         // 3. Pre-calculate Deltas (Outside the atomic update for speed)
         var elevationDelta = 0.0
         var distanceDelta = 0f
@@ -73,16 +81,20 @@ class TripManager(
             // Time logic (Moving vs Stopped)
             var newMoving = currentStats.movingTime
             var newStopped = currentStats.stoppedTime
-            stopDetector.updateTimes(currentSpeedMps, currentTime) { movingDeltaMs, stoppedDeltaMs ->
+            stopDetector.updateTimes(currentTime) { movingDeltaMs, stoppedDeltaMs ->
                 newMoving += (movingDeltaMs / 1000L)
                 newStopped += (stoppedDeltaMs / 1000L)
+                speedSmoother.reset()
             }
 
-            // Live Average Speed (Distance in km / Moving hours)
             val movingHours = newMoving / 3600f
             val totalKm = (currentStats.distanceMeters + distanceDelta) / 1000f
             val newAvgSpeed = if (movingHours > 0) totalKm / movingHours else 0f
-
+            // Live Average Speed (Distance in km / Moving hours)
+            /*var newAvgSpeed = calculateAverageSpeed(newMoving, currentStats.distanceMeters + distanceDelta)
+            if (newAvgSpeed > sessionMaxSpeedKmh) {
+                newAvgSpeed = sessionMaxSpeedKmh.toFloat()
+            }*/
             // Smoothing the G-Force for the UI
             val smoothedG = (currentStats.currentGForce * 0.8f) + (gForce * 0.2f)
 
@@ -91,8 +103,8 @@ class TripManager(
                 movingTime = newMoving,
                 stoppedTime = newStopped,
                 distanceMeters = currentStats.distanceMeters + distanceDelta,
-                maxSpeed = maxOf(currentStats.maxSpeed, currentSpeedKmh),
-                avgSpeed = newAvgSpeed, // Keep this updated for the UI
+                maxSpeed = maxOf(currentStats.maxSpeed, sessionMaxSpeedKmh.toFloat()),
+                avgSpeed = newAvgSpeed,
                 totalElevationGain = (currentStats.totalElevationGain + elevationDelta).toFloat(),
                 currentGForce = smoothedG,
                 maxGForce = maxOf(currentStats.maxGForce, kotlin.math.abs(smoothedG))
@@ -107,5 +119,25 @@ class TripManager(
 
     fun stopTrip() {
         isTracking = false
+    }
+
+    fun calculateAverageSpeed(totalDistanceMeters: Long, movingTimeMillis: Float): Float {
+        // 1. THE SHIELD: Don't calculate average speed until they have actually ridden a bit.
+        // If they haven't moved at least 50 meters or ridden for 10 seconds, return 0.
+        if (totalDistanceMeters < 50f || movingTimeMillis < 10_000L) {
+            return 0f
+        }
+
+        // 2. Convert milliseconds to hours
+        val hours = movingTimeMillis / 3600000.0 // 1000ms * 60s * 60m
+
+        // 3. Convert meters to kilometers
+        val kilometers = totalDistanceMeters / 1000.0
+
+        // 4. Calculate Average Speed (Distance / Time)
+        val averageSpeedKmh = kilometers / hours
+
+        return averageSpeedKmh.toFloat()
+
     }
 }

@@ -1,0 +1,591 @@
+/*
+package com.odys.mototriptracker.ui.dashboard
+
+// ─────────────────────────────────────────────────────────────────────────────
+// build.gradle.kts (module level) — add:
+//
+//   implementation("com.google.maps.android:maps-compose:8.2.1")
+//
+// AndroidManifest.xml — add inside <application>:
+//
+//   <meta-data
+//       android:name="com.google.android.geo.API_KEY"
+//       android:value="${MAPS_API_KEY}" />
+//
+// local.properties — add:
+//   MAPS_API_KEY=your_key_here
+//
+// res/raw/dark_map_style.json — create with the JSON at the bottom of this file.
+// ─────────────────────────────────────────────────────────────────────────────
+
+import android.graphics.Bitmap
+import android.graphics.Canvas as AndroidCanvas
+import android.graphics.Paint
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Share
+import androidx.compose.material3.Icon
+import androidx.compose.material3.Text
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.google.android.gms.maps.CameraUpdateFactory
+import com.google.android.gms.maps.model.*
+import com.google.android.gms.maps.model.LatLng
+import com.google.maps.android.compose.*
+import com.odys.mototriptracker.ui.dashboard.LegendSegment
+
+// ── Colours ───────────────────────────────────────────────────────────────────
+private val BgDark       = Color(0xFF0E0E14)
+private val SurfaceDark  = Color(0xFF1A1A26)
+private val CardDark     = Color(0xFF1C1C2A)
+private val PurpleActive = Color(0xFF5B5FEF)
+private val Mint         = Color(0xFF5EFFC8)
+private val Blue         = Color(0xFF5B9EF7)
+private val Yellow       = Color(0xFFFACC15)
+private val RouteAmber   = Color(0xFFEF9F27)
+private val RouteTeal    = Color(0xFF1D9E75)
+private val RouteCoral   = Color(0xFFD85A30)
+private val RouteBlue    = Color(0xFF378ADD)
+private val TextHint     = Color(0x40FFFFFF)
+private val Overlay      = Color(0xB20E0E14)
+
+// ── Enums & models ────────────────────────────────────────────────────────────
+enum class MapLayer { Speed, Elevation }
+enum class WaypointType { Start, Stop, End }
+
+data class Waypoint(
+    val label: String,
+    val detail: String,
+    val time: String,
+    val type: WaypointType,
+    val position: LatLng
+)
+
+*/
+/**
+ * One GPS point in the ride with telemetry.
+ * Replace with your real data model (Room entity, proto, etc.)
+ *//*
+
+data class RidePoint(
+    val latLng: LatLng,
+    val speedKmh: Float,
+    val elevationM: Float
+)
+
+// ── Sample data ───────────────────────────────────────────────────────────────
+val sampleRidePoints = listOf(
+    RidePoint(LatLng(37.9453, 23.6460),  12f,  5f),
+    RidePoint(LatLng(37.9480, 23.6490),  35f, 10f),
+    RidePoint(LatLng(37.9510, 23.6530),  28f, 18f),
+    RidePoint(LatLng(37.9540, 23.6570),  55f, 28f),
+    RidePoint(LatLng(37.9580, 23.6620),  72f, 45f),
+    RidePoint(LatLng(37.9620, 23.6680),  90f, 62f),
+    RidePoint(LatLng(37.9655, 23.6730), 115f, 78f),
+    RidePoint(LatLng(37.9690, 23.6790), 133f, 90f),
+    RidePoint(LatLng(37.9710, 23.6840),  60f, 97f),
+)
+
+val sampleWaypoints = listOf(
+    Waypoint("Departure",  "Piraeus port area · 0.0 km",           "09:44", WaypointType.Start, sampleRidePoints.first().latLng),
+    Waypoint("Brief stop", "Traffic light · 2.0 km · 01:02 pause", "09:51", WaypointType.Stop,  sampleRidePoints[2].latLng),
+    Waypoint("Brief stop", "Intersection · 4.0 km · 00:42 pause",  "09:53", WaypointType.Stop,  sampleRidePoints[6].latLng),
+    Waypoint("Arrival",    "Destination · 6.0 km · +97m elev.",    "09:55", WaypointType.End,   sampleRidePoints.last().latLng),
+)
+
+// ── Colour helpers ────────────────────────────────────────────────────────────
+private fun speedColor(kmh: Float): Color = when {
+    kmh < 40f -> RouteAmber
+    kmh < 80f -> RouteTeal
+    else      -> RouteCoral
+}
+
+private fun elevColor(elevM: Float, baseElevM: Float): Color {
+    val gain = elevM - baseElevM
+    return when {
+        gain < 10f -> RouteBlue
+        gain < 50f -> RouteAmber
+        else       -> RouteCoral
+    }
+}
+
+*/
+/**
+ * Splits a list of RidePoints into contiguous segments that share the same
+ * colour for the given layer. Adjacent segments overlap by one point so the
+ * polylines connect without gaps.
+ *//*
+
+private fun buildColoredSegments(
+    points: List<RidePoint>,
+    layer: MapLayer,
+    baseElev: Float
+): List<Pair<List<LatLng>, Color>> {
+    if (points.size < 2) return emptyList()
+    val segments = mutableListOf<Pair<List<LatLng>, Color>>()
+    var segStart = 0
+    var currentColor = if (layer == MapLayer.Speed)
+        speedColor(points[0].speedKmh)
+    else
+        elevColor(points[0].elevationM, baseElev)
+
+    for (i in 1..points.lastIndex) {
+        val nextColor = if (layer == MapLayer.Speed)
+            speedColor(points[i].speedKmh)
+        else
+            elevColor(points[i].elevationM, baseElev)
+
+        val isLast = i == points.lastIndex
+        if (nextColor != currentColor || isLast) {
+            val endIdx = if (isLast) i else i
+            segments += points.subList(segStart, endIdx + 1).map { it.latLng } to currentColor
+            segStart = i
+            currentColor = nextColor
+        }
+    }
+    return segments
+}
+
+// ── Screen ────────────────────────────────────────────────────────────────────
+@Composable
+fun FullRouteScreenGMaps(
+    ridePoints: List<RidePoint> = sampleRidePoints,
+    waypoints: List<Waypoint>   = sampleWaypoints,
+    onBack: () -> Unit          = {},
+    onShare: () -> Unit         = {}
+) {
+    var activeLayer by remember { mutableStateOf(MapLayer.Speed) }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(BgDark)
+            .verticalScroll(rememberScrollState())
+            .padding(bottom = 32.dp)
+    ) {
+        RouteTopBar(onBack = onBack, onShare = onShare)
+        Spacer(Modifier.height(4.dp))
+        RouteMapCard(
+            ridePoints    = ridePoints,
+            waypoints     = waypoints,
+            activeLayer   = activeLayer,
+            onLayerChange = { activeLayer = it }
+        )
+        Spacer(Modifier.height(12.dp))
+        WaypointsPanel(waypoints = waypoints)
+        Spacer(Modifier.height(12.dp))
+        ProfileChart(ridePoints = ridePoints, activeLayer = activeLayer)
+        Spacer(Modifier.height(12.dp))
+        LegendPills(activeLayer = activeLayer)
+    }
+}
+
+// ── Top bar ───────────────────────────────────────────────────────────────────
+@Composable
+private fun RouteTopBar(onBack: () -> Unit, onShare: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        IconCircleButton(onClick = onBack) {
+            Icon(Icons.Default.ArrowBack, "Back", tint = TextPrimary, modifier = Modifier.size(18.dp))
+        }
+        Text("Full route", color = TextPrimary, fontSize = 17.sp, fontWeight = FontWeight.Medium)
+        IconCircleButton(shape = RoundedCornerShape(8.dp), onClick = onShare) {
+            Icon(Icons.Default.Share, "Share", tint = TextPrimary, modifier = Modifier.size(16.dp))
+        }
+    }
+}
+
+@Composable
+private fun IconCircleButton(
+    shape: androidx.compose.ui.graphics.Shape = CircleShape,
+    onClick: () -> Unit,
+    content: @Composable BoxScope.() -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .size(36.dp)
+            .clip(shape)
+            .background(CardDark)
+            .clickable { onClick() },
+        contentAlignment = Alignment.Center,
+        content = content
+    )
+}
+
+// ── Map card ──────────────────────────────────────────────────────────────────
+@Composable
+private fun RouteMapCard(
+    ridePoints: List<RidePoint>,
+    waypoints: List<Waypoint>,
+    activeLayer: MapLayer,
+    onLayerChange: (MapLayer) -> Unit
+) {
+    val bounds = remember(ridePoints) {
+        LatLngBounds.builder().also { b -> ridePoints.forEach { b.include(it.latLng) } }.build()
+    }
+    val cameraState = rememberCameraPositionState()
+    LaunchedEffect(bounds) {
+        cameraState.move(CameraUpdateFactory.newLatLngBounds(bounds, 80))
+    }
+
+    val baseElev = remember(ridePoints) { ridePoints.firstOrNull()?.elevationM ?: 0f }
+    val segments by remember(ridePoints, activeLayer) {
+        derivedStateOf { buildColoredSegments(ridePoints, activeLayer, baseElev) }
+    }
+
+    val startBitmap = remember { createMarkerBitmap(Mint.toArgb(),   28) }
+    val endBitmap   = remember { createMarkerBitmap(Blue.toArgb(),   28) }
+    val stopBitmap  = remember { createMarkerBitmap(Yellow.toArgb(), 20) }
+
+    Box(
+        modifier = Modifier
+            .padding(horizontal = 20.dp)
+            .fillMaxWidth()
+            .height(340.dp)
+            .clip(RoundedCornerShape(20.dp))
+    ) {
+        // ── Real Google Map ────────────────────────────────────────────────
+        GoogleMap(
+            modifier = Modifier.fillMaxSize(),
+            cameraPositionState = cameraState,
+            properties = MapProperties(
+                mapStyleOptions = MapStyleOptions(DARK_MAP_STYLE_JSON)
+            ),
+            uiSettings = MapUiSettings(
+                zoomControlsEnabled    = false,
+                myLocationButtonEnabled = false,
+                mapToolbarEnabled      = false,
+                compassEnabled         = false,
+                scrollGesturesEnabled  = true,
+                zoomGesturesEnabled    = true
+            )
+        ) {
+            // Coloured route polylines
+            segments.forEach { (latLngs, color) ->
+                Polyline(
+                    points   = latLngs,
+                    color    = color,
+                    width    = 14f,
+                    jointType = JointType.ROUND,
+                    startCap  = RoundCap(),
+                    endCap    = RoundCap(),
+                    zIndex    = 1f
+                )
+            }
+
+            // Stop markers
+            waypoints.filter { it.type == WaypointType.Stop }.forEach { wp ->
+                Marker(
+                    state   = MarkerState(wp.position),
+                    icon    = BitmapDescriptorFactory.fromBitmap(stopBitmap),
+                    title   = wp.label,
+                    snippet = wp.detail,
+                    zIndex  = 2f
+                )
+            }
+
+            // Start marker
+            waypoints.firstOrNull { it.type == WaypointType.Start }?.let {
+                Marker(
+                    state  = MarkerState(it.position),
+                    icon   = BitmapDescriptorFactory.fromBitmap(startBitmap),
+                    title  = "Start",
+                    zIndex = 3f
+                )
+            }
+
+            // End marker
+            waypoints.firstOrNull { it.type == WaypointType.End }?.let {
+                Marker(
+                    state  = MarkerState(it.position),
+                    icon   = BitmapDescriptorFactory.fromBitmap(endBitmap),
+                    title  = "Arrival",
+                    zIndex = 3f
+                )
+            }
+        }
+
+        // ── Layer toggle (overlaid) ────────────────────────────────────────
+        Column(
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .padding(10.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            LayerToggleButton("Speed",     activeLayer == MapLayer.Speed)     { onLayerChange(MapLayer.Speed) }
+            LayerToggleButton("Elevation", activeLayer == MapLayer.Elevation) { onLayerChange(MapLayer.Elevation) }
+        }
+
+        // ── Legend bar (overlaid) ──────────────────────────────────────────
+        Row(
+            modifier = Modifier
+                .align(Alignment.BottomStart)
+                .padding(10.dp)
+                .clip(RoundedCornerShape(8.dp))
+                .background(Overlay)
+                .padding(horizontal = 10.dp, vertical = 5.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            val (c1, c2, c3, label) = if (activeLayer == MapLayer.Speed)
+                listOf(RouteAmber, RouteTeal, RouteCoral, "Slow · Cruise · Fast")
+            else
+                listOf(RouteBlue, RouteAmber, RouteCoral, "Flat · Climb · Steep")
+            LegendSegment(c1 as Color); LegendSegment(c2 as Color); LegendSegment(c3 as Color)
+            Spacer(Modifier.width(4.dp))
+            Text(label as String, color = TextMuted, fontSize = 9.sp)
+        }
+    }
+}
+
+@Composable
+private fun LayerToggleButton(label: String, isActive: Boolean, onClick: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .clip(RoundedCornerShape(7.dp))
+            .background(if (isActive) PurpleActive else CardDark)
+            .clickable { onClick() }
+            .padding(horizontal = 10.dp, vertical = 5.dp)
+    ) {
+        Text(
+            text       = label,
+            color      = if (isActive) TextPrimary else TextMuted,
+            fontSize   = 11.sp,
+            fontWeight = if (isActive) FontWeight.Medium else FontWeight.Normal
+        )
+    }
+}
+
+@Composable
+private fun LegendSegment(color: Color) {
+    Box(
+        modifier = Modifier
+            .size(width = 14.dp, height = 5.dp)
+            .clip(RoundedCornerShape(2.dp))
+            .background(color)
+    )
+}
+
+// ── Waypoints ─────────────────────────────────────────────────────────────────
+@Composable
+private fun WaypointsPanel(waypoints: List<Waypoint>) {
+    Column(modifier = Modifier.padding(horizontal = 20.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text("Route waypoints", color = TextPrimary, fontSize = 15.sp, fontWeight = FontWeight.Medium)
+            Text("Mar 17 · 09:44",  color = TextHint,    fontSize = 12.sp)
+        }
+        Spacer(Modifier.height(12.dp))
+        waypoints.forEachIndexed { i, wp ->
+            WaypointRow(wp, showLine = i < waypoints.lastIndex)
+        }
+    }
+}
+
+@Composable
+private fun WaypointRow(wp: Waypoint, showLine: Boolean) {
+    Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier.width(24.dp)
+        ) {
+            Spacer(Modifier.height(4.dp))
+            val dotColor = when (wp.type) {
+                WaypointType.Start -> Mint
+                WaypointType.Stop  -> Yellow
+                WaypointType.End   -> Blue
+            }
+            Box(
+                modifier = Modifier
+                    .size(12.dp)
+                    .drawWithCache {
+                        onDrawBehind {
+                            drawCircle(BgDark)
+                            drawCircle(dotColor, style = Stroke(2f))
+                            drawCircle(dotColor, radius = 3f)
+                        }
+                    }
+            )
+            if (showLine) {
+                Box(
+                    modifier = Modifier
+                        .width(1.5.dp)
+                        .height(32.dp)
+                        .background(Color(0x1FFFFFFF))
+                )
+            }
+        }
+        Spacer(Modifier.width(10.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(wp.label,  color = TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+            Text(wp.detail, color = TextHint,    fontSize = 11.sp)
+            if (showLine) Spacer(Modifier.height(20.dp))
+        }
+        Text(wp.time, color = TextMuted, fontSize = 12.sp)
+    }
+}
+
+// ── Profile chart (elevation or speed) ───────────────────────────────────────
+@Composable
+private fun ProfileChart(ridePoints: List<RidePoint>, activeLayer: MapLayer) {
+    val values = remember(ridePoints, activeLayer) {
+        ridePoints.map { if (activeLayer == MapLayer.Elevation) it.elevationM else it.speedKmh }
+    }
+    val lineColor = if (activeLayer == MapLayer.Elevation) Blue else RouteTeal
+    val fillColor = if (activeLayer == MapLayer.Elevation) Color(0x1F5B9EF7) else Color(0x1F1D9E75)
+    val peakVal   = values.maxOrNull() ?: 0f
+    val peakLabel = if (activeLayer == MapLayer.Elevation) "+${peakVal.toInt()} m peak"
+    else "${peakVal.toInt()} km/h peak"
+    val peakColor = if (activeLayer == MapLayer.Elevation) Blue else RouteCoral
+
+    Column(modifier = Modifier.padding(horizontal = 20.dp)) {
+        Text(
+            text = if (activeLayer == MapLayer.Elevation) "ELEVATION PROFILE" else "SPEED PROFILE",
+            color = TextHint, fontSize = 10.sp, letterSpacing = 1.sp
+        )
+        Spacer(Modifier.height(8.dp))
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(80.dp)
+                .clip(RoundedCornerShape(12.dp))
+                .background(SurfaceDark)
+                .drawWithCache {
+                    val w     = size.width
+                    val h     = size.height
+                    val pad   = 12f
+                    val minV  = values.minOrNull() ?: 0f
+                    val maxV  = values.maxOrNull() ?: 1f
+                    val range = (maxV - minV).coerceAtLeast(1f)
+                    val step  = if (values.size > 1) (w - pad * 2) / (values.size - 1) else 0f
+                    fun yFor(v: Float) = pad + (1f - (v - minV) / range) * (h - pad * 2)
+
+                    val line = Path().apply {
+                        values.forEachIndexed { i, v ->
+                            if (i == 0) moveTo(pad, yFor(v)) else lineTo(pad + i * step, yFor(v))
+                        }
+                    }
+                    val fill = Path().apply {
+                        addPath(line)
+                        lineTo(pad + (values.size - 1) * step, h - pad)
+                        lineTo(pad, h - pad)
+                        close()
+                    }
+                    onDrawBehind {
+                        drawPath(fill, fillColor)
+                        drawPath(line, lineColor, style = Stroke(2f, cap = StrokeCap.Round))
+                    }
+                }
+        )
+        Spacer(Modifier.height(4.dp))
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            Text("0 km",    color = TextHint,  fontSize = 9.sp)
+            Text(peakLabel, color = peakColor, fontSize = 9.sp)
+            Text("6.0 km",  color = TextHint,  fontSize = 9.sp)
+        }
+    }
+}
+
+// ── Legend pills ──────────────────────────────────────────────────────────────
+@Composable
+private fun LegendPills(activeLayer: MapLayer) {
+    val pills = if (activeLayer == MapLayer.Speed) listOf(
+        Triple(RouteAmber, "Slow",   "0–40 km/h"),
+        Triple(RouteTeal,  "Cruise", "40–80 km/h"),
+        Triple(RouteCoral, "Fast",   "80+ km/h"),
+    ) else listOf(
+        Triple(RouteBlue,  "Flat",  "0–10 m"),
+        Triple(RouteAmber, "Climb", "10–50 m"),
+        Triple(RouteCoral, "Steep", "50 m+"),
+    )
+    Row(
+        modifier = Modifier.padding(horizontal = 20.dp).fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        pills.forEach { (color, label, range) ->
+            Row(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(20.dp))
+                    .background(SurfaceDark)
+                    .padding(horizontal = 10.dp, vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(5.dp)
+            ) {
+                Box(modifier = Modifier.size(7.dp).clip(CircleShape).background(color))
+                Text(label, color = TextMuted,   fontSize = 11.sp)
+                Text(range, color = TextPrimary, fontSize = 11.sp, fontWeight = FontWeight.Medium)
+            }
+        }
+    }
+}
+
+// ── Marker bitmap ─────────────────────────────────────────────────────────────
+private fun createMarkerBitmap(colorArgb: Int, sizeDp: Int): Bitmap {
+    val px = sizeDp * 3
+    val bmp = Bitmap.createBitmap(px, px, Bitmap.Config.ARGB_8888)
+    val canvas = AndroidCanvas(bmp)
+    val fill = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = colorArgb; style = Paint.Style.FILL
+    }
+    val border = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = android.graphics.Color.argb(255, 14, 14, 20)
+        style = Paint.Style.STROKE
+        strokeWidth = px * 0.12f
+    }
+    val r = px / 2f
+    canvas.drawCircle(r, r, r - border.strokeWidth, fill)
+    canvas.drawCircle(r, r, r - border.strokeWidth, border)
+    return bmp
+}
+
+// ── Preview ───────────────────────────────────────────────────────────────────
+@Preview(showBackground = true, backgroundColor = 0xFF0E0E14, widthDp = 390, heightDp = 900)
+@Composable
+fun FullRouteScreenPreview() {
+    FullRouteScreenGMaps()
+}
+
+// ── Dark map style JSON (paste into res/raw/dark_map_style.json) ──────────────
+val DARK_MAP_STYLE_JSON = """
+[
+  { "elementType": "geometry",        "stylers": [{ "color": "#1a1a2e" }] },
+  { "elementType": "labels.text.fill","stylers": [{ "color": "#6b6b8d" }] },
+  { "elementType": "labels.text.stroke","stylers": [{ "color": "#0e0e14" }] },
+  { "featureType": "road",            "elementType": "geometry",       "stylers": [{ "color": "#2a2a42" }] },
+  { "featureType": "road.highway",    "elementType": "geometry",       "stylers": [{ "color": "#3a3a58" }] },
+  { "featureType": "road",            "elementType": "labels.text.fill","stylers": [{ "color": "#4a4a6a" }] },
+  { "featureType": "water",           "elementType": "geometry",       "stylers": [{ "color": "#0d1b2a" }] },
+  { "featureType": "poi",             "elementType": "geometry",       "stylers": [{ "color": "#16162a" }] },
+  { "featureType": "poi",             "elementType": "labels",         "stylers": [{ "visibility": "off" }] },
+  { "featureType": "transit",         "stylers": [{ "visibility": "off" }] },
+  { "featureType": "administrative",  "elementType": "geometry",       "stylers": [{ "color": "#2a2a42" }] }
+]
+""".trimIndent()
+*/

@@ -105,7 +105,7 @@ fun RideSummaryScreen(summary: TripEntity, onBack: () -> Unit, onDelete: () -> U
 
             // Stats grid
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                SummaryStatCard("DISTANCE", "${String.format("%.1f km", summary.distanceMeters / 1000f)}", "km", Modifier.weight(1f))
+                SummaryStatCard("DISTANCE", "${String.format("%.1f ", summary.distanceMeters / 1000f)}", "km", Modifier.weight(1f))
                 SummaryStatCard("TOTAL TIME", formatSecondsToTime(totalTime), "mm:ss", Modifier.weight(1f))
             }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {

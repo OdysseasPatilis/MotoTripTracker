@@ -9,6 +9,7 @@ import com.google.android.gms.location.LocationRequest
 import com.google.android.gms.location.LocationResult
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
+import com.odys.mototriptracker.domain.RideTimer
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
@@ -17,23 +18,36 @@ class LocationRepository(context: Context) {
 
     private val fusedLocation = LocationServices.getFusedLocationProviderClient(context)
 
+    val riderTimer = RideTimer()
+
     @SuppressLint("MissingPermission") // Handled in the Service layer
     fun getLocationFlow(): Flow<Location> = callbackFlow {
 
+        riderTimer.start()
         val request = LocationRequest.Builder(
             Priority.PRIORITY_HIGH_ACCURACY,
-            2000L // Interval: 2 seconds
+            1000L // Interval: 2 seconds
         )
             // Optional but highly recommended: Minimum wait time between updates
             .setMinUpdateIntervalMillis(1000L)
             // 🏍️ THE MAGIC BULLET: Only give me an update if they moved at least 2 meters.
             // Prevents battery drain and duplicate points at stoplights!
-            .setMinUpdateDistanceMeters(2f)
+            //.setMinUpdateDistanceMeters(2f)
             .build()
 
         val locationCallback = object : LocationCallback() {
             override fun onLocationResult(result: LocationResult) {
                 for (location in result.locations) {
+                    // 1. THE SHIELD: Ignore points without accuracy data
+                    if (!location.hasAccuracy()) continue
+                    // 2. THE FILTER: Throw away "bouncy" points
+                    // 15 meters is a great threshold for motorcycles.
+                    // Anything higher is usually a cold-start bounce or tall building interference.
+                    if (location.accuracy > 15f) {
+                        println("LocationRepo: Ignored bouncy GPS point. Accuracy was ${location.accuracy}m")
+                        continue // Skips this point entirely!
+                    }
+
                     // trySend is safe here because callbackFlow provides a buffer automatically
                     trySend(location)
                     println("LocationRepo New location: ${location.latitude}, ${location.longitude}, speed: ${location.speed}")

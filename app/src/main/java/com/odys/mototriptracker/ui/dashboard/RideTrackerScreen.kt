@@ -2,6 +2,9 @@ package com.odys.mototriptracker.ui.dashboard
 
 import android.app.Activity
 import android.view.WindowManager
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animateIntAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -28,6 +31,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -68,7 +72,7 @@ fun RideTrackerScreen(
     isLocationEnabled: Boolean,
     onStartRide: () -> Unit,
     onStopRide: () -> Unit,
-    onViewHistory: () -> Unit // New callback for navigation
+    onViewHistory: () -> Unit
 ) {
     KeepScreenOn()
     Scaffold(
@@ -156,8 +160,8 @@ fun RideTrackerScreen(
 
             // Stats grid
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                StatCard("DISTANCE", "0.0 km", Modifier.weight(1f))
-                StatCard("TOTAL TIME", "00:00", Modifier.weight(1f))
+                StatCard("DISTANCE", "${String.format("%.1f km", stats.distanceKm)}", Modifier.weight(1f))
+                StatCard("TOTAL TIME", formatSecondsToTime(stats.tripTime), Modifier.weight(1f))
             }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 StatCard("MOVING",
@@ -201,7 +205,7 @@ fun StatCard(
 }
 
 @Composable
-fun SpeedometerArc(speedKmh: Float, maxSpeedKmh: Float = 200f) {
+fun SpeedometerArc(speedKmh: Float, maxSpeedKmh: Float = 260f) {
     val speedPercent = (speedKmh  / maxSpeedKmh ).coerceIn(0f, 1f)
     val arcBg = Color(0xFF252547)
     val dotColor = NeonGreen
@@ -261,10 +265,19 @@ fun SpeedometerArc(speedKmh: Float, maxSpeedKmh: Float = 200f) {
             drawCircle(color = dotColor, radius = 7.dp.toPx(), center = Offset(cx, cy))
         }
 
+        val animatedSpeed by animateIntAsState(
+            targetValue = speedKmh.toInt(),
+            animationSpec = tween(
+                durationMillis = 1000, // How long it takes to count up/down
+                easing = FastOutSlowInEasing // Starts fast, slows down as it reaches the target
+            ),
+            label = "SpeedAnimation"
+        )
+
         // Speed number centred inside the arc
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text(
-                text = speedKmh.toInt().toString(),
+                text = animatedSpeed.toString(),
                 color = TextPrimary,
                 fontSize = 72.sp,
                 fontWeight = FontWeight.Bold,
