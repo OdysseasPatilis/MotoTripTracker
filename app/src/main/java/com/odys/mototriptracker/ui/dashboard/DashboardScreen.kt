@@ -91,14 +91,42 @@ fun DashboardScreen() {
     var showHistory by remember { mutableStateOf(false) }
     var selectedTrip by remember { mutableStateOf<TripEntity?>(null) } // Tracks which trip is open
     val isLocationEnabled by rememberLocationEnabledState(context)
+    var showFullRoute by remember { mutableStateOf(false) }
 
-    if (selectedTrip != null) {
-        RideSummaryScreen(
+    if (showFullRoute && selectedTrip != null) {
+        // 1. We are viewing the Full Route!
+
+        // Collect the data from the ViewModel
+        val ridePoints by viewModel.ridePoints.collectAsStateWithLifecycle()
+        val waypoints by viewModel.waypoints.collectAsStateWithLifecycle()
+
+        // Tell the ViewModel to load the data for this trip when the screen opens
+        LaunchedEffect(selectedTrip!!.id) {
+            viewModel.loadTripDataForMap(selectedTrip!!.id)
+        }
+
+        // Show your beautiful map screen
+        FullRouteScreenGMaps(
+            summary = selectedTrip!!,
+            ridePoints = ridePoints,
+            waypoints = waypoints,
+            onBack = {
+                showFullRoute = false // Go back to the summary screen
+                viewModel.clearMapData() // Free up memory
+            }
+        )
+
+    } else if (selectedTrip != null) {
+        RideSummaryScreenUpdate(
             summary = selectedTrip!!,
             onBack = { selectedTrip = null },
             onDelete = {
                 viewModel.deleteTrip(selectedTrip!!.id)
                 selectedTrip = null
+            },
+            onViewRoute = {
+                viewModel.loadTripDataForMap(selectedTrip!!.id)
+                showFullRoute = true
             }
         )
     } else if (showHistory) {

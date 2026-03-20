@@ -1,6 +1,10 @@
 package com.odys.mototriptracker.domain
 
 import android.location.Location
+import com.odys.mototriptracker.data.checkpoint.RoutePointEntity
+import com.odys.mototriptracker.data.trip.TripEntity
+import com.odys.mototriptracker.data.trip.TripRepository
+import io.objectbox.Box
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -8,27 +12,38 @@ import kotlinx.coroutines.flow.update
 
 class TripManager(
     private val speedFilter: SpeedFilter,
-    private val stopDetector: StopDetector
+    private val stopDetector: StopDetector,
+    private val tripRepository: TripRepository
 ) {
-
+    private var currentTripId: Long = 0L
     private val _tripStats = MutableStateFlow(TripStats())
     val tripStats: StateFlow<TripStats> = _tripStats.asStateFlow()
-    private var lastLocation: Location? = null
 
+    private var lastLocation: Location? = null
     private var isTracking = false
     private var lastLocationTime: Long = 0L
     private var lastSpeedMps: Float = 0f
+
     val speedSmoother = SpeedSmoother()
+    private var elevationSmoother = ElevationSmoother() // Made this a variable so we can reset it
 
     var sessionMaxSpeedKmh = 0
+
     fun startTrip() {
         isTracking = true
         lastLocation = null
         lastLocationTime = 0L
         lastSpeedMps = 0f
-        _tripStats.value = TripStats(
-            tripStartTime = System.currentTimeMillis()
-        )
+        sessionMaxSpeedKmh = 0
+
+        // Reset the smoother for the new ride!
+        elevationSmoother = ElevationSmoother()
+
+        val startTimeMs = System.currentTimeMillis()
+        _tripStats.value = TripStats(tripStartTime = startTimeMs)
+
+        // Let the repo secure it on disk immediately
+        currentTripId = tripRepository.startNewTrip(startTimeMs)
     }
 
     fun onLocationUpdate(location: Location) {
@@ -46,7 +61,6 @@ class TripManager(
         val rawSpeedKmh = (location.speed * 3.6f).toInt()
         if (rawSpeedKmh > sessionMaxSpeedKmh) {
             sessionMaxSpeedKmh = rawSpeedKmh
-            println("New Top Speed Hit! $sessionMaxSpeedKmh km/h")
         }
         // 3. Pre-calculate Deltas (Outside the atomic update for speed)
         var elevationDelta = 0.0
@@ -54,13 +68,9 @@ class TripManager(
         var gForce = 0f
 
         lastLocation?.let { prev ->
-            // Elevation Gain (0.5m threshold to filter noise)
-            if (location.hasAltitude() && prev.hasAltitude()) {
-                val diff = location.altitude - prev.altitude
-                if (diff > 0.5) elevationDelta = diff
+            if (location.hasAltitude()) {
+                elevationDelta = elevationSmoother.calculateGain(location.altitude)
             }
-
-            // Distance (Only if moving to prevent GPS drift)
             if (currentSpeedMps > 0.1f) {
                 distanceDelta = prev.distanceTo(location)
             }
@@ -77,10 +87,9 @@ class TripManager(
 
         // 4. Thread-safe atomic update
         _tripStats.update { currentStats ->
-
-            // Time logic (Moving vs Stopped)
             var newMoving = currentStats.movingTime
             var newStopped = currentStats.stoppedTime
+
             stopDetector.updateTimes(currentTime) { movingDeltaMs, stoppedDeltaMs ->
                 newMoving += (movingDeltaMs / 1000L)
                 newStopped += (stoppedDeltaMs / 1000L)
@@ -111,14 +120,52 @@ class TripManager(
             )
         }
 
-        // 5. Update references for next iteration
         lastSpeedMps = currentSpeedMps
         lastLocationTime = currentTime
         lastLocation = location
+
+        // Let the Repository handle the ObjectBox saving!
+        tripRepository.addRoutePointAndUpdateStats(
+            tripId = currentTripId,
+            lat = location.latitude,
+            lng = location.longitude,
+            alt = location.altitude,
+            speedMps = currentSpeedMps,
+            timeMs = currentTime,
+            runningStats = _tripStats.value
+        )
     }
 
     fun stopTrip() {
+        if (!isTracking) return
         isTracking = false
+        speedSmoother.reset()
+
+        val endTimeMs = System.currentTimeMillis()
+
+        // 1. Flush the final silent stop time
+        _tripStats.update { currentStats ->
+            var finalMoving = currentStats.movingTime
+            var finalStopped = currentStats.stoppedTime
+
+            stopDetector.updateTimes(endTimeMs) { movingDeltaMs, stoppedDeltaMs ->
+                finalMoving += (movingDeltaMs / 1000L)
+                finalStopped += (stoppedDeltaMs / 1000L)
+            }
+
+            val movingHours = finalMoving / 3600f
+            val totalKm = currentStats.distanceMeters / 1000f
+            val finalAvgSpeed = if (movingHours > 0) totalKm / movingHours else 0f
+
+            currentStats.copy(
+                movingTime = finalMoving,
+                stoppedTime = finalStopped,
+                avgSpeed = finalAvgSpeed
+            )
+        }
+
+        // 2. Tell the Repo to compress the Map string and seal the file!
+        tripRepository.saveTrip(currentTripId, _tripStats.value)
     }
 
     fun calculateAverageSpeed(totalDistanceMeters: Long, movingTimeMillis: Float): Float {

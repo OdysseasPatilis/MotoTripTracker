@@ -1,7 +1,7 @@
 package com.odys.mototriptracker
 
 import android.app.Application
-import com.odys.mototriptracker.data.trip.MyObjectBox
+import com.odys.mototriptracker.data.MyObjectBox
 import com.odys.mototriptracker.data.trip.TripRepository
 import com.odys.mototriptracker.domain.SpeedFilter
 import com.odys.mototriptracker.domain.StopDetector
@@ -29,9 +29,9 @@ class MotoTripTrackerApp : Application() {
         val speedFilter = SpeedFilter()
         val stopDetector = StopDetector()
 
-        tripManager = TripManager(speedFilter, stopDetector)
-
         // Now boxStore actually exists when we pass it in!
         tripRepository = TripRepository(boxStore)
+        tripManager = TripManager(speedFilter, stopDetector,tripRepository)
+
     }
 }

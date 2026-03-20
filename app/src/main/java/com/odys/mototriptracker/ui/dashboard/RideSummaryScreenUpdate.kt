@@ -2,7 +2,18 @@ package com.odys.mototriptracker.ui.dashboard
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -13,6 +24,8 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -24,28 +37,39 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.google.android.gms.maps.CameraUpdateFactory
+import com.google.android.gms.maps.model.LatLngBounds
+import com.google.android.gms.maps.model.MapStyleOptions
+import com.google.android.gms.maps.model.RoundCap
+import com.google.maps.android.PolyUtil
+import com.google.maps.android.compose.GoogleMap
+import com.google.maps.android.compose.MapProperties
+import com.google.maps.android.compose.MapUiSettings
+import com.google.maps.android.compose.Polyline
+import com.google.maps.android.compose.rememberCameraPositionState
+import com.odys.mototriptracker.data.trip.TripEntity
 
 // ── Colours ──────────────────────────────────────────────────────────────────
 private val BackgroundDark = Color(0xFF0E0E14)
-private val SurfaceDark      = Color(0xFF1A1A26)
-private val CardDark         = Color(0xFF1C1C2A)
-private val PurpleAccent     = Color(0xFF5B5FEF)
-private val Mint             = Color(0xFF5EFFC8)
-private val Red              = Color(0xFFFF5F5F)
-private val Blue             = Color(0xFF5B9EF7)
-private val Purple           = Color(0xFFC084FC)
+private val SurfaceDark = Color(0xFF1A1A26)
+private val CardDark = Color(0xFF1C1C2A)
+private val PurpleAccent = Color(0xFF5B5FEF)
+private val Mint = Color(0xFF5EFFC8)
+private val Red = Color(0xFFFF5F5F)
+private val Blue = Color(0xFF5B9EF7)
+private val Purple = Color(0xFFC084FC)
 
-private val TextHint         = Color(0x40FFFFFF)
-private val RouteAmber       = Color(0xFFEF9F27)
-private val RouteTeal        = Color(0xFF1D9E75)
-private val RouteCoral       = Color(0xFFD85A30)
+private val TextHint = Color(0x40FFFFFF)
+private val RouteAmber = Color(0xFFEF9F27)
+private val RouteTeal = Color(0xFF1D9E75)
+private val RouteCoral = Color(0xFFD85A30)
 
 // ── Entry point ───────────────────────────────────────────────────────────────
 @Composable
 fun RideSummaryScreenUpdate(
+    summary: TripEntity,
     onBack: () -> Unit = {},
     onDelete: () -> Unit = {},
     onViewRoute: () -> Unit = {}
@@ -59,11 +83,15 @@ fun RideSummaryScreenUpdate(
     ) {
         TopBar(onBack = onBack, onDelete = onDelete)
         Spacer(Modifier.height(4.dp))
-        DateCard()
+        DateCard(summary)
         Spacer(Modifier.height(10.dp))
-        MapPreviewCard(onClick = onViewRoute)
+        MapPreviewCard(
+            "${String.format("%.1f ", summary.distanceMeters / 1000f)} km",
+            summary.encodedRoutePolyline,
+            onClick = onViewRoute
+        )
         Spacer(Modifier.height(10.dp))
-        StatsGrid()
+        StatsGrid(summary)
     }
 }
 
@@ -73,7 +101,8 @@ private fun TopBar(onBack: () -> Unit, onDelete: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 20.dp, vertical = 14.dp),
+            .padding(horizontal = 20.dp, vertical = 14.dp)
+            .statusBarsPadding(),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
@@ -120,7 +149,7 @@ private fun TopBar(onBack: () -> Unit, onDelete: () -> Unit) {
 
 // ── Date card ─────────────────────────────────────────────────────────────────
 @Composable
-private fun DateCard() {
+private fun DateCard(summary: TripEntity) {
     Box(
         modifier = Modifier
             .padding(horizontal = 20.dp)
@@ -144,7 +173,7 @@ private fun DateCard() {
             )
             Spacer(Modifier.height(4.dp))
             Text(
-                text = "Mar 17, 2026 – 09:44",
+                text = formatTimestampToDate(summary.startTime),
                 color = Mint,
                 fontSize = 22.sp,
                 fontWeight = FontWeight.SemiBold
@@ -155,22 +184,76 @@ private fun DateCard() {
 
 // ── Map preview card ──────────────────────────────────────────────────────────
 @Composable
-private fun MapPreviewCard(onClick: () -> Unit) {
+fun MapPreviewCard(
+    distance: String,
+    encodedPolyline: String?, // NEW: Pass the string from TripEntity
+    onClick: () -> Unit
+) {
+    // 1. Decode the string back into GPS points (Only runs when the string changes)
+    val decodedPath = remember(encodedPolyline) {
+        if (encodedPolyline?.isNotBlank() == true) {
+            PolyUtil.decode(encodedPolyline)
+        } else {
+            emptyList()
+        }
+    }
+
+    val cameraPositionState = rememberCameraPositionState()
+
+    // 2. Auto-Zoom to fit the route
+    LaunchedEffect(decodedPath) {
+        if (decodedPath.isNotEmpty()) {
+            val boundsBuilder = LatLngBounds.Builder()
+            decodedPath.forEach { boundsBuilder.include(it) }
+            val bounds = boundsBuilder.build()
+
+            // We use .move() instead of .animate() here so it's instantly
+            // framed when the card appears on the screen.
+            cameraPositionState.move(CameraUpdateFactory.newLatLngBounds(bounds, 80)) // 80px padding
+        }
+    }
+
     Box(
         modifier = Modifier
             .padding(horizontal = 20.dp)
             .fillMaxWidth()
             .height(190.dp)
             .clip(RoundedCornerShape(20.dp))
-            .background(SurfaceDark)
+            .background(Color(0xFF1E1E24)) // Your SurfaceDark
             .clickable { onClick() }
     ) {
-        // Drawn map with route
-        RouteCanvas(
-            modifier = Modifier.fillMaxSize()
-        )
 
-        // Distance chip top-right
+        // --- 3. THE REAL MAP ---
+        GoogleMap(
+            modifier = Modifier.fillMaxSize(),
+            cameraPositionState = cameraPositionState,
+            properties = MapProperties(
+                mapStyleOptions = MapStyleOptions(DARK_MAP_STYLE_JSON)
+            ),
+            // Lock down all gestures so it feels like a static card
+            uiSettings = MapUiSettings(
+                zoomControlsEnabled = false,
+                zoomGesturesEnabled = false,
+                scrollGesturesEnabled = false,
+                rotationGesturesEnabled = false,
+                tiltGesturesEnabled = false,
+                compassEnabled = false,
+                myLocationButtonEnabled = false
+            )
+        ) {
+            if (decodedPath.isNotEmpty()) {
+                Polyline(
+                    points = decodedPath,
+                    color = Color(0xFF4DE1C1), // Your Mint color
+                    width = 14f,               // Thick enough to see on a small card
+                    startCap = RoundCap(),
+                    endCap = RoundCap(),
+                    geodesic = true
+                )
+            }
+        }
+
+        // --- Distance chip top-right ---
         Box(
             modifier = Modifier
                 .align(Alignment.TopEnd)
@@ -179,16 +262,17 @@ private fun MapPreviewCard(onClick: () -> Unit) {
                 .background(Color(0x8C0E0E14))
                 .padding(horizontal = 10.dp, vertical = 4.dp)
         ) {
-            Text(text = "6.0 km", color = Color(0xBFFFFFFF), fontSize = 11.sp)
+            Text(text = distance, color = Color(0xBFFFFFFF), fontSize = 11.sp)
         }
 
-        // Bottom overlay: pulsing dot + label
+        // --- Bottom overlay: pulsing dot + label ---
         Box(
             modifier = Modifier
                 .align(Alignment.BottomStart)
                 .padding(12.dp)
                 .clip(RoundedCornerShape(20.dp))
-                .background(Color(0x1FFFFFFF))
+                .background(Color(0xE61E1E24))
+                .clickable { onClick() } // <-- ADD IT HERE INSTEAD!
                 .padding(horizontal = 14.dp, vertical = 6.dp)
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -196,12 +280,14 @@ private fun MapPreviewCard(onClick: () -> Unit) {
                     modifier = Modifier
                         .size(7.dp)
                         .clip(CircleShape)
-                        .background(Mint)
+                        .background(Color(0xFF4DE1C1))
                 )
                 Spacer(Modifier.width(7.dp))
+
+                // Keep the text simple
                 Text(
                     text = "View full route  ↗",
-                    color = TextPrimary,
+                    color = Color.White,
                     fontSize = 12.sp
                 )
             }
@@ -285,16 +371,17 @@ private fun RouteCanvas(modifier: Modifier = Modifier) {
 
 // ── Stats grid ────────────────────────────────────────────────────────────────
 @Composable
-private fun StatsGrid() {
+private fun StatsGrid(summary: TripEntity) {
+    val totalTime = summary.movingTime + summary.stoppedTime
     val stats = listOf(
-        StatItem("Distance",   "6.0",  "km",    TextPrimary),
-        StatItem("Total time", "11:23","mm:ss", TextPrimary),
-        StatItem("Moving",     "09:39","mm:ss", Mint),
-        StatItem("Stopped",    "01:44","mm:ss", Red),
-        StatItem("Avg speed",  "37",   "km/h",  TextPrimary),
-        StatItem("Max speed",  "133",  "km/h",  Blue),
-        StatItem("Elevation",  "+97",  "meters",TextPrimary),
-        StatItem("Max G",      "0.22", "G-force",Purple),
+        StatItem("Distance",   "${String.format("%.1f ", summary.distanceMeters / 1000f)}",  "km",    TextPrimary),
+        StatItem("Total time", formatSecondsToTime(totalTime),"mm:ss", TextPrimary),
+        StatItem("Moving",     formatSecondsToTime(summary.movingTime),"mm:ss", Mint),
+        StatItem("Stopped",    formatSecondsToTime(summary.stoppedTime),"mm:ss", Red),
+        StatItem("Avg speed",  summary.avgSpeed.toInt().toString(),   "km/h",  TextPrimary),
+        StatItem("Max speed",  summary.maxSpeed.toInt().toString(),  "km/h",  Blue),
+        StatItem("Elevation",  "+${summary.elevationGain.toInt()}",  "meters",TextPrimary),
+        StatItem("Max G",      String.format("%.2f", summary.maxGForce), "G-force",Purple),
     )
 
     Column(
@@ -352,8 +439,9 @@ private fun StatCard(stat: StatItem, modifier: Modifier = Modifier) {
 }
 
 // ── Preview ───────────────────────────────────────────────────────────────────
+/*
 @Preview(showBackground = true, backgroundColor = 0xFF0E0E14, widthDp = 390, heightDp = 800)
 @Composable
 fun RideSummaryScreenPreview() {
     RideSummaryScreenUpdate()
-}
+}*/

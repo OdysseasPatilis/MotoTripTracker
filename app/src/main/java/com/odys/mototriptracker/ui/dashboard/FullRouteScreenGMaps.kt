@@ -1,4 +1,3 @@
-/*
 package com.odys.mototriptracker.ui.dashboard
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -23,6 +22,7 @@ import android.graphics.Canvas as AndroidCanvas
 import android.graphics.Paint
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -44,29 +44,29 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.google.android.gms.maps.CameraUpdateFactory
 import com.google.android.gms.maps.model.*
 import com.google.android.gms.maps.model.LatLng
 import com.google.maps.android.compose.*
-import com.odys.mototriptracker.ui.dashboard.LegendSegment
+import com.odys.mototriptracker.data.trip.TripEntity
+import androidx.core.graphics.createBitmap
 
 // ── Colours ───────────────────────────────────────────────────────────────────
-private val BgDark       = Color(0xFF0E0E14)
-private val SurfaceDark  = Color(0xFF1A1A26)
-private val CardDark     = Color(0xFF1C1C2A)
+private val BgDark = Color(0xFF0E0E14)
+private val SurfaceDark = Color(0xFF1A1A26)
+private val CardDark = Color(0xFF1C1C2A)
 private val PurpleActive = Color(0xFF5B5FEF)
-private val Mint         = Color(0xFF5EFFC8)
-private val Blue         = Color(0xFF5B9EF7)
-private val Yellow       = Color(0xFFFACC15)
-private val RouteAmber   = Color(0xFFEF9F27)
-private val RouteTeal    = Color(0xFF1D9E75)
-private val RouteCoral   = Color(0xFFD85A30)
-private val RouteBlue    = Color(0xFF378ADD)
-private val TextHint     = Color(0x40FFFFFF)
-private val Overlay      = Color(0xB20E0E14)
+private val Mint = Color(0xFF5EFFC8)
+private val Blue = Color(0xFF5B9EF7)
+private val Yellow = Color(0xFFFACC15)
+private val RouteAmber = Color(0xFFEF9F27)
+private val RouteTeal = Color(0xFF1D9E75)
+private val RouteCoral = Color(0xFFD85A30)
+private val RouteBlue = Color(0xFF378ADD)
+private val TextHint = Color(0x40FFFFFF)
+private val Overlay = Color(0xB20E0E14)
 
 // ── Enums & models ────────────────────────────────────────────────────────────
 enum class MapLayer { Speed, Elevation }
@@ -80,11 +80,10 @@ data class Waypoint(
     val position: LatLng
 )
 
-*/
 /**
  * One GPS point in the ride with telemetry.
  * Replace with your real data model (Room entity, proto, etc.)
- *//*
+ */
 
 data class RidePoint(
     val latLng: LatLng,
@@ -92,27 +91,6 @@ data class RidePoint(
     val elevationM: Float
 )
 
-// ── Sample data ───────────────────────────────────────────────────────────────
-val sampleRidePoints = listOf(
-    RidePoint(LatLng(37.9453, 23.6460),  12f,  5f),
-    RidePoint(LatLng(37.9480, 23.6490),  35f, 10f),
-    RidePoint(LatLng(37.9510, 23.6530),  28f, 18f),
-    RidePoint(LatLng(37.9540, 23.6570),  55f, 28f),
-    RidePoint(LatLng(37.9580, 23.6620),  72f, 45f),
-    RidePoint(LatLng(37.9620, 23.6680),  90f, 62f),
-    RidePoint(LatLng(37.9655, 23.6730), 115f, 78f),
-    RidePoint(LatLng(37.9690, 23.6790), 133f, 90f),
-    RidePoint(LatLng(37.9710, 23.6840),  60f, 97f),
-)
-
-val sampleWaypoints = listOf(
-    Waypoint("Departure",  "Piraeus port area · 0.0 km",           "09:44", WaypointType.Start, sampleRidePoints.first().latLng),
-    Waypoint("Brief stop", "Traffic light · 2.0 km · 01:02 pause", "09:51", WaypointType.Stop,  sampleRidePoints[2].latLng),
-    Waypoint("Brief stop", "Intersection · 4.0 km · 00:42 pause",  "09:53", WaypointType.Stop,  sampleRidePoints[6].latLng),
-    Waypoint("Arrival",    "Destination · 6.0 km · +97m elev.",    "09:55", WaypointType.End,   sampleRidePoints.last().latLng),
-)
-
-// ── Colour helpers ────────────────────────────────────────────────────────────
 private fun speedColor(kmh: Float): Color = when {
     kmh < 40f -> RouteAmber
     kmh < 80f -> RouteTeal
@@ -124,16 +102,15 @@ private fun elevColor(elevM: Float, baseElevM: Float): Color {
     return when {
         gain < 10f -> RouteBlue
         gain < 50f -> RouteAmber
-        else       -> RouteCoral
+        else -> RouteCoral
     }
 }
 
-*/
 /**
  * Splits a list of RidePoints into contiguous segments that share the same
  * colour for the given layer. Adjacent segments overlap by one point so the
  * polylines connect without gaps.
- *//*
+ */
 
 private fun buildColoredSegments(
     points: List<RidePoint>,
@@ -168,10 +145,11 @@ private fun buildColoredSegments(
 // ── Screen ────────────────────────────────────────────────────────────────────
 @Composable
 fun FullRouteScreenGMaps(
-    ridePoints: List<RidePoint> = sampleRidePoints,
-    waypoints: List<Waypoint>   = sampleWaypoints,
-    onBack: () -> Unit          = {},
-    onShare: () -> Unit         = {}
+    summary: TripEntity,
+    ridePoints: List<RidePoint>,
+    waypoints: List<Waypoint> ,
+    onBack: () -> Unit = {},
+    onShare: () -> Unit = {}
 ) {
     var activeLayer by remember { mutableStateOf(MapLayer.Speed) }
 
@@ -185,15 +163,15 @@ fun FullRouteScreenGMaps(
         RouteTopBar(onBack = onBack, onShare = onShare)
         Spacer(Modifier.height(4.dp))
         RouteMapCard(
-            ridePoints    = ridePoints,
-            waypoints     = waypoints,
-            activeLayer   = activeLayer,
+            ridePoints = ridePoints,
+            waypoints = waypoints,
+            activeLayer = activeLayer,
             onLayerChange = { activeLayer = it }
         )
         Spacer(Modifier.height(12.dp))
-        WaypointsPanel(waypoints = waypoints)
+        WaypointsPanel(summary,waypoints)
         Spacer(Modifier.height(12.dp))
-        ProfileChart(ridePoints = ridePoints, activeLayer = activeLayer)
+        ProfileChart(summary, ridePoints, activeLayer)
         Spacer(Modifier.height(12.dp))
         LegendPills(activeLayer = activeLayer)
     }
@@ -205,7 +183,8 @@ private fun RouteTopBar(onBack: () -> Unit, onShare: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 20.dp, vertical = 14.dp),
+            .padding(horizontal = 20.dp, vertical = 14.dp)
+            .statusBarsPadding(),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
@@ -245,11 +224,24 @@ private fun RouteMapCard(
     onLayerChange: (MapLayer) -> Unit
 ) {
     val bounds = remember(ridePoints) {
-        LatLngBounds.builder().also { b -> ridePoints.forEach { b.include(it.latLng) } }.build()
+        // THE FIX: If the list is empty (still loading), return null safely
+        if (ridePoints.isEmpty()) {
+            null
+        } else {
+            // Otherwise, build the bounds
+            val builder = LatLngBounds.builder()
+            ridePoints.forEach { builder.include(it.latLng) }
+            builder.build()
+        }
     }
+
     val cameraState = rememberCameraPositionState()
+
+// Make sure the LaunchedEffect also expects the null safely
     LaunchedEffect(bounds) {
-        cameraState.move(CameraUpdateFactory.newLatLngBounds(bounds, 80))
+        if (bounds != null) {
+            cameraState.move(CameraUpdateFactory.newLatLngBounds(bounds, 80))
+        }
     }
 
     val baseElev = remember(ridePoints) { ridePoints.firstOrNull()?.elevationM ?: 0f }
@@ -276,33 +268,33 @@ private fun RouteMapCard(
                 mapStyleOptions = MapStyleOptions(DARK_MAP_STYLE_JSON)
             ),
             uiSettings = MapUiSettings(
-                zoomControlsEnabled    = false,
+                zoomControlsEnabled = false,
                 myLocationButtonEnabled = false,
-                mapToolbarEnabled      = false,
-                compassEnabled         = false,
-                scrollGesturesEnabled  = true,
-                zoomGesturesEnabled    = true
+                mapToolbarEnabled = false,
+                compassEnabled = false,
+                scrollGesturesEnabled = true,
+                zoomGesturesEnabled = true
             )
         ) {
             // Coloured route polylines
             segments.forEach { (latLngs, color) ->
                 Polyline(
-                    points   = latLngs,
-                    color    = color,
-                    width    = 14f,
+                    points = latLngs,
+                    color = color,
+                    width = 14f,
                     jointType = JointType.ROUND,
-                    startCap  = RoundCap(),
-                    endCap    = RoundCap(),
-                    zIndex    = 1f
+                    startCap = RoundCap(),
+                    endCap = RoundCap(),
+                    zIndex = 1f
                 )
             }
 
             // Stop markers
             waypoints.filter { it.type == WaypointType.Stop }.forEach { wp ->
                 Marker(
-                    state   = MarkerState(wp.position),
-                    icon    = BitmapDescriptorFactory.fromBitmap(stopBitmap),
-                    title   = wp.label,
+                    state = MarkerState(wp.position),
+                    icon = BitmapDescriptorFactory.fromBitmap(stopBitmap),
+                    title = wp.label,
                     snippet = wp.detail,
                     zIndex  = 2f
                 )
@@ -311,9 +303,9 @@ private fun RouteMapCard(
             // Start marker
             waypoints.firstOrNull { it.type == WaypointType.Start }?.let {
                 Marker(
-                    state  = MarkerState(it.position),
-                    icon   = BitmapDescriptorFactory.fromBitmap(startBitmap),
-                    title  = "Start",
+                    state = MarkerState(it.position),
+                    icon = BitmapDescriptorFactory.fromBitmap(startBitmap),
+                    title = "Start",
                     zIndex = 3f
                 )
             }
@@ -321,9 +313,9 @@ private fun RouteMapCard(
             // End marker
             waypoints.firstOrNull { it.type == WaypointType.End }?.let {
                 Marker(
-                    state  = MarkerState(it.position),
-                    icon   = BitmapDescriptorFactory.fromBitmap(endBitmap),
-                    title  = "Arrival",
+                    state = MarkerState(it.position),
+                    icon = BitmapDescriptorFactory.fromBitmap(endBitmap),
+                    title = "Arrival",
                     zIndex = 3f
                 )
             }
@@ -336,8 +328,8 @@ private fun RouteMapCard(
                 .padding(10.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
-            LayerToggleButton("Speed",     activeLayer == MapLayer.Speed)     { onLayerChange(MapLayer.Speed) }
-            LayerToggleButton("Elevation", activeLayer == MapLayer.Elevation) { onLayerChange(MapLayer.Elevation) }
+            LayerToggleButton("Speed", activeLayer == MapLayer.Speed)     { onLayerChange(MapLayer.Speed) }
+            LayerToggleButton("Elevation",activeLayer == MapLayer.Elevation) { onLayerChange(MapLayer.Elevation) }
         }
 
         // ── Legend bar (overlaid) ──────────────────────────────────────────
@@ -372,9 +364,9 @@ private fun LayerToggleButton(label: String, isActive: Boolean, onClick: () -> U
             .padding(horizontal = 10.dp, vertical = 5.dp)
     ) {
         Text(
-            text       = label,
-            color      = if (isActive) TextPrimary else TextMuted,
-            fontSize   = 11.sp,
+            text = label,
+            color = if (isActive) TextPrimary else TextMuted,
+            fontSize = 11.sp,
             fontWeight = if (isActive) FontWeight.Medium else FontWeight.Normal
         )
     }
@@ -392,7 +384,7 @@ private fun LegendSegment(color: Color) {
 
 // ── Waypoints ─────────────────────────────────────────────────────────────────
 @Composable
-private fun WaypointsPanel(waypoints: List<Waypoint>) {
+private fun WaypointsPanel(summary: TripEntity,waypoints: List<Waypoint>) {
     Column(modifier = Modifier.padding(horizontal = 20.dp)) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -400,7 +392,7 @@ private fun WaypointsPanel(waypoints: List<Waypoint>) {
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text("Route waypoints", color = TextPrimary, fontSize = 15.sp, fontWeight = FontWeight.Medium)
-            Text("Mar 17 · 09:44",  color = TextHint,    fontSize = 12.sp)
+            Text(formatTimestampToDate(summary.startTime),  color = TextHint,    fontSize = 12.sp)
         }
         Spacer(Modifier.height(12.dp))
         waypoints.forEachIndexed { i, wp ->
@@ -419,8 +411,8 @@ private fun WaypointRow(wp: Waypoint, showLine: Boolean) {
             Spacer(Modifier.height(4.dp))
             val dotColor = when (wp.type) {
                 WaypointType.Start -> Mint
-                WaypointType.Stop  -> Yellow
-                WaypointType.End   -> Blue
+                WaypointType.Stop -> Yellow
+                WaypointType.End -> Blue
             }
             Box(
                 modifier = Modifier
@@ -444,8 +436,8 @@ private fun WaypointRow(wp: Waypoint, showLine: Boolean) {
         }
         Spacer(Modifier.width(10.dp))
         Column(modifier = Modifier.weight(1f)) {
-            Text(wp.label,  color = TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.Medium)
-            Text(wp.detail, color = TextHint,    fontSize = 11.sp)
+            Text(wp.label, color = TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+            Text(wp.detail, color = TextHint, fontSize = 11.sp)
             if (showLine) Spacer(Modifier.height(20.dp))
         }
         Text(wp.time, color = TextMuted, fontSize = 12.sp)
@@ -454,13 +446,13 @@ private fun WaypointRow(wp: Waypoint, showLine: Boolean) {
 
 // ── Profile chart (elevation or speed) ───────────────────────────────────────
 @Composable
-private fun ProfileChart(ridePoints: List<RidePoint>, activeLayer: MapLayer) {
+private fun ProfileChart(summary: TripEntity, ridePoints: List<RidePoint>, activeLayer: MapLayer) {
     val values = remember(ridePoints, activeLayer) {
         ridePoints.map { if (activeLayer == MapLayer.Elevation) it.elevationM else it.speedKmh }
     }
     val lineColor = if (activeLayer == MapLayer.Elevation) Blue else RouteTeal
     val fillColor = if (activeLayer == MapLayer.Elevation) Color(0x1F5B9EF7) else Color(0x1F1D9E75)
-    val peakVal   = values.maxOrNull() ?: 0f
+    val peakVal = values.maxOrNull() ?: 0f
     val peakLabel = if (activeLayer == MapLayer.Elevation) "+${peakVal.toInt()} m peak"
     else "${peakVal.toInt()} km/h peak"
     val peakColor = if (activeLayer == MapLayer.Elevation) Blue else RouteCoral
@@ -478,11 +470,11 @@ private fun ProfileChart(ridePoints: List<RidePoint>, activeLayer: MapLayer) {
                 .clip(RoundedCornerShape(12.dp))
                 .background(SurfaceDark)
                 .drawWithCache {
-                    val w     = size.width
-                    val h     = size.height
-                    val pad   = 12f
-                    val minV  = values.minOrNull() ?: 0f
-                    val maxV  = values.maxOrNull() ?: 1f
+                    val w = size.width
+                    val h = size.height
+                    val pad = 12f
+                    val minV = values.minOrNull() ?: 0f
+                    val maxV = values.maxOrNull() ?: 1f
                     val range = (maxV - minV).coerceAtLeast(1f)
                     val step  = if (values.size > 1) (w - pad * 2) / (values.size - 1) else 0f
                     fun yFor(v: Float) = pad + (1f - (v - minV) / range) * (h - pad * 2)
@@ -506,9 +498,9 @@ private fun ProfileChart(ridePoints: List<RidePoint>, activeLayer: MapLayer) {
         )
         Spacer(Modifier.height(4.dp))
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text("0 km",    color = TextHint,  fontSize = 9.sp)
-            Text(peakLabel, color = peakColor, fontSize = 9.sp)
-            Text("6.0 km",  color = TextHint,  fontSize = 9.sp)
+            Text("0 km", color = TextHint,  fontSize = 9.sp)
+            Text(peakLabel,color = peakColor, fontSize = 9.sp)
+            Text("${String.format("%.1f ", summary.distanceMeters / 1000f)} km", color = TextHint,  fontSize = 9.sp)
         }
     }
 }
@@ -526,7 +518,10 @@ private fun LegendPills(activeLayer: MapLayer) {
         Triple(RouteCoral, "Steep", "50 m+"),
     )
     Row(
-        modifier = Modifier.padding(horizontal = 20.dp).fillMaxWidth(),
+        modifier = Modifier
+            .padding(horizontal = 20.dp)
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState()),
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         pills.forEach { (color, label, range) ->
@@ -539,8 +534,9 @@ private fun LegendPills(activeLayer: MapLayer) {
                 horizontalArrangement = Arrangement.spacedBy(5.dp)
             ) {
                 Box(modifier = Modifier.size(7.dp).clip(CircleShape).background(color))
-                Text(label, color = TextMuted,   fontSize = 11.sp)
-                Text(range, color = TextPrimary, fontSize = 11.sp, fontWeight = FontWeight.Medium)
+                // Add maxLines = 1 to prevent wrapping
+                Text(label, color = TextMuted, fontSize = 11.sp, maxLines = 1)
+                Text(range, color = TextPrimary, fontSize = 11.sp, fontWeight = FontWeight.Medium, maxLines = 1)
             }
         }
     }
@@ -549,7 +545,7 @@ private fun LegendPills(activeLayer: MapLayer) {
 // ── Marker bitmap ─────────────────────────────────────────────────────────────
 private fun createMarkerBitmap(colorArgb: Int, sizeDp: Int): Bitmap {
     val px = sizeDp * 3
-    val bmp = Bitmap.createBitmap(px, px, Bitmap.Config.ARGB_8888)
+    val bmp = createBitmap(px, px)
     val canvas = AndroidCanvas(bmp)
     val fill = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = colorArgb; style = Paint.Style.FILL
@@ -566,11 +562,13 @@ private fun createMarkerBitmap(colorArgb: Int, sizeDp: Int): Bitmap {
 }
 
 // ── Preview ───────────────────────────────────────────────────────────────────
+/*
 @Preview(showBackground = true, backgroundColor = 0xFF0E0E14, widthDp = 390, heightDp = 900)
 @Composable
 fun FullRouteScreenPreview() {
     FullRouteScreenGMaps()
 }
+*/
 
 // ── Dark map style JSON (paste into res/raw/dark_map_style.json) ──────────────
 val DARK_MAP_STYLE_JSON = """
@@ -588,4 +586,3 @@ val DARK_MAP_STYLE_JSON = """
   { "featureType": "administrative",  "elementType": "geometry",       "stylers": [{ "color": "#2a2a42" }] }
 ]
 """.trimIndent()
-*/
