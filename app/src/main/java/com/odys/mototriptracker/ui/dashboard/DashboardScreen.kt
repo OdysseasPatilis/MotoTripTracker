@@ -158,7 +158,11 @@ fun DashboardScreen() {
             onViewHistory = {
                 viewModel.loadHistory() // Load the latest data from ObjectBox
                 showHistory = true      // Switch the UI
-            }
+            },
+            onPauseRide = {
+                println("on pause")
+            },
+            isPaused = !isTracking
         )
     }
 }

@@ -1,14 +1,17 @@
 package com.odys.mototriptracker.data.trip
 
+import android.content.Context
 import com.google.android.gms.maps.model.LatLng
 import com.google.maps.android.PolyUtil
 import com.odys.mototriptracker.data.checkpoint.RoutePointEntity
 import com.odys.mototriptracker.data.checkpoint.RoutePointEntity_
+import com.odys.mototriptracker.data.waypoint.AdvancedWaypointAnalyzer
 import com.odys.mototriptracker.data.waypoint.WaypointAnalyzer
 import com.odys.mototriptracker.domain.TripStats
 import io.objectbox.BoxStore
 
 class TripRepository(
+    private val context: Context,
     boxStore: BoxStore
 ) {
 
@@ -68,10 +71,10 @@ class TripRepository(
         // 1. Fetch all the raw GPS points
         val savedPoints = trip.routePoints
         // --- NEW: GENERATE WAYPOINTS ---
-        val updatedWaypoints = WaypointAnalyzer.analyzeAndMarkWaypoints(
+        val updatedWaypoints = AdvancedWaypointAnalyzer.analyzeAndMarkWaypoints(
+             context = context, // Pass the context here!
             points = savedPoints,
-            totalDistanceMeters = finalStats.distanceMeters,
-            totalElevationGain = finalStats.totalElevationGain
+            totalDistanceMeters = finalStats.distanceMeters
         )
         // Save only the modified points back to the database
         if (updatedWaypoints.isNotEmpty()) {

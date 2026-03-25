@@ -121,7 +121,7 @@ fun RideHistoryCard(ride: TripEntity, onClick: () -> Unit) {
                 Text(formatTimestampToDate(ride.startTime), color = NeonGreen, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
                 Text("${formatSecondsToTime(totalTime)} duration",
                     color = TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.Medium)
-                Text("${String.format("%.1f km", ride.distanceMeters / 1000f)} km  ·  ${ride.avgSpeed.toInt()} km/h avg",
+                Text("${String.format("%.1f km", ride.distanceMeters / 1000f)}  ·  ${ride.avgSpeed.toInt()} km/h avg",
                     color = TextMuted, fontSize = 12.sp)
             }
             Icon(Icons.Rounded.ChevronRight, contentDescription = null,

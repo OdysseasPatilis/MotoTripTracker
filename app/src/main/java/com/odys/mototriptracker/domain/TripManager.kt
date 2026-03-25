@@ -13,7 +13,8 @@ import kotlinx.coroutines.flow.update
 class TripManager(
     private val speedFilter: SpeedFilter,
     private val stopDetector: StopDetector,
-    private val tripRepository: TripRepository
+    private val tripRepository: TripRepository,
+    private val gForceTracker: GForceTracker
 ) {
     private var currentTripId: Long = 0L
     private val _tripStats = MutableStateFlow(TripStats())
@@ -38,6 +39,7 @@ class TripManager(
 
         // Reset the smoother for the new ride!
         elevationSmoother = ElevationSmoother()
+        gForceTracker.startTracking()
 
         val startTimeMs = System.currentTimeMillis()
         _tripStats.value = TripStats(tripStartTime = startTimeMs)
@@ -77,13 +79,6 @@ class TripManager(
         }
 
         // G-Force Calculation
-        if (lastLocationTime > 0 && lastSpeedMps >= 0) {
-            val deltaV = currentSpeedMps - lastSpeedMps
-            val deltaT = (currentTime - lastLocationTime) / 1000f
-            if (deltaT > 0.1f) { // Ensure a minimum time gap to avoid division by near-zero
-                gForce = (deltaV / deltaT) / 9.81f
-            }
-        }
 
         // 4. Thread-safe atomic update
         _tripStats.update { currentStats ->
@@ -105,7 +100,8 @@ class TripManager(
                 newAvgSpeed = sessionMaxSpeedKmh.toFloat()
             }*/
             // Smoothing the G-Force for the UI
-            val smoothedG = (currentStats.currentGForce * 0.8f) + (gForce * 0.2f)
+            val hardwareCurrentG = gForceTracker.currentGForce
+            val hardwareMaxG = maxOf(currentStats.maxGForce, gForceTracker.maxSessionGForce)
 
             currentStats.copy(
                 speed = currentSpeedKmh,
@@ -115,8 +111,8 @@ class TripManager(
                 maxSpeed = maxOf(currentStats.maxSpeed, sessionMaxSpeedKmh.toFloat()),
                 avgSpeed = newAvgSpeed,
                 totalElevationGain = (currentStats.totalElevationGain + elevationDelta).toFloat(),
-                currentGForce = smoothedG,
-                maxGForce = maxOf(currentStats.maxGForce, kotlin.math.abs(smoothedG))
+                currentGForce = hardwareCurrentG,
+                maxGForce = hardwareMaxG
             )
         }
 
@@ -140,7 +136,7 @@ class TripManager(
         if (!isTracking) return
         isTracking = false
         speedSmoother.reset()
-
+        gForceTracker.stopTracking()
         val endTimeMs = System.currentTimeMillis()
 
         // 1. Flush the final silent stop time

@@ -51,6 +51,21 @@ import java.util.Date
 import java.util.Locale
 import kotlin.math.cos
 import kotlin.math.sin
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
+import android.os.BatteryManager
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.border
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.geometry.CornerRadius
+import kotlinx.coroutines.delay
+import java.util.Calendar
 
 // --- Color palette ---
 val BgDeep    = Color(0xFF0A0A0F)
@@ -72,7 +87,9 @@ fun RideTrackerScreen(
     isLocationEnabled: Boolean,
     onStartRide: () -> Unit,
     onStopRide: () -> Unit,
-    onViewHistory: () -> Unit
+    onViewHistory: () -> Unit,
+    onPauseRide: () -> Unit,
+    isPaused: Boolean
 ) {
     KeepScreenOn()
     Scaffold(
@@ -85,33 +102,59 @@ fun RideTrackerScreen(
                     .navigationBarsPadding()
                     .padding(start = 20.dp, end = 20.dp, bottom = 24.dp, top = 12.dp)
             ) {
-                Button(
-                    onClick = { if (isTracking) onStopRide() else onStartRide() },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(56.dp)
-                        .clip(RoundedCornerShape(28.dp))
-                        .background(
-                            if (isTracking)
-                                Brush.horizontalGradient(listOf(NeonRed, Color(0xFFFF6B6B)))
-                            else
-                                GradientButton
-                        ),
-                    colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent),
-                    contentPadding = PaddingValues(0.dp),
-                    enabled = isLocationEnabled || isTracking
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    Text(
-                        text = when {
-                            isTracking -> "STOP RIDE"
-                            !isLocationEnabled -> "ENABLE GPS TO START"
-                            else -> "START RIDE"
-                        },
-                        color = if (isLocationEnabled || isTracking) BgDeep else Color.Gray,
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Bold,
-                        letterSpacing = 2.sp
-                    )
+                    if (isTracking) {
+                        // Pause / Resume
+                        Button(
+                            onClick = onPauseRide,
+                            modifier = Modifier.weight(1f).height(56.dp),
+                            shape = RoundedCornerShape(28.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1A1A2E)),
+                            border = BorderStroke(1.dp, Color(0x1FFFFFFF))
+                        ) {
+                            if (!isPaused) {
+                                // Recording dot
+                                Canvas(Modifier.size(8.dp)) {
+                                    drawCircle(Color(0xFFE24B4A))
+                                }
+                                Spacer(Modifier.width(6.dp))
+                            }
+                            Text(
+                                if (isPaused) "RESUME" else "PAUSE",
+                                color = TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Bold
+                            )
+                        }
+                        // Stop
+                        Button(
+                            onClick = onStopRide,
+                            modifier = Modifier.weight(1f).height(56.dp),
+                            shape = RoundedCornerShape(28.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0x26E24B4A)),
+                            border = BorderStroke(1.dp, Color(0x4DE24B4A))
+                        ) {
+                            Text("STOP", color = Color(0xFFE24B4A),
+                                fontSize = 14.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+                        }
+                    } else {
+                        // Your existing single START RIDE button — keep unchanged
+                        Button(
+                            onClick = onStartRide,
+                            modifier = Modifier.fillMaxWidth().height(56.dp)
+                                .clip(RoundedCornerShape(28.dp)).background(GradientButton),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent),
+                            contentPadding = PaddingValues(0.dp),
+                            enabled = isLocationEnabled
+                        ) {
+                            Text(
+                                if (!isLocationEnabled) "ENABLE GPS TO START" else "START RIDE",
+                                color = if (isLocationEnabled) BgDeep else Color.Gray,
+                                fontSize = 16.sp, fontWeight = FontWeight.Bold, letterSpacing = 2.sp
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -125,20 +168,31 @@ fun RideTrackerScreen(
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             // Top bar
+            val currentTime = rememberCurrentTime()
+            val batteryLevel = rememberBatteryLevel()
+
+// Replace your existing top bar Row with:
             Row(
                 Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    "RIDE TRACKER", color = TextMuted, fontSize = 12.sp,
-                    fontWeight = FontWeight.Medium, letterSpacing = 2.sp
-                )
-                TextButton(onClick = onViewHistory) {
+                Column {
                     Text(
-                        "HISTORY", color = NeonGreen, fontSize = 12.sp,
-                        fontWeight = FontWeight.Medium, letterSpacing = 1.sp
+                        "RIDE TRACKER", color = TextMuted, fontSize = 10.sp,
+                        fontWeight = FontWeight.Medium, letterSpacing = 2.sp
                     )
+                    Text(
+                        currentTime, color = TextPrimary, fontSize = 22.sp,
+                        fontWeight = FontWeight.Bold, lineHeight = 24.sp
+                    )
+                }
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    BatteryIndicator(batteryLevel)
+                    TextButton(onClick = onViewHistory) {
+                        Text("HISTORY", color = NeonGreen, fontSize = 11.sp,
+                            fontWeight = FontWeight.Medium, letterSpacing = 1.sp)
+                    }
                 }
             }
             // Speedometer card
@@ -205,90 +259,137 @@ fun StatCard(
 }
 
 @Composable
-fun SpeedometerArc(speedKmh: Float, maxSpeedKmh: Float = 260f) {
-    val speedPercent = (speedKmh  / maxSpeedKmh ).coerceIn(0f, 1f)
-    val arcBg = Color(0xFF252547)
-    val dotColor = NeonGreen
+fun SpeedometerArc(
+    speedKmh: Float,
+    maxSpeedKmh: Float = 260f,
+    speedLimitKmh: Float = 90f
+) {
+    val isOverLimit = speedKmh > speedLimitKmh
+    val limitPercent = (speedLimitKmh / maxSpeedKmh).coerceIn(0f, 1f)
+    val speedPercent = (speedKmh / maxSpeedKmh).coerceIn(0f, 1f)
 
-    // Outer box: fixed square so the arc always has room
-    Box(
-        modifier = Modifier.size(260.dp),
-        contentAlignment = Alignment.Center
-    ) {
+    val badgeBg by animateColorAsState(
+        targetValue = if (isOverLimit) Color(0x26E24B4A) else Color(0x0FFFFFFF),
+        animationSpec = tween(300),
+        label = "badgeBg"
+    )
+    val badgeBorder by animateColorAsState(
+        targetValue = if (isOverLimit) Color(0x66E24B4A) else Color(0x1FFFFFFF),
+        animationSpec = tween(300),
+        label = "badgeBorder"
+    )
+    val badgeNumColor by animateColorAsState(
+        targetValue = if (isOverLimit) Color(0xFFE24B4A) else Color(0x55FFFFFF),
+        animationSpec = tween(300),
+        label = "badgeNum"
+    )
+    val speedNumColor by animateColorAsState(
+        targetValue = if (isOverLimit) Color(0xFFE24B4A) else TextPrimary,
+        animationSpec = tween(300),
+        label = "speedNum"
+    )
+    Box(modifier = Modifier.size(260.dp), contentAlignment = Alignment.Center) {
+
+        // Speed limit badge — top left of the arc box
+        /*Box(
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .padding(end = 0.dp, top = 0.dp)  // ← nudges it away from the arc tip
+        ) {
+            Row(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(badgeBg)
+                    .border(
+                        width = 0.5.dp,
+                        color = badgeBorder,
+                        shape = RoundedCornerShape(8.dp)
+                    )
+                    .padding(horizontal = 8.dp, vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(
+                        text = speedLimitKmh.toInt().toString(),
+                        color = badgeNumColor,
+                        fontSize = 13.sp, fontWeight = FontWeight.Bold
+                    )
+                    Text("LIMIT", color = Color(0x40FFFFFF), fontSize = 8.sp, letterSpacing = 0.5.sp)
+                }
+            }
+        }*/
+
         Canvas(modifier = Modifier.fillMaxSize()) {
             val strokeWidth = 14.dp.toPx()
             val padding = strokeWidth / 2 + 4.dp.toPx()
             val arcSize = Size(size.width - padding * 2, size.height - padding * 2)
             val topLeft = Offset(padding, padding)
             val style = Stroke(width = strokeWidth, cap = StrokeCap.Round)
-
-            val startAngle = 150f   // starts bottom-left
-            val totalSweep = 240f   // sweeps to bottom-right
+            val startAngle = 150f
+            val totalSweep = 240f
 
             // Background track
-            drawArc(
-                color = arcBg,
-                startAngle = startAngle,
-                sweepAngle = totalSweep,
-                useCenter = false,
-                topLeft = topLeft,
-                size = arcSize,
-                style = style
-            )
+            drawArc(color = Color(0xFF252547), startAngle = startAngle,
+                sweepAngle = totalSweep, useCenter = false,
+                topLeft = topLeft, size = arcSize, style = style)
 
-            // Coloured progress
             if (speedPercent > 0f) {
-                drawArc(
-                    brush= Brush.sweepGradient(
-                        colorStops = arrayOf(
-                            0f  to NeonGreen,
-                            1f  to NeonBlue
+                if (!isOverLimit) {
+                    // Normal green→blue arc
+                    drawArc(
+                        brush = Brush.sweepGradient(
+                            colorStops = arrayOf(0f to NeonGreen, 1f to NeonBlue),
+                            center = Offset(size.width / 2, size.height / 2)
                         ),
-                        center = Offset(size.width / 2, size.height / 2)
-                    ),
-                    startAngle = startAngle,
-                    sweepAngle = totalSweep * speedPercent,
-                    useCenter = false,
-                    topLeft = topLeft,
-                    size = arcSize,
-                    style = style
-                )
+                        startAngle = startAngle,
+                        sweepAngle = totalSweep * speedPercent,
+                        useCenter = false, topLeft = topLeft, size = arcSize, style = style
+                    )
+                } else {
+                    // Teal arc up to the limit
+                    drawArc(
+                        color = NeonGreen.copy(alpha = 0.35f),
+                        startAngle = startAngle,
+                        sweepAngle = totalSweep * limitPercent,
+                        useCenter = false, topLeft = topLeft, size = arcSize, style = style
+                    )
+                    // Red arc from limit to current speed
+                    drawArc(
+                        color = Color(0xFFE24B4A),
+                        startAngle = startAngle + totalSweep * limitPercent,
+                        sweepAngle = totalSweep * (speedPercent - limitPercent),
+                        useCenter = false, topLeft = topLeft, size = arcSize, style = style
+                    )
+                }
             }
 
-            // Indicator dot at the tip of the progress arc
-            val angleRad  = Math.toRadians(
-                (startAngle + totalSweep * speedPercent).toDouble()
-            )
+            // Indicator dot — keep your existing dot code here unchanged
+            val angleRad = Math.toRadians((startAngle + totalSweep * speedPercent).toDouble())
             val radius = arcSize.width / 2
             val cx = topLeft.x + radius + radius * cos(angleRad).toFloat()
             val cy = topLeft.y + arcSize.height / 2 + radius * sin(angleRad).toFloat()
-            drawCircle(color = dotColor, radius = 7.dp.toPx(), center = Offset(cx, cy))
+            drawCircle(
+                color = if (isOverLimit) Color(0xFFE24B4A) else NeonGreen,
+                radius = 7.dp.toPx(), center = Offset(cx, cy)
+            )
         }
 
+        // Your existing animated speed number — keep unchanged
         val animatedSpeed by animateIntAsState(
             targetValue = speedKmh.toInt(),
-            animationSpec = tween(
-                durationMillis = 1000, // How long it takes to count up/down
-                easing = FastOutSlowInEasing // Starts fast, slows down as it reaches the target
-            ),
+            animationSpec = tween(1000, easing = FastOutSlowInEasing),
             label = "SpeedAnimation"
         )
-
-        // Speed number centred inside the arc
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text(
                 text = animatedSpeed.toString(),
-                color = TextPrimary,
-                fontSize = 72.sp,
-                fontWeight = FontWeight.Bold,
-                lineHeight = 72.sp
+                color = speedNumColor,              // ← animated
+                fontSize = 72.sp, fontWeight = FontWeight.Bold, lineHeight = 72.sp
             )
             Text(
-                text = "KM/H",
-                color = TextMuted,
-                fontSize = 14.sp,
-                fontWeight = FontWeight.Medium,
-                letterSpacing = 3.sp
+                "KM/H", color = TextMuted, fontSize = 14.sp,
+                fontWeight = FontWeight.Medium, letterSpacing = 3.sp
             )
         }
     }
@@ -353,6 +454,80 @@ fun KeepScreenOn() {
     }
 }
 
+@Composable
+fun rememberCurrentTime(): String {
+    var time by remember { mutableStateOf(currentTimeString()) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(10_000)
+            time = currentTimeString()
+        }
+    }
+    return time
+}
+
+fun currentTimeString(): String {
+    val cal = Calendar.getInstance()
+    return String.format("%02d:%02d", cal.get(Calendar.HOUR_OF_DAY), cal.get(Calendar.MINUTE))
+}
+
+@Composable
+fun rememberBatteryLevel(): Int {
+    val context = LocalContext.current
+    var level by remember { mutableStateOf(100) }
+    DisposableEffect(Unit) {
+        val receiver = object : BroadcastReceiver() {
+            override fun onReceive(ctx: Context, intent: Intent) {
+                val raw  = intent.getIntExtra(BatteryManager.EXTRA_LEVEL, -1)
+                val scale = intent.getIntExtra(BatteryManager.EXTRA_SCALE, -1)
+                if (raw >= 0 && scale > 0) level = (raw * 100 / scale)
+            }
+        }
+        context.registerReceiver(receiver, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
+        onDispose { context.unregisterReceiver(receiver) }
+    }
+    return level
+}
+
+@Composable
+fun BatteryIndicator(level: Int) {
+    val color = when {
+        level <= 20 -> NeonRed
+        level <= 50 -> Color(0xFFEF9F27)
+        else        -> NeonGreen
+    }
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+        Canvas(modifier = Modifier.size(width = 24.dp, height = 13.dp)) {
+            val bodyW = size.width - 3.dp.toPx()
+            val bodyH = size.height
+            val termW = 3.dp.toPx()
+            val termH = 5.dp.toPx()
+            // Body outline
+            drawRoundRect(
+                color = Color(0x55FFFFFF),
+                size = Size(bodyW, bodyH),
+                cornerRadius = CornerRadius(2.dp.toPx()),
+                style = Stroke(width = 1.5.dp.toPx())
+            )
+            // Terminal nub
+            drawRoundRect(
+                color = Color(0x55FFFFFF),
+                topLeft = Offset(bodyW, (bodyH - termH) / 2),
+                size = Size(termW, termH),
+                cornerRadius = CornerRadius(1.dp.toPx())
+            )
+            // Fill
+            val fillW = ((bodyW - 4.dp.toPx()) * level / 100f).coerceAtLeast(0f)
+            drawRoundRect(
+                color = color,
+                topLeft = Offset(2.dp.toPx(), 2.dp.toPx()),
+                size = Size(fillW, bodyH - 4.dp.toPx()),
+                cornerRadius = CornerRadius(1.dp.toPx())
+            )
+        }
+        Text("$level%", color = Color(0x80FFFFFF), fontSize = 11.sp)
+    }
+}
 fun formatSecondsToTime(totalSeconds: Long): String {
     val hours = totalSeconds / 3600
     val minutes = (totalSeconds % 3600) / 60

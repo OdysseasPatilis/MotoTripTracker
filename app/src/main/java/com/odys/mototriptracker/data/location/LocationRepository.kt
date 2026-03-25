@@ -50,7 +50,7 @@ class LocationRepository(context: Context) {
 
                     // trySend is safe here because callbackFlow provides a buffer automatically
                     trySend(location)
-                    println("LocationRepo New location: ${location.latitude}, ${location.longitude}, speed: ${location.speed}")
+                    //println("LocationRepo New location: ${location.latitude}, ${location.longitude}, speed: ${location.speed}")
                 }
             }
         }

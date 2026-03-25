@@ -99,15 +99,37 @@ class TripViewModel(
             // Notice we don't need `.filter { it.isWaypoint }` anymore
             // because ObjectBox already did the filtering for us!
             _waypoints.value = rawWaypoints.map { entity ->
-                val type = when (entity.waypointTitle) {
-                    "Departure" -> WaypointType.Start
-                    "Arrival" -> WaypointType.End
-                    else -> WaypointType.Stop
+
+                // --- THE LEGACY BRIDGE ---
+                val type = if (!entity.waypointType.isNullOrEmpty()) {
+                    // 1. Modern Trips (The new analyzer)
+                    when (entity.waypointType) {
+                        "START" -> WaypointType.Start
+                        "END" -> WaypointType.End
+                        "STOP_SIGN" -> WaypointType.StopSign
+                        "TRAFFIC_LIGHT" -> WaypointType.TrafficLight
+                        "BRIEF_STOP" -> WaypointType.BriefStop
+                        "REST_STOP" -> WaypointType.RestStop
+                        "TOP_SPEED" -> WaypointType.TopSpeed
+                        "SUMMIT" -> WaypointType.Summit
+                        else -> WaypointType.Unknown
+                    }
+                } else {
+                    // 2. Legacy Trips (From before we added waypointType)
+                    when (entity.waypointTitle) {
+                        "Departure" -> WaypointType.Start
+                        "Arrival" -> WaypointType.End
+                        else -> WaypointType.BriefStop // Default old stops to the yellow dot
+                    }
                 }
 
+                // Safely handle titles and subtitles just in case they are null too
+                val safeTitle = entity.waypointTitle ?: "Waypoint"
+                val safeSubtitle = entity.waypointSubtitle ?: ""
+
                 Waypoint(
-                    label = entity.waypointTitle,
-                    detail = entity.waypointSubtitle,
+                    label = safeTitle,
+                    detail = safeSubtitle,
                     time = timeFormatter.format(Date(entity.timestamp)),
                     type = type,
                     position = LatLng(entity.latitude, entity.longitude)

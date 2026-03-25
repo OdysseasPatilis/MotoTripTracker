@@ -17,9 +17,11 @@ package com.odys.mototriptracker.ui.dashboard
 // res/raw/dark_map_style.json — create with the JSON at the bottom of this file.
 // ─────────────────────────────────────────────────────────────────────────────
 
+import android.R.attr.onClick
 import android.graphics.Bitmap
 import android.graphics.Canvas as AndroidCanvas
 import android.graphics.Paint
+import android.view.MotionEvent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -30,7 +32,12 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Bolt
+import androidx.compose.material.icons.filled.LocalCafe
+import androidx.compose.material.icons.filled.Place
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.Terrain
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
@@ -43,6 +50,11 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.pointerInteropFilter
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -52,6 +64,7 @@ import com.google.android.gms.maps.model.LatLng
 import com.google.maps.android.compose.*
 import com.odys.mototriptracker.data.trip.TripEntity
 import androidx.core.graphics.createBitmap
+import kotlinx.coroutines.launch
 
 // ── Colours ───────────────────────────────────────────────────────────────────
 private val BgDark = Color(0xFF0E0E14)
@@ -70,8 +83,17 @@ private val Overlay = Color(0xB20E0E14)
 
 // ── Enums & models ────────────────────────────────────────────────────────────
 enum class MapLayer { Speed, Elevation }
-enum class WaypointType { Start, Stop, End }
-
+enum class WaypointType {
+    Start,
+    End,
+    StopSign,
+    TrafficLight,
+    BriefStop,
+    RestStop,
+    TopSpeed,
+    Summit,
+    Unknown
+}
 data class Waypoint(
     val label: String,
     val detail: String,
@@ -93,8 +115,8 @@ data class RidePoint(
 
 private fun speedColor(kmh: Float): Color = when {
     kmh < 40f -> RouteAmber
-    kmh < 80f -> RouteTeal
-    else      -> RouteCoral
+    kmh < 130f -> RouteTeal
+    else -> RouteCoral
 }
 
 private fun elevColor(elevM: Float, baseElevM: Float): Color {
@@ -152,12 +174,16 @@ fun FullRouteScreenGMaps(
     onShare: () -> Unit = {}
 ) {
     var activeLayer by remember { mutableStateOf(MapLayer.Speed) }
+    var isParentScrollEnabled by remember { mutableStateOf(true) }
+    val scrollState = rememberScrollState() // Hoist the screen scroll state
+    val cameraState = rememberCameraPositionState() // Hoist the map camera state
+    val coroutineScope = rememberCoroutineScope() // Needed for smooth animations
 
     Column(
         modifier = Modifier
             .fillMaxSize()
             .background(BgDark)
-            .verticalScroll(rememberScrollState())
+            .verticalScroll(state = rememberScrollState(), enabled = isParentScrollEnabled)
             .padding(bottom = 32.dp)
     ) {
         RouteTopBar(onBack = onBack, onShare = onShare)
@@ -166,10 +192,22 @@ fun FullRouteScreenGMaps(
             ridePoints = ridePoints,
             waypoints = waypoints,
             activeLayer = activeLayer,
-            onLayerChange = { activeLayer = it }
+            onLayerChange = { activeLayer = it },
+            onMapTouch = { isTouched -> isParentScrollEnabled = !isTouched },
+            cameraState = cameraState
         )
         Spacer(Modifier.height(12.dp))
-        WaypointsPanel(summary,waypoints)
+        WaypointsPanel(summary, waypoints, onWaypointClick = { latLng ->
+            // WHEN A WAYPOINT IS CLICKED:
+            coroutineScope.launch {
+                // 1. Smoothly scroll the screen back to the top so they can see the map
+                scrollState.animateScrollTo(0)
+
+                // 2. Smoothly animate the Google Map camera to zoom in on the waypoint!
+                // 16f is a great zoom level for street-level detail
+                cameraState.animate(CameraUpdateFactory.newLatLngZoom(latLng, 16f))
+            }
+        })
         Spacer(Modifier.height(12.dp))
         ProfileChart(summary, ridePoints, activeLayer)
         Spacer(Modifier.height(12.dp))
@@ -221,7 +259,9 @@ private fun RouteMapCard(
     ridePoints: List<RidePoint>,
     waypoints: List<Waypoint>,
     activeLayer: MapLayer,
-    onLayerChange: (MapLayer) -> Unit
+    onLayerChange: (MapLayer) -> Unit,
+    onMapTouch: (Boolean) -> Unit,
+    cameraState: CameraPositionState
 ) {
     val bounds = remember(ridePoints) {
         // THE FIX: If the list is empty (still loading), return null safely
@@ -235,7 +275,6 @@ private fun RouteMapCard(
         }
     }
 
-    val cameraState = rememberCameraPositionState()
 
 // Make sure the LaunchedEffect also expects the null safely
     LaunchedEffect(bounds) {
@@ -244,21 +283,64 @@ private fun RouteMapCard(
         }
     }
 
+
     val baseElev = remember(ridePoints) { ridePoints.firstOrNull()?.elevationM ?: 0f }
     val segments by remember(ridePoints, activeLayer) {
         derivedStateOf { buildColoredSegments(ridePoints, activeLayer, baseElev) }
     }
+    val mapLatLngs = remember(ridePoints) { ridePoints.map { it.latLng } }
+    val colorSpans = remember(ridePoints, activeLayer) {
+        if (ridePoints.size < 2) return@remember emptyList<StyleSpan>()
 
-    val startBitmap = remember { createMarkerBitmap(Mint.toArgb(),   28) }
-    val endBitmap   = remember { createMarkerBitmap(Blue.toArgb(),   28) }
-    val stopBitmap  = remember { createMarkerBitmap(Yellow.toArgb(), 20) }
+        val spans = mutableListOf<StyleSpan>()
+        for (i in 0 until ridePoints.size - 1) {
+            val point = ridePoints[i]
 
+            // Pick the color based on the active toggle
+            val color = if (activeLayer == MapLayer.Speed) {
+                speedColor(point.speedKmh)
+            } else {
+                elevColor(point.elevationM, baseElev)
+            }
+
+            // Convert the Compose Color to an Android ARGB Int for Google Maps
+            spans.add(StyleSpan(color.toArgb()))
+        }
+        spans
+    }
+
+    // The big primary markers
+    val startBitmap = remember { createMarkerBitmap(Mint.toArgb(), 28) }
+    val endBitmap = remember { createMarkerBitmap(Blue.toArgb(), 28) }
+
+// The premium telemetry highlights (Medium size)
+    val speedBitmap = remember { createMarkerBitmap(RouteCoral.toArgb(), 24) }
+    val summitBitmap = remember { createMarkerBitmap(Color(0xFFD988FF).toArgb(), 24) } // Purple
+    val restBitmap = remember { createMarkerBitmap(RouteTeal.toArgb(), 24) }
+
+// Standard pauses (Small size)
+    val stopBitmap   = remember { createMarkerBitmap(Yellow.toArgb(), 18) }
     Box(
         modifier = Modifier
             .padding(horizontal = 20.dp)
             .fillMaxWidth()
             .height(340.dp)
             .clip(RoundedCornerShape(20.dp))
+            // This tells the parent scroll view "Hey, if the user touches here, let the Map handle it!"
+            .pointerInput(Unit) {
+                awaitPointerEventScope {
+                    while (true) {
+                        // "Initial" pass means we see the touch BEFORE Google Maps sees it
+                        val event = awaitPointerEvent(PointerEventPass.Initial)
+
+                        // Check if ANY finger is currently touching the screen
+                        val isTouched = event.changes.any { it.pressed }
+
+                        // Update the parent scroll state
+                        onMapTouch(isTouched)
+                    }
+                }
+            }
     ) {
         // ── Real Google Map ────────────────────────────────────────────────
         GoogleMap(
@@ -277,10 +359,10 @@ private fun RouteMapCard(
             )
         ) {
             // Coloured route polylines
-            segments.forEach { (latLngs, color) ->
+            if (mapLatLngs.size >= 2) {
                 Polyline(
-                    points = latLngs,
-                    color = color,
+                    points = mapLatLngs,
+                    spans = colorSpans, // Pass the dynamically generated colors here!
                     width = 14f,
                     jointType = JointType.ROUND,
                     startCap = RoundCap(),
@@ -289,34 +371,31 @@ private fun RouteMapCard(
                 )
             }
 
-            // Stop markers
-            waypoints.filter { it.type == WaypointType.Stop }.forEach { wp ->
+            waypoints.forEach { wp ->
+
+                // 1. Pick the right graphic and Z-Index (so important things draw on top)
+                val (bitmap, zIdx) = when (wp.type) {
+                    WaypointType.Start -> Pair(startBitmap, 3f)
+                    WaypointType.End -> Pair(endBitmap, 3f)
+
+                    WaypointType.TopSpeed -> Pair(speedBitmap, 2.5f)
+                    WaypointType.Summit -> Pair(summitBitmap, 2.5f)
+                    WaypointType.RestStop -> Pair(restBitmap, 2f)
+
+                    WaypointType.TrafficLight,
+                    WaypointType.BriefStop,
+                    WaypointType.StopSign -> Pair(stopBitmap, 1.5f)
+
+                    else -> Pair(stopBitmap, 1f)
+                }
+
+                // 2. Draw the marker on the map
                 Marker(
                     state = MarkerState(wp.position),
-                    icon = BitmapDescriptorFactory.fromBitmap(stopBitmap),
+                    icon = BitmapDescriptorFactory.fromBitmap(bitmap),
                     title = wp.label,
-                    snippet = wp.detail,
-                    zIndex  = 2f
-                )
-            }
-
-            // Start marker
-            waypoints.firstOrNull { it.type == WaypointType.Start }?.let {
-                Marker(
-                    state = MarkerState(it.position),
-                    icon = BitmapDescriptorFactory.fromBitmap(startBitmap),
-                    title = "Start",
-                    zIndex = 3f
-                )
-            }
-
-            // End marker
-            waypoints.firstOrNull { it.type == WaypointType.End }?.let {
-                Marker(
-                    state = MarkerState(it.position),
-                    icon = BitmapDescriptorFactory.fromBitmap(endBitmap),
-                    title = "Arrival",
-                    zIndex = 3f
+                    snippet = wp.detail, // This will now show the actual street name or telemetry stat!
+                    zIndex = zIdx
                 )
             }
         }
@@ -384,7 +463,7 @@ private fun LegendSegment(color: Color) {
 
 // ── Waypoints ─────────────────────────────────────────────────────────────────
 @Composable
-private fun WaypointsPanel(summary: TripEntity,waypoints: List<Waypoint>) {
+private fun WaypointsPanel(summary: TripEntity,waypoints: List<Waypoint>,onWaypointClick: (LatLng) -> Unit) {
     Column(modifier = Modifier.padding(horizontal = 20.dp)) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -396,50 +475,91 @@ private fun WaypointsPanel(summary: TripEntity,waypoints: List<Waypoint>) {
         }
         Spacer(Modifier.height(12.dp))
         waypoints.forEachIndexed { i, wp ->
-            WaypointRow(wp, showLine = i < waypoints.lastIndex)
+            WaypointRow(wp, showLine = i < waypoints.lastIndex, onClick = { onWaypointClick(wp.position) })
         }
     }
 }
 
 @Composable
-private fun WaypointRow(wp: Waypoint, showLine: Boolean) {
-    Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
+private fun WaypointRow(wp: Waypoint, showLine: Boolean, onClick: () -> Unit) {
+    // 1. Determine the exact Icon and Color based on the smart type!
+    val (icon: ImageVector?, dotColor: Color) = when (wp.type) {
+        WaypointType.Start -> Pair(Icons.Default.PlayArrow, Mint)
+        WaypointType.End -> Pair(Icons.Default.Place, Blue)
+        WaypointType.TopSpeed -> Pair(Icons.Default.Bolt, RouteCoral) // ⚡
+        WaypointType.Summit -> Pair(Icons.Default.Terrain, Color(0xFFD988FF)) // ⛰️ Purple
+        WaypointType.RestStop -> Pair(Icons.Default.LocalCafe, RouteTeal) // ☕
+        WaypointType.TrafficLight -> Pair(null, RouteAmber) // Keep as a simple dot
+        WaypointType.BriefStop -> Pair(null, Yellow) // Keep as a simple dot
+        WaypointType.StopSign -> Pair(null, RouteCoral) // Keep as a simple dot
+        else ->  Pair(null, Color.Gray)
+    }
+
+    Row(modifier = Modifier
+        .fillMaxWidth()
+        .clickable { onClick() }
+        .padding(vertical = 4.dp),
+        verticalAlignment = Alignment.Top) {
+        // --- TIMELINE GRAPHIC COLUMN ---
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             modifier = Modifier.width(24.dp)
         ) {
             Spacer(Modifier.height(4.dp))
-            val dotColor = when (wp.type) {
-                WaypointType.Start -> Mint
-                WaypointType.Stop -> Yellow
-                WaypointType.End -> Blue
-            }
-            Box(
-                modifier = Modifier
-                    .size(12.dp)
-                    .drawWithCache {
-                        onDrawBehind {
-                            drawCircle(BgDark)
-                            drawCircle(dotColor, style = Stroke(2f))
-                            drawCircle(dotColor, radius = 3f)
+
+            // Draw an Icon if we have one, otherwise fallback to the classic ring dot
+            if (icon != null) {
+                Box(
+                    modifier = Modifier
+                        .size(18.dp)
+                        .clip(CircleShape)
+                        .background(dotColor.copy(alpha = 0.2f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = icon,
+                        contentDescription = wp.label,
+                        tint = dotColor,
+                        modifier = Modifier.size(12.dp)
+                    )
+                }
+            } else {
+                // The classic hollow dot for standard stops
+                Box(
+                    modifier = Modifier
+                        .size(12.dp)
+                        .drawWithCache {
+                            onDrawBehind {
+                                drawCircle(BgDark)
+                                drawCircle(dotColor, style = Stroke(2f))
+                                drawCircle(dotColor, radius = 3f)
+                            }
                         }
-                    }
-            )
+                )
+            }
+
+            // Connecting Line
             if (showLine) {
                 Box(
                     modifier = Modifier
                         .width(1.5.dp)
-                        .height(32.dp)
+                        .height(38.dp) // Made slightly taller to fit the address subtext comfortably
                         .background(Color(0x1FFFFFFF))
                 )
             }
         }
+
         Spacer(Modifier.width(10.dp))
+
+        // --- TEXT COLUMN ---
         Column(modifier = Modifier.weight(1f)) {
             Text(wp.label, color = TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.Medium)
-            Text(wp.detail, color = TextHint, fontSize = 11.sp)
+            // The detail text will now automatically display the actual Geocoded Street Name!
+            Text(wp.detail, color = TextHint, fontSize = 11.sp, maxLines = 1)
             if (showLine) Spacer(Modifier.height(20.dp))
         }
+
+        // --- TIME COLUMN ---
         Text(wp.time, color = TextMuted, fontSize = 12.sp)
     }
 }
@@ -476,7 +596,7 @@ private fun ProfileChart(summary: TripEntity, ridePoints: List<RidePoint>, activ
                     val minV = values.minOrNull() ?: 0f
                     val maxV = values.maxOrNull() ?: 1f
                     val range = (maxV - minV).coerceAtLeast(1f)
-                    val step  = if (values.size > 1) (w - pad * 2) / (values.size - 1) else 0f
+                    val step = if (values.size > 1) (w - pad * 2) / (values.size - 1) else 0f
                     fun yFor(v: Float) = pad + (1f - (v - minV) / range) * (h - pad * 2)
 
                     val line = Path().apply {
@@ -510,8 +630,8 @@ private fun ProfileChart(summary: TripEntity, ridePoints: List<RidePoint>, activ
 private fun LegendPills(activeLayer: MapLayer) {
     val pills = if (activeLayer == MapLayer.Speed) listOf(
         Triple(RouteAmber, "Slow",   "0–40 km/h"),
-        Triple(RouteTeal,  "Cruise", "40–80 km/h"),
-        Triple(RouteCoral, "Fast",   "80+ km/h"),
+        Triple(RouteTeal,  "Cruise", "40–130 km/h"),
+        Triple(RouteCoral, "Fast",   "130+ km/h"),
     ) else listOf(
         Triple(RouteBlue,  "Flat",  "0–10 m"),
         Triple(RouteAmber, "Climb", "10–50 m"),
@@ -533,7 +653,10 @@ private fun LegendPills(activeLayer: MapLayer) {
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(5.dp)
             ) {
-                Box(modifier = Modifier.size(7.dp).clip(CircleShape).background(color))
+                Box(modifier = Modifier
+                    .size(7.dp)
+                    .clip(CircleShape)
+                    .background(color))
                 // Add maxLines = 1 to prevent wrapping
                 Text(label, color = TextMuted, fontSize = 11.sp, maxLines = 1)
                 Text(range, color = TextPrimary, fontSize = 11.sp, fontWeight = FontWeight.Medium, maxLines = 1)

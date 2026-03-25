@@ -15,6 +15,7 @@ data class RoutePointEntity(
     var timestamp: Long = 0,
 
     // NEW: To populate that "Route waypoints" list in your UI
+    var waypointType: String? = null, // "START", "STOP_SIGN", "TRAFFIC_LIGHT", "REST_STOP", "TOP_SPEED", "SUMMIT", "END"
     var isWaypoint: Boolean = false,
     var waypointTitle: String = "", // e.g., "Brief stop" or "Departure"
     var waypointSubtitle: String = "" // e.g., "Traffic light - 2.0km - 01:02 pause"
