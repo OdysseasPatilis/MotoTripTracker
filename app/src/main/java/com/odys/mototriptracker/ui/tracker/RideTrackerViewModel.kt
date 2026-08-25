@@ -2,54 +2,48 @@ package com.odys.mototriptracker.ui.tracker
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.odys.mototriptracker.domain.usecase.ObserveTripStatsUseCase
+import com.odys.mototriptracker.domain.usecase.ObserveRideSessionUseCase
+import com.odys.mototriptracker.domain.usecase.PauseRideUseCase
+import com.odys.mototriptracker.domain.usecase.ResumeRideUseCase
 import com.odys.mototriptracker.domain.usecase.StartRideUseCase
 import com.odys.mototriptracker.domain.usecase.StopRideUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import javax.inject.Inject
 
 @HiltViewModel
 class RideTrackerViewModel @Inject constructor(
-    observeTripStatsUseCase: ObserveTripStatsUseCase,
+    observeRideSessionUseCase: ObserveRideSessionUseCase,
     private val startRideUseCase: StartRideUseCase,
-    private val stopRideUseCase: StopRideUseCase
+    private val stopRideUseCase: StopRideUseCase,
+    private val pauseRideUseCase: PauseRideUseCase,
+    private val resumeRideUseCase: ResumeRideUseCase
 ) : ViewModel() {
 
-    private val isTracking = MutableStateFlow(false)
-    private val isPaused = MutableStateFlow(false)
-
-    val uiState: StateFlow<RideTrackerUiState> = combine(
-        observeTripStatsUseCase(),
-        isTracking,
-        isPaused
-    ) { stats, tracking, paused ->
-        RideTrackerUiState(
-            stats = stats,
-            isTracking = tracking,
-            isPaused = paused
+    val uiState: StateFlow<RideTrackerUiState> = observeRideSessionUseCase()
+        .map { session ->
+            RideTrackerUiState(
+                stats = session.stats,
+                isTracking = session.isActive,
+                isPaused = session.isPaused
+            )
+        }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5_000),
+            initialValue = RideTrackerUiState()
         )
-    }.stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5_000),
-        initialValue = RideTrackerUiState()
-    )
 
     fun startRide() {
-        if (isTracking.value) return
-        isTracking.value = true
-        isPaused.value = false
+        if (uiState.value.isTracking) return
         startRideUseCase()
     }
 
     fun stopRide() {
-        if (!isTracking.value) return
-        isTracking.value = false
-        isPaused.value = false
+        if (!uiState.value.isTracking) return
 
         val result = stopRideUseCase()
         if (result.isTooShort) {
@@ -57,8 +51,14 @@ class RideTrackerViewModel @Inject constructor(
         }
     }
 
-    fun pauseRide() {
-        // Stub until pause/resume is implemented end-to-end.
-        println("on pause")
+    fun togglePause() {
+        val state = uiState.value
+        if (!state.isTracking) return
+
+        if (state.isPaused) {
+            resumeRideUseCase()
+        } else {
+            pauseRideUseCase()
+        }
     }
 }

@@ -10,11 +10,17 @@ import com.google.android.gms.location.LocationResult
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
 import com.odys.mototriptracker.domain.RideTimer
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
+import javax.inject.Inject
+import javax.inject.Singleton
 
-class LocationRepository(context: Context) {
+@Singleton
+class LocationRepository @Inject constructor(
+    @ApplicationContext context: Context
+) {
 
     private val fusedLocation = LocationServices.getFusedLocationProviderClient(context)
 

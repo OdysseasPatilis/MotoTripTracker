@@ -12,82 +12,112 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
 import androidx.lifecycle.LifecycleService
 import androidx.lifecycle.lifecycleScope
-import com.odys.mototriptracker.MotoTripTrackerApp
 import com.odys.mototriptracker.R
 import com.odys.mototriptracker.data.location.LocationRepository
 import com.odys.mototriptracker.domain.TripManager
+import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
+import javax.inject.Inject
 
+@AndroidEntryPoint
 class TripForegroundService : LifecycleService() {
 
-    private lateinit var locationRepository: LocationRepository
-    private lateinit var tripManager: TripManager
+    @Inject
+    lateinit var locationRepository: LocationRepository
 
-    // Keep track of whether we've already started to avoid double-starting flows
-    private var isTracking = false
+    @Inject
+    lateinit var tripManager: TripManager
+
+    private var locationJob: Job? = null
+    private var isForegroundStarted = false
 
     override fun onCreate() {
         super.onCreate()
-
-        // 1. Initialize our dependencies ONCE
-        locationRepository = LocationRepository(this)
-
-        // Grab the SINGLETON TripManager from the Application class!
-        val app = applicationContext as MotoTripTrackerApp
-        tripManager = app.tripManager
-
         createNotificationChannel()
     }
 
     @RequiresPermission(allOf = [Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION])
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        super.onStartCommand(intent, flags, startId) // Required for LifecycleService
+        super.onStartCommand(intent, flags, startId)
 
-        // Prevent starting the coroutine and location updates multiple times
-        if (!isTracking) {
-            isTracking = true
+        when (intent?.action) {
+            ACTION_PAUSE -> pauseTracking()
+            ACTION_RESUME -> resumeTracking()
+            else -> startTracking()
+        }
 
-            // 2. Start the foreground notification here
+        return START_STICKY
+    }
+
+    @RequiresPermission(allOf = [Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION])
+    private fun startTracking() {
+        ensureForeground(contentText = "Tracking your ride")
+        startLocationCollection()
+    }
+
+    private fun pauseTracking() {
+        stopLocationCollection()
+        ensureForeground(contentText = "Ride paused")
+    }
+
+    @RequiresPermission(allOf = [Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION])
+    private fun resumeTracking() {
+        ensureForeground(contentText = "Tracking your ride")
+        startLocationCollection()
+    }
+
+    @RequiresPermission(allOf = [Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION])
+    private fun startLocationCollection() {
+        if (locationJob?.isActive == true) return
+
+        locationJob = lifecycleScope.launch {
+            locationRepository.getLocationFlow().collect { location ->
+                tripManager.onLocationUpdate(location)
+            }
+        }
+    }
+
+    private fun stopLocationCollection() {
+        locationJob?.cancel()
+        locationJob = null
+    }
+
+    private fun ensureForeground(contentText: String) {
+        val notification = createNotification(contentText)
+        if (!isForegroundStarted) {
             ServiceCompat.startForeground(
                 this,
-                1,
-                createNotification(),
+                NOTIFICATION_ID,
+                notification,
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
                     ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION
                 } else {
                     0
                 }
             )
-
-            // 3. Start collecting locations
-            lifecycleScope.launch {
-                // Just call the flow directly! It starts the GPS automatically.
-                locationRepository.getLocationFlow().collect { location ->
-                    tripManager.onLocationUpdate(location)
-                }
-            }
+            isForegroundStarted = true
+        } else {
+            val manager = getSystemService(NotificationManager::class.java)
+            manager.notify(NOTIFICATION_ID, notification)
         }
-
-        // START_STICKY tells Android: "If you kill this service for memory,
-        // restart it as soon as you can."
-        return START_STICKY
     }
 
-    private fun createNotification(): Notification {
-        return NotificationCompat.Builder(this, "ride_channel")
+    private fun createNotification(contentText: String): Notification {
+        return NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("Ride Tracking")
-            .setContentText("Tracking your ride")
-            .setSmallIcon(R.drawable.ic_launcher_foreground) // Make sure this icon exists!
-            .setOngoing(true) // Prevents the user from swiping it away
+            .setContentText(contentText)
+            .setSmallIcon(R.drawable.ic_launcher_foreground)
+            .setOngoing(true)
             .build()
     }
 
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
-                "ride_channel",
+                CHANNEL_ID,
                 "Ride Tracking",
-                NotificationManager.IMPORTANCE_LOW // Changed to LOW for quiet background operation
+                NotificationManager.IMPORTANCE_LOW
             )
             val manager = getSystemService(NotificationManager::class.java)
             manager.createNotificationChannel(channel)
@@ -95,18 +125,24 @@ class TripForegroundService : LifecycleService() {
     }
 
     override fun onDestroy() {
+        stopLocationCollection()
+        isForegroundStarted = false
         super.onDestroy()
-        isTracking = false
     }
 
     override fun onTaskRemoved(rootIntent: Intent?) {
         super.onTaskRemoved(rootIntent)
-
-        isTracking = false
-
-
+        stopLocationCollection()
         stopForeground(STOP_FOREGROUND_REMOVE)
-
         stopSelf()
+    }
+
+    companion object {
+        const val ACTION_START = "com.odys.mototriptracker.action.START"
+        const val ACTION_PAUSE = "com.odys.mototriptracker.action.PAUSE"
+        const val ACTION_RESUME = "com.odys.mototriptracker.action.RESUME"
+
+        private const val CHANNEL_ID = "ride_channel"
+        private const val NOTIFICATION_ID = 1
     }
 }

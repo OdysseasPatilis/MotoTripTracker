@@ -5,9 +5,15 @@ import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
+import dagger.hilt.android.qualifiers.ApplicationContext
+import javax.inject.Inject
+import javax.inject.Singleton
 import kotlin.math.sqrt
 
-class GForceTracker(context: Context) : SensorEventListener {
+@Singleton
+class GForceTracker @Inject constructor(
+    @ApplicationContext context: Context
+) : SensorEventListener {
 
     private val sensorManager = context.getSystemService(Context.SENSOR_SERVICE) as SensorManager
     private val linearAccelSensor: Sensor? = sensorManager.getDefaultSensor(Sensor.TYPE_LINEAR_ACCELERATION)
@@ -19,10 +25,11 @@ class GForceTracker(context: Context) : SensorEventListener {
     var maxSessionGForce: Float = 0f
         private set
 
-    fun startTracking() {
-        // Reset stats for the new ride
-        currentGForce = 0f
-        maxSessionGForce = 0f
+    fun startTracking(resetSession: Boolean = true) {
+        if (resetSession) {
+            currentGForce = 0f
+            maxSessionGForce = 0f
+        }
 
         // Register the listener at a standard UI rate (~15-20ms per tick)
         linearAccelSensor?.let {
@@ -32,6 +39,7 @@ class GForceTracker(context: Context) : SensorEventListener {
 
     fun stopTracking() {
         sensorManager.unregisterListener(this)
+        currentGForce = 0f
     }
 
     override fun onSensorChanged(event: SensorEvent?) {

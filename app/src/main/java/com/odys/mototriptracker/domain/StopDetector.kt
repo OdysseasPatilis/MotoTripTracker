@@ -1,6 +1,10 @@
 package com.odys.mototriptracker.domain
 
-class StopDetector {
+import javax.inject.Inject
+import javax.inject.Singleton
+
+@Singleton
+class StopDetector @Inject constructor() {
     private var lastUpdateTime = 0L
 
     // If we request pings every 2s, any gap larger than 4s means we stopped moving 2 meters.
@@ -10,6 +14,10 @@ class StopDetector {
     // Adjust this based on your needs (e.g., 300,000L = 5 minutes).
     private val MAX_VALID_DELTA_MS = 300_000L
     val speedSmoother = SpeedSmoother()
+
+    fun reset() {
+        lastUpdateTime = 0L
+    }
 
     fun updateTimes(
         currentTimeMs: Long,

@@ -6,12 +6,15 @@ import com.google.maps.android.PolyUtil
 import com.odys.mototriptracker.data.checkpoint.RoutePointEntity
 import com.odys.mototriptracker.data.checkpoint.RoutePointEntity_
 import com.odys.mototriptracker.data.waypoint.AdvancedWaypointAnalyzer
-import com.odys.mototriptracker.data.waypoint.WaypointAnalyzer
 import com.odys.mototriptracker.domain.TripStats
+import dagger.hilt.android.qualifiers.ApplicationContext
 import io.objectbox.BoxStore
+import javax.inject.Inject
+import javax.inject.Singleton
 
-class TripRepository(
-    private val context: Context,
+@Singleton
+class TripRepository @Inject constructor(
+    @param:ApplicationContext private val context: Context,
     boxStore: BoxStore
 ) {
 
@@ -92,6 +95,10 @@ class TripRepository(
 
     fun getTrips(): List<TripEntity> {
         return tripBox.all
+    }
+
+    fun getTrip(id: Long): TripEntity? {
+        return tripBox.get(id)
     }
 
     fun deleteTrip(id: Long) {

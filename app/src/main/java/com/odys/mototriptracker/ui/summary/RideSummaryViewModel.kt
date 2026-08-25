@@ -3,7 +3,8 @@ package com.odys.mototriptracker.ui.summary
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.odys.mototriptracker.data.trip.TripRepository
+import com.odys.mototriptracker.domain.usecase.DeleteTripUseCase
+import com.odys.mototriptracker.domain.usecase.GetTripUseCase
 import com.odys.mototriptracker.ui.navigation.Routes
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
@@ -15,7 +16,8 @@ import javax.inject.Inject
 @HiltViewModel
 class RideSummaryViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
-    private val tripRepository: TripRepository
+    private val getTripUseCase: GetTripUseCase,
+    private val deleteTripUseCase: DeleteTripUseCase
 ) : ViewModel() {
 
     private val tripId: Long = checkNotNull(savedStateHandle[Routes.TRIP_ID_ARG])
@@ -29,7 +31,7 @@ class RideSummaryViewModel @Inject constructor(
 
     private fun loadTrip() {
         viewModelScope.launch(Dispatchers.IO) {
-            val trip = tripRepository.getTrip(tripId)
+            val trip = getTripUseCase(tripId)
             _uiState.value = if (trip == null) {
                 RideSummaryUiState(isLoading = false, notFound = true)
             } else {
@@ -40,7 +42,7 @@ class RideSummaryViewModel @Inject constructor(
 
     fun deleteTrip() {
         viewModelScope.launch(Dispatchers.IO) {
-            tripRepository.deleteTrip(tripId)
+            deleteTripUseCase(tripId)
             _uiState.value = _uiState.value.copy(isDeleted = true)
         }
     }

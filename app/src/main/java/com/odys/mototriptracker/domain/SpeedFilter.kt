@@ -1,8 +1,11 @@
 package com.odys.mototriptracker.domain
 
 import android.location.Location
+import javax.inject.Inject
+import javax.inject.Singleton
 
-class SpeedFilter {
+@Singleton
+class SpeedFilter @Inject constructor() {
     // 15 meters is a good threshold for a motorcycle on a road
     private val MIN_ACCURACY_METERS = 15f
 

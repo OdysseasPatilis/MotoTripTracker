@@ -51,7 +51,7 @@ fun RideTrackerRoute(
         },
         onStopRide = viewModel::stopRide,
         onViewHistory = onViewHistory,
-        onPauseRide = viewModel::pauseRide,
+        onPauseRide = viewModel::togglePause,
         isPaused = uiState.isPaused
     )
 }

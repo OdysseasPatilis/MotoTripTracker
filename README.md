@@ -1,13 +1,13 @@
          ┌──────────────────────────────┐
          │        Dashboard UI          │  <-- View
-         │  (Compose / Fragment)        │
-         │  Observes StateFlow/LiveData │
+         │  (Compose)                   │
+         │  Observes StateFlow          │
          │  Shows speed, trip stats     │
          └─────────────┬────────────────┘
-                       │ observes
+                       │ observes (hiltViewModel)
                        ▼
          ┌──────────────────────────────┐
-         │       TripViewModel          │  <-- ViewModel
+         │       TripViewModel          │  <-- ViewModel (@HiltViewModel)
          │ Holds TripStats & TrackPoints│
          │ Receives updates from TripManager │
          │ Exposes ride data to UI      │
@@ -36,9 +36,15 @@
                        │ provides data to
                        ▼
          ┌──────────────────────────────┐
-         │  TripForegroundService       │  <-- Foreground Service
+         │  TripForegroundService       │  <-- Foreground Service (@AndroidEntryPoint)
          │ Keeps GPS tracking alive     │
          │ Sends location updates to TripManager │
          │ Saves completed trips to ObjectBox     │
          │ Runs even if UI is closed    │
          └──────────────────────────────┘
+
+Dependency injection: Hilt (SingletonComponent + constructor injection)
+Navigation: Jetpack Navigation Compose (tracker → history → summary → full route)
+UI state: per-screen UiState exposed as StateFlow from feature ViewModels
+Domain: use cases in domain/usecase (ViewModels depend on use cases, not repos/managers)
+

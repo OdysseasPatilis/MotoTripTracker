@@ -3,7 +3,7 @@ package com.odys.mototriptracker.ui.route
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.odys.mototriptracker.data.trip.TripRepository
+import com.odys.mototriptracker.domain.usecase.GetTripRouteUseCase
 import com.odys.mototriptracker.ui.mapper.toRidePoint
 import com.odys.mototriptracker.ui.mapper.toWaypoint
 import com.odys.mototriptracker.ui.navigation.Routes
@@ -17,7 +17,7 @@ import javax.inject.Inject
 @HiltViewModel
 class FullRouteViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
-    private val tripRepository: TripRepository
+    private val getTripRouteUseCase: GetTripRouteUseCase
 ) : ViewModel() {
 
     private val tripId: Long = checkNotNull(savedStateHandle[Routes.TRIP_ID_ARG])
@@ -31,19 +31,16 @@ class FullRouteViewModel @Inject constructor(
 
     private fun loadRoute() {
         viewModelScope.launch(Dispatchers.IO) {
-            val trip = tripRepository.getTrip(tripId)
-            if (trip == null) {
+            val details = getTripRouteUseCase(tripId)
+            if (details == null) {
                 _uiState.value = FullRouteUiState(isLoading = false, notFound = true)
                 return@launch
             }
 
-            val ridePoints = tripRepository.getRoutePointsForMap(tripId).map { it.toRidePoint() }
-            val waypoints = tripRepository.getWaypointsForTrip(tripId).map { it.toWaypoint() }
-
             _uiState.value = FullRouteUiState(
-                trip = trip,
-                ridePoints = ridePoints,
-                waypoints = waypoints,
+                trip = details.trip,
+                ridePoints = details.routePoints.map { it.toRidePoint() },
+                waypoints = details.waypoints.map { it.toWaypoint() },
                 isLoading = false
             )
         }

@@ -1,16 +1,16 @@
 package com.odys.mototriptracker.domain
 
 import android.location.Location
-import com.odys.mototriptracker.data.checkpoint.RoutePointEntity
-import com.odys.mototriptracker.data.trip.TripEntity
 import com.odys.mototriptracker.data.trip.TripRepository
-import io.objectbox.Box
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import javax.inject.Inject
+import javax.inject.Singleton
 
-class TripManager(
+@Singleton
+class TripManager @Inject constructor(
     private val speedFilter: SpeedFilter,
     private val stopDetector: StopDetector,
     private val tripRepository: TripRepository,
@@ -20,36 +20,66 @@ class TripManager(
     private val _tripStats = MutableStateFlow(TripStats())
     val tripStats: StateFlow<TripStats> = _tripStats.asStateFlow()
 
+    private val _sessionState = MutableStateFlow(RideSessionState())
+    val sessionState: StateFlow<RideSessionState> = _sessionState.asStateFlow()
+
     private var lastLocation: Location? = null
     private var isTracking = false
+    private var isPaused = false
     private var lastLocationTime: Long = 0L
     private var lastSpeedMps: Float = 0f
 
     val speedSmoother = SpeedSmoother()
-    private var elevationSmoother = ElevationSmoother() // Made this a variable so we can reset it
+    private var elevationSmoother = ElevationSmoother()
 
     var sessionMaxSpeedKmh = 0
 
     fun startTrip() {
         isTracking = true
+        isPaused = false
         lastLocation = null
         lastLocationTime = 0L
         lastSpeedMps = 0f
         sessionMaxSpeedKmh = 0
+        stopDetector.reset()
 
-        // Reset the smoother for the new ride!
         elevationSmoother = ElevationSmoother()
-        gForceTracker.startTracking()
+        gForceTracker.startTracking(resetSession = true)
 
         val startTimeMs = System.currentTimeMillis()
         _tripStats.value = TripStats(tripStartTime = startTimeMs)
-
-        // Let the repo secure it on disk immediately
         currentTripId = tripRepository.startNewTrip(startTimeMs)
+        publishSession()
+    }
+
+    fun pauseTrip() {
+        if (!isTracking || isPaused) return
+
+        isPaused = true
+        gForceTracker.stopTracking()
+        stopDetector.reset()
+        // Avoid a teleport jump across the pause gap when GPS resumes.
+        lastLocation = null
+        lastLocationTime = 0L
+        lastSpeedMps = 0f
+
+        _tripStats.update { it.copy(speed = 0f, currentGForce = 0f) }
+        publishSession()
+    }
+
+    fun resumeTrip() {
+        if (!isTracking || !isPaused) return
+
+        isPaused = false
+        stopDetector.reset()
+        lastLocation = null
+        lastLocationTime = 0L
+        gForceTracker.startTracking(resetSession = false)
+        publishSession()
     }
 
     fun onLocationUpdate(location: Location) {
-        if (!isTracking) return
+        if (!isTracking || isPaused) return
 
         // 1. Accuracy Check
         if (!speedFilter.isValid(location)) return
@@ -57,17 +87,15 @@ class TripManager(
         // 2. Extract Data
         val currentSpeedMps = speedFilter.getProcessedSpeed(location)
         val currentSpeedKmh = currentSpeedMps * 3.6f
-        //val currentSpeedKmh = speedSmoother.getSmoothedSpeedKmh(currentSpeedMps).toFloat()
         val currentTime = location.time
 
         val rawSpeedKmh = (location.speed * 3.6f).toInt()
         if (rawSpeedKmh > sessionMaxSpeedKmh) {
             sessionMaxSpeedKmh = rawSpeedKmh
         }
-        // 3. Pre-calculate Deltas (Outside the atomic update for speed)
+
         var elevationDelta = 0.0
         var distanceDelta = 0f
-        var gForce = 0f
 
         lastLocation?.let { prev ->
             if (location.hasAltitude()) {
@@ -78,9 +106,6 @@ class TripManager(
             }
         }
 
-        // G-Force Calculation
-
-        // 4. Thread-safe atomic update
         _tripStats.update { currentStats ->
             var newMoving = currentStats.movingTime
             var newStopped = currentStats.stoppedTime
@@ -94,12 +119,7 @@ class TripManager(
             val movingHours = newMoving / 3600f
             val totalKm = (currentStats.distanceMeters + distanceDelta) / 1000f
             val newAvgSpeed = if (movingHours > 0) totalKm / movingHours else 0f
-            // Live Average Speed (Distance in km / Moving hours)
-            /*var newAvgSpeed = calculateAverageSpeed(newMoving, currentStats.distanceMeters + distanceDelta)
-            if (newAvgSpeed > sessionMaxSpeedKmh) {
-                newAvgSpeed = sessionMaxSpeedKmh.toFloat()
-            }*/
-            // Smoothing the G-Force for the UI
+
             val hardwareCurrentG = gForceTracker.currentGForce
             val hardwareMaxG = maxOf(currentStats.maxGForce, gForceTracker.maxSessionGForce)
 
@@ -120,7 +140,6 @@ class TripManager(
         lastLocationTime = currentTime
         lastLocation = location
 
-        // Let the Repository handle the ObjectBox saving!
         tripRepository.addRoutePointAndUpdateStats(
             tripId = currentTripId,
             lat = location.latitude,
@@ -130,16 +149,17 @@ class TripManager(
             timeMs = currentTime,
             runningStats = _tripStats.value
         )
+        publishSession()
     }
 
     fun stopTrip() {
         if (!isTracking) return
         isTracking = false
+        isPaused = false
         speedSmoother.reset()
         gForceTracker.stopTracking()
         val endTimeMs = System.currentTimeMillis()
 
-        // 1. Flush the final silent stop time
         _tripStats.update { currentStats ->
             var finalMoving = currentStats.movingTime
             var finalStopped = currentStats.stoppedTime
@@ -154,33 +174,24 @@ class TripManager(
             val finalAvgSpeed = if (movingHours > 0) totalKm / movingHours else 0f
 
             currentStats.copy(
+                speed = 0f,
+                currentGForce = 0f,
                 movingTime = finalMoving,
                 stoppedTime = finalStopped,
                 avgSpeed = finalAvgSpeed
             )
         }
 
-        // 2. Tell the Repo to compress the Map string and seal the file!
         tripRepository.saveTrip(currentTripId, _tripStats.value)
+        stopDetector.reset()
+        publishSession()
     }
 
-    fun calculateAverageSpeed(totalDistanceMeters: Long, movingTimeMillis: Float): Float {
-        // 1. THE SHIELD: Don't calculate average speed until they have actually ridden a bit.
-        // If they haven't moved at least 50 meters or ridden for 10 seconds, return 0.
-        if (totalDistanceMeters < 50f || movingTimeMillis < 10_000L) {
-            return 0f
-        }
-
-        // 2. Convert milliseconds to hours
-        val hours = movingTimeMillis / 3600000.0 // 1000ms * 60s * 60m
-
-        // 3. Convert meters to kilometers
-        val kilometers = totalDistanceMeters / 1000.0
-
-        // 4. Calculate Average Speed (Distance / Time)
-        val averageSpeedKmh = kilometers / hours
-
-        return averageSpeedKmh.toFloat()
-
+    private fun publishSession() {
+        _sessionState.value = RideSessionState(
+            stats = _tripStats.value,
+            isActive = isTracking,
+            isPaused = isPaused
+        )
     }
 }
