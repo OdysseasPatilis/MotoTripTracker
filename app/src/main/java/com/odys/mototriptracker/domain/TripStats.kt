@@ -11,7 +11,9 @@ data class TripStats(
     val maxGForce: Float = 0f,
     val elevation: Float = 0f,
     val avgSpeed: Float = 0f,
-    val totalElevationGain: Float = 0f
+    val totalElevationGain: Float = 0f,
+    /** Live road speed limit from OSM, null until first lookup succeeds. */
+    val roadSpeedLimitKmh: Int? = null
 ) {
     val tripTime: Long
         get() = movingTime + stoppedTime

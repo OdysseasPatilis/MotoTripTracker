@@ -14,6 +14,7 @@ import androidx.lifecycle.LifecycleService
 import androidx.lifecycle.lifecycleScope
 import com.odys.mototriptracker.R
 import com.odys.mototriptracker.data.location.LocationRepository
+import com.odys.mototriptracker.domain.SpeedLimitResolver
 import com.odys.mototriptracker.domain.TripManager
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.Job
@@ -28,6 +29,9 @@ class TripForegroundService : LifecycleService() {
 
     @Inject
     lateinit var tripManager: TripManager
+
+    @Inject
+    lateinit var speedLimitResolver: SpeedLimitResolver
 
     private var locationJob: Job? = null
     private var isForegroundStarted = false
@@ -52,6 +56,7 @@ class TripForegroundService : LifecycleService() {
 
     @RequiresPermission(allOf = [Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION])
     private fun startTracking() {
+        speedLimitResolver.reset()
         ensureForeground(contentText = "Tracking your ride")
         startLocationCollection()
     }
@@ -74,6 +79,11 @@ class TripForegroundService : LifecycleService() {
         locationJob = lifecycleScope.launch {
             locationRepository.getLocationFlow().collect { location ->
                 tripManager.onLocationUpdate(location)
+                speedLimitResolver.onLocationUpdate(
+                    latitude = location.latitude,
+                    longitude = location.longitude,
+                    scope = lifecycleScope
+                )
             }
         }
     }

@@ -63,6 +63,7 @@ import com.google.android.gms.maps.model.*
 import com.google.android.gms.maps.model.LatLng
 import com.google.maps.android.compose.*
 import com.odys.mototriptracker.data.trip.TripEntity
+import com.odys.mototriptracker.ui.theme.LocalAppPalette
 import androidx.core.graphics.createBitmap
 import kotlinx.coroutines.launch
 
@@ -173,6 +174,7 @@ fun FullRouteScreenGMaps(
     onBack: () -> Unit = {},
     onShare: () -> Unit = {}
 ) {
+    val palette = LocalAppPalette.current
     var activeLayer by remember { mutableStateOf(MapLayer.Speed) }
     var isParentScrollEnabled by remember { mutableStateOf(true) }
     val scrollState = rememberScrollState() // Hoist the screen scroll state
@@ -182,11 +184,11 @@ fun FullRouteScreenGMaps(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(BgDark)
+            .background(palette.bgDeep)
             .verticalScroll(state = rememberScrollState(), enabled = isParentScrollEnabled)
             .padding(bottom = 32.dp)
     ) {
-        RouteTopBar(onBack = onBack, onShare = onShare)
+        RouteTopBar(onBack = onBack, onShare = onShare, palette = palette)
         Spacer(Modifier.height(4.dp))
         RouteMapCard(
             ridePoints = ridePoints,
@@ -194,10 +196,11 @@ fun FullRouteScreenGMaps(
             activeLayer = activeLayer,
             onLayerChange = { activeLayer = it },
             onMapTouch = { isTouched -> isParentScrollEnabled = !isTouched },
-            cameraState = cameraState
+            cameraState = cameraState,
+            palette = palette
         )
         Spacer(Modifier.height(12.dp))
-        WaypointsPanel(summary, waypoints, onWaypointClick = { latLng ->
+        WaypointsPanel(summary, waypoints, palette, onWaypointClick = { latLng ->
             // WHEN A WAYPOINT IS CLICKED:
             coroutineScope.launch {
                 // 1. Smoothly scroll the screen back to the top so they can see the map
@@ -209,15 +212,19 @@ fun FullRouteScreenGMaps(
             }
         })
         Spacer(Modifier.height(12.dp))
-        ProfileChart(summary, ridePoints, activeLayer)
+        ProfileChart(summary, ridePoints, activeLayer, palette)
         Spacer(Modifier.height(12.dp))
-        LegendPills(activeLayer = activeLayer)
+        LegendPills(activeLayer = activeLayer, palette = palette)
     }
 }
 
 // ── Top bar ───────────────────────────────────────────────────────────────────
 @Composable
-private fun RouteTopBar(onBack: () -> Unit, onShare: () -> Unit) {
+private fun RouteTopBar(
+    onBack: () -> Unit,
+    onShare: () -> Unit,
+    palette: com.odys.mototriptracker.ui.theme.AppPalette
+) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -226,12 +233,12 @@ private fun RouteTopBar(onBack: () -> Unit, onShare: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
-        IconCircleButton(onClick = onBack) {
-            Icon(Icons.Default.ArrowBack, "Back", tint = TextPrimary, modifier = Modifier.size(18.dp))
+        IconCircleButton(onClick = onBack, palette = palette) {
+            Icon(Icons.Default.ArrowBack, "Back", tint = palette.textPrimary, modifier = Modifier.size(18.dp))
         }
-        Text("Full route", color = TextPrimary, fontSize = 17.sp, fontWeight = FontWeight.Medium)
-        IconCircleButton(shape = RoundedCornerShape(8.dp), onClick = onShare) {
-            Icon(Icons.Default.Share, "Share", tint = TextPrimary, modifier = Modifier.size(16.dp))
+        Text("Full route", color = palette.textPrimary, fontSize = 17.sp, fontWeight = FontWeight.Medium)
+        IconCircleButton(shape = RoundedCornerShape(8.dp), onClick = onShare, palette = palette) {
+            Icon(Icons.Default.Share, "Share", tint = palette.textPrimary, modifier = Modifier.size(16.dp))
         }
     }
 }
@@ -240,13 +247,14 @@ private fun RouteTopBar(onBack: () -> Unit, onShare: () -> Unit) {
 private fun IconCircleButton(
     shape: androidx.compose.ui.graphics.Shape = CircleShape,
     onClick: () -> Unit,
+    palette: com.odys.mototriptracker.ui.theme.AppPalette,
     content: @Composable BoxScope.() -> Unit
 ) {
     Box(
         modifier = Modifier
             .size(36.dp)
             .clip(shape)
-            .background(CardDark)
+            .background(palette.bgCard)
             .clickable { onClick() },
         contentAlignment = Alignment.Center,
         content = content
@@ -261,7 +269,8 @@ private fun RouteMapCard(
     activeLayer: MapLayer,
     onLayerChange: (MapLayer) -> Unit,
     onMapTouch: (Boolean) -> Unit,
-    cameraState: CameraPositionState
+    cameraState: CameraPositionState,
+    palette: com.odys.mototriptracker.ui.theme.AppPalette
 ) {
     val bounds = remember(ridePoints) {
         // THE FIX: If the list is empty (still loading), return null safely
@@ -407,8 +416,8 @@ private fun RouteMapCard(
                 .padding(10.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
-            LayerToggleButton("Speed", activeLayer == MapLayer.Speed)     { onLayerChange(MapLayer.Speed) }
-            LayerToggleButton("Elevation",activeLayer == MapLayer.Elevation) { onLayerChange(MapLayer.Elevation) }
+            LayerToggleButton("Speed", activeLayer == MapLayer.Speed, palette) { onLayerChange(MapLayer.Speed) }
+            LayerToggleButton("Elevation", activeLayer == MapLayer.Elevation, palette) { onLayerChange(MapLayer.Elevation) }
         }
 
         // ── Legend bar (overlaid) ──────────────────────────────────────────
@@ -428,23 +437,28 @@ private fun RouteMapCard(
                 listOf(RouteBlue, RouteAmber, RouteCoral, "Flat · Climb · Steep")
             LegendSegment(c1 as Color); LegendSegment(c2 as Color); LegendSegment(c3 as Color)
             Spacer(Modifier.width(4.dp))
-            Text(label as String, color = TextMuted, fontSize = 9.sp)
+            Text(label as String, color = palette.textMuted, fontSize = 9.sp)
         }
     }
 }
 
 @Composable
-private fun LayerToggleButton(label: String, isActive: Boolean, onClick: () -> Unit) {
+private fun LayerToggleButton(
+    label: String,
+    isActive: Boolean,
+    palette: com.odys.mototriptracker.ui.theme.AppPalette,
+    onClick: () -> Unit
+) {
     Box(
         modifier = Modifier
             .clip(RoundedCornerShape(7.dp))
-            .background(if (isActive) PurpleActive else CardDark)
+            .background(if (isActive) palette.layerActive else palette.bgCard)
             .clickable { onClick() }
             .padding(horizontal = 10.dp, vertical = 5.dp)
     ) {
         Text(
             text = label,
-            color = if (isActive) TextPrimary else TextMuted,
+            color = if (isActive) palette.textPrimary else palette.textMuted,
             fontSize = 11.sp,
             fontWeight = if (isActive) FontWeight.Medium else FontWeight.Normal
         )
@@ -463,25 +477,35 @@ private fun LegendSegment(color: Color) {
 
 // ── Waypoints ─────────────────────────────────────────────────────────────────
 @Composable
-private fun WaypointsPanel(summary: TripEntity,waypoints: List<Waypoint>,onWaypointClick: (LatLng) -> Unit) {
+private fun WaypointsPanel(
+    summary: TripEntity,
+    waypoints: List<Waypoint>,
+    palette: com.odys.mototriptracker.ui.theme.AppPalette,
+    onWaypointClick: (LatLng) -> Unit
+) {
     Column(modifier = Modifier.padding(horizontal = 20.dp)) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text("Route waypoints", color = TextPrimary, fontSize = 15.sp, fontWeight = FontWeight.Medium)
-            Text(formatTimestampToDate(summary.startTime),  color = TextHint,    fontSize = 12.sp)
+            Text("Route waypoints", color = palette.textPrimary, fontSize = 15.sp, fontWeight = FontWeight.Medium)
+            Text(formatTimestampToDate(summary.startTime), color = palette.textSecondary, fontSize = 12.sp)
         }
         Spacer(Modifier.height(12.dp))
         waypoints.forEachIndexed { i, wp ->
-            WaypointRow(wp, showLine = i < waypoints.lastIndex, onClick = { onWaypointClick(wp.position) })
+            WaypointRow(wp, showLine = i < waypoints.lastIndex, palette = palette, onClick = { onWaypointClick(wp.position) })
         }
     }
 }
 
 @Composable
-private fun WaypointRow(wp: Waypoint, showLine: Boolean, onClick: () -> Unit) {
+private fun WaypointRow(
+    wp: Waypoint,
+    showLine: Boolean,
+    palette: com.odys.mototriptracker.ui.theme.AppPalette,
+    onClick: () -> Unit
+) {
     // 1. Determine the exact Icon and Color based on the smart type!
     val (icon: ImageVector?, dotColor: Color) = when (wp.type) {
         WaypointType.Start -> Pair(Icons.Default.PlayArrow, Mint)
@@ -530,7 +554,7 @@ private fun WaypointRow(wp: Waypoint, showLine: Boolean, onClick: () -> Unit) {
                         .size(12.dp)
                         .drawWithCache {
                             onDrawBehind {
-                                drawCircle(BgDark)
+                                drawCircle(palette.bgDeep)
                                 drawCircle(dotColor, style = Stroke(2f))
                                 drawCircle(dotColor, radius = 3f)
                             }
@@ -553,20 +577,25 @@ private fun WaypointRow(wp: Waypoint, showLine: Boolean, onClick: () -> Unit) {
 
         // --- TEXT COLUMN ---
         Column(modifier = Modifier.weight(1f)) {
-            Text(wp.label, color = TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+            Text(wp.label, color = palette.textPrimary, fontSize = 13.sp, fontWeight = FontWeight.Medium)
             // The detail text will now automatically display the actual Geocoded Street Name!
-            Text(wp.detail, color = TextHint, fontSize = 11.sp, maxLines = 1)
+            Text(wp.detail, color = palette.textSecondary, fontSize = 11.sp, maxLines = 1)
             if (showLine) Spacer(Modifier.height(20.dp))
         }
 
         // --- TIME COLUMN ---
-        Text(wp.time, color = TextMuted, fontSize = 12.sp)
+        Text(wp.time, color = palette.textMuted, fontSize = 12.sp)
     }
 }
 
 // ── Profile chart (elevation or speed) ───────────────────────────────────────
 @Composable
-private fun ProfileChart(summary: TripEntity, ridePoints: List<RidePoint>, activeLayer: MapLayer) {
+private fun ProfileChart(
+    summary: TripEntity,
+    ridePoints: List<RidePoint>,
+    activeLayer: MapLayer,
+    palette: com.odys.mototriptracker.ui.theme.AppPalette
+) {
     val values = remember(ridePoints, activeLayer) {
         ridePoints.map { if (activeLayer == MapLayer.Elevation) it.elevationM else it.speedKmh }
     }
@@ -580,7 +609,7 @@ private fun ProfileChart(summary: TripEntity, ridePoints: List<RidePoint>, activ
     Column(modifier = Modifier.padding(horizontal = 20.dp)) {
         Text(
             text = if (activeLayer == MapLayer.Elevation) "ELEVATION PROFILE" else "SPEED PROFILE",
-            color = TextHint, fontSize = 10.sp, letterSpacing = 1.sp
+            color = palette.textSecondary, fontSize = 10.sp, letterSpacing = 1.sp
         )
         Spacer(Modifier.height(8.dp))
         Box(
@@ -588,7 +617,7 @@ private fun ProfileChart(summary: TripEntity, ridePoints: List<RidePoint>, activ
                 .fillMaxWidth()
                 .height(80.dp)
                 .clip(RoundedCornerShape(12.dp))
-                .background(SurfaceDark)
+                .background(palette.bgPanel)
                 .drawWithCache {
                     val w = size.width
                     val h = size.height
@@ -618,16 +647,19 @@ private fun ProfileChart(summary: TripEntity, ridePoints: List<RidePoint>, activ
         )
         Spacer(Modifier.height(4.dp))
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text("0 km", color = TextHint,  fontSize = 9.sp)
-            Text(peakLabel,color = peakColor, fontSize = 9.sp)
-            Text("${String.format("%.1f ", summary.distanceMeters / 1000f)} km", color = TextHint,  fontSize = 9.sp)
+            Text("0 km", color = palette.textSecondary, fontSize = 9.sp)
+            Text(peakLabel, color = peakColor, fontSize = 9.sp)
+            Text("${String.format("%.1f ", summary.distanceMeters / 1000f)} km", color = palette.textSecondary, fontSize = 9.sp)
         }
     }
 }
 
 // ── Legend pills ──────────────────────────────────────────────────────────────
 @Composable
-private fun LegendPills(activeLayer: MapLayer) {
+private fun LegendPills(
+    activeLayer: MapLayer,
+    palette: com.odys.mototriptracker.ui.theme.AppPalette
+) {
     val pills = if (activeLayer == MapLayer.Speed) listOf(
         Triple(RouteAmber, "Slow",   "0–40 km/h"),
         Triple(RouteTeal,  "Cruise", "40–130 km/h"),
@@ -648,7 +680,7 @@ private fun LegendPills(activeLayer: MapLayer) {
             Row(
                 modifier = Modifier
                     .clip(RoundedCornerShape(20.dp))
-                    .background(SurfaceDark)
+                    .background(palette.bgPanel)
                     .padding(horizontal = 10.dp, vertical = 6.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(5.dp)
@@ -658,8 +690,8 @@ private fun LegendPills(activeLayer: MapLayer) {
                     .clip(CircleShape)
                     .background(color))
                 // Add maxLines = 1 to prevent wrapping
-                Text(label, color = TextMuted, fontSize = 11.sp, maxLines = 1)
-                Text(range, color = TextPrimary, fontSize = 11.sp, fontWeight = FontWeight.Medium, maxLines = 1)
+                Text(label, color = palette.textMuted, fontSize = 11.sp, maxLines = 1)
+                Text(range, color = palette.textPrimary, fontSize = 11.sp, fontWeight = FontWeight.Medium, maxLines = 1)
             }
         }
     }

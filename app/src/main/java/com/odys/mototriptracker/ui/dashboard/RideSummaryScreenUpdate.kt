@@ -50,6 +50,8 @@ import com.google.maps.android.compose.MapUiSettings
 import com.google.maps.android.compose.Polyline
 import com.google.maps.android.compose.rememberCameraPositionState
 import com.odys.mototriptracker.data.trip.TripEntity
+import com.odys.mototriptracker.ui.theme.AppPalette
+import com.odys.mototriptracker.ui.theme.LocalAppPalette
 
 // ── Colours ──────────────────────────────────────────────────────────────────
 private val BackgroundDark = Color(0xFF0E0E14)
@@ -74,14 +76,15 @@ fun RideSummaryScreenUpdate(
     onDelete: () -> Unit = {},
     onViewRoute: () -> Unit = {}
 ) {
+    val palette = LocalAppPalette.current
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(BackgroundDark)
+            .background(palette.bgDeep)
             .verticalScroll(rememberScrollState())
             .padding(bottom = 32.dp)
     ) {
-        TopBar(onBack = onBack, onDelete = onDelete)
+        TopBar(onBack = onBack, onDelete = onDelete, palette = palette)
         Spacer(Modifier.height(4.dp))
         DateCard(summary)
         Spacer(Modifier.height(10.dp))
@@ -91,13 +94,17 @@ fun RideSummaryScreenUpdate(
             onClick = onViewRoute
         )
         Spacer(Modifier.height(10.dp))
-        StatsGrid(summary)
+        StatsGrid(summary, palette)
     }
 }
 
 // ── Top bar ───────────────────────────────────────────────────────────────────
 @Composable
-private fun TopBar(onBack: () -> Unit, onDelete: () -> Unit) {
+private fun TopBar(
+    onBack: () -> Unit,
+    onDelete: () -> Unit,
+    palette: AppPalette
+) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -110,21 +117,21 @@ private fun TopBar(onBack: () -> Unit, onDelete: () -> Unit) {
             modifier = Modifier
                 .size(36.dp)
                 .clip(CircleShape)
-                .background(CardDark)
+                .background(palette.bgCard)
                 .clickable { onBack() },
             contentAlignment = Alignment.Center
         ) {
             Icon(
                 imageVector = Icons.Default.ArrowBack,
                 contentDescription = "Back",
-                tint = TextPrimary,
+                tint = palette.textPrimary,
                 modifier = Modifier.size(18.dp)
             )
         }
 
         Text(
             text = "Ride Summary",
-            color = TextPrimary,
+            color = palette.textPrimary,
             fontSize = 17.sp,
             fontWeight = FontWeight.Medium
         )
@@ -133,14 +140,14 @@ private fun TopBar(onBack: () -> Unit, onDelete: () -> Unit) {
             modifier = Modifier
                 .size(36.dp)
                 .clip(RoundedCornerShape(8.dp))
-                .background(Color(0xFF3A1A1A))
+                .background(palette.deleteButtonBg)
                 .clickable { onDelete() },
             contentAlignment = Alignment.Center
         ) {
             Icon(
                 imageVector = Icons.Default.Delete,
                 contentDescription = "Delete",
-                tint = Color(0xFFE24B4A),
+                tint = palette.stopRed,
                 modifier = Modifier.size(18.dp)
             )
         }
@@ -371,17 +378,20 @@ private fun RouteCanvas(modifier: Modifier = Modifier) {
 
 // ── Stats grid ────────────────────────────────────────────────────────────────
 @Composable
-private fun StatsGrid(summary: TripEntity) {
+private fun StatsGrid(
+    summary: TripEntity,
+    palette: AppPalette
+) {
     val totalTime = summary.movingTime + summary.stoppedTime
     val stats = listOf(
-        StatItem("Distance",   "${String.format("%.1f ", summary.distanceMeters / 1000f)}",  "km",    TextPrimary),
-        StatItem("Total time", formatSecondsToTime(totalTime),"mm:ss", TextPrimary),
-        StatItem("Moving",     formatSecondsToTime(summary.movingTime),"mm:ss", Mint),
-        StatItem("Stopped",    formatSecondsToTime(summary.stoppedTime),"mm:ss", Red),
-        StatItem("Avg speed",  summary.avgSpeed.toInt().toString(),   "km/h",  TextPrimary),
-        StatItem("Max speed",  summary.maxSpeed.toInt().toString(),  "km/h",  Blue),
-        StatItem("Elevation",  "+${summary.elevationGain.toInt()}",  "meters",TextPrimary),
-        StatItem("Max G",      String.format("%.2f", summary.maxGForce), "G-force",Purple),
+        StatItem("Distance",   "${String.format("%.1f ", summary.distanceMeters / 1000f)}",  "km",    palette.textPrimary),
+        StatItem("Total time", formatSecondsToTime(totalTime),"mm:ss", palette.textPrimary),
+        StatItem("Moving",     formatSecondsToTime(summary.movingTime),"mm:ss", palette.mint),
+        StatItem("Stopped",    formatSecondsToTime(summary.stoppedTime),"mm:ss", palette.neonRed),
+        StatItem("Avg speed",  summary.avgSpeed.toInt().toString(),   "km/h",  palette.textPrimary),
+        StatItem("Max speed",  summary.maxSpeed.toInt().toString(),  "km/h",  palette.neonBlue),
+        StatItem("Elevation",  "+${summary.elevationGain.toInt()}",  "meters", palette.textPrimary),
+        StatItem("Max G",      String.format("%.2f", summary.maxGForce), "G-force", palette.purpleAccent),
     )
 
     Column(
@@ -391,7 +401,7 @@ private fun StatsGrid(summary: TripEntity) {
         stats.chunked(2).forEach { row ->
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 row.forEach { stat ->
-                    StatCard(stat, modifier = Modifier.weight(1f))
+                    StatCard(stat, palette, modifier = Modifier.weight(1f))
                 }
                 // fill empty slot if odd number of stats
                 if (row.size == 1) Spacer(Modifier.weight(1f))
@@ -408,16 +418,20 @@ private data class StatItem(
 )
 
 @Composable
-private fun StatCard(stat: StatItem, modifier: Modifier = Modifier) {
+private fun StatCard(
+    stat: StatItem,
+    palette: AppPalette,
+    modifier: Modifier = Modifier
+) {
     Column(
         modifier = modifier
             .clip(RoundedCornerShape(14.dp))
-            .background(SurfaceDark)
+            .background(palette.bgPanel)
             .padding(horizontal = 16.dp, vertical = 14.dp)
     ) {
         Text(
             text = stat.label.uppercase(),
-            color = TextHint,
+            color = palette.textSecondary,
             fontSize = 10.sp,
             letterSpacing = 1.sp
         )
@@ -432,7 +446,7 @@ private fun StatCard(stat: StatItem, modifier: Modifier = Modifier) {
         Spacer(Modifier.height(3.dp))
         Text(
             text = stat.unit,
-            color = TextHint,
+            color = palette.textSecondary,
             fontSize = 11.sp
         )
     }

@@ -1,0 +1,95 @@
+package com.odys.mototriptracker.domain
+
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
+import javax.inject.Inject
+import javax.inject.Singleton
+import kotlin.math.asin
+import kotlin.math.cos
+import kotlin.math.pow
+import kotlin.math.sin
+import kotlin.math.sqrt
+
+@Singleton
+class SpeedLimitResolver @Inject constructor(
+    private val speedLimitProvider: SpeedLimitProvider,
+    private val tripManager: TripManager
+) {
+    private val cache = mutableMapOf<String, Int?>()
+    private var lastQueryLat: Double? = null
+    private var lastQueryLng: Double? = null
+    private var lastQueryTimeMs: Long = 0L
+    private var lookupJob: Job? = null
+
+    fun reset() {
+        lookupJob?.cancel()
+        lookupJob = null
+        cache.clear()
+        lastQueryLat = null
+        lastQueryLng = null
+        lastQueryTimeMs = 0L
+    }
+
+    fun onLocationUpdate(latitude: Double, longitude: Double, scope: CoroutineScope) {
+        if (!shouldQuery(latitude, longitude)) return
+
+        val cacheKey = gridKey(latitude, longitude)
+        if (cacheKey in cache) {
+            cache[cacheKey]?.let { tripManager.updateRoadSpeedLimit(it) }
+            lastQueryLat = latitude
+            lastQueryLng = longitude
+            lastQueryTimeMs = System.currentTimeMillis()
+            return
+        }
+
+        lookupJob?.cancel()
+        lookupJob = scope.launch {
+            val limit = speedLimitProvider.getSpeedLimitKmh(latitude, longitude)
+            cache[cacheKey] = limit
+            lastQueryLat = latitude
+            lastQueryLng = longitude
+            lastQueryTimeMs = System.currentTimeMillis()
+            if (limit != null) {
+                tripManager.updateRoadSpeedLimit(limit)
+            }
+        }
+    }
+
+    private fun shouldQuery(latitude: Double, longitude: Double): Boolean {
+        val now = System.currentTimeMillis()
+        val lastLat = lastQueryLat
+        val lastLng = lastQueryLng
+        if (lastLat == null || lastLng == null) return true
+
+        val movedEnough = haversineMeters(lastLat, lastLng, latitude, longitude) >= MIN_MOVE_METERS
+        val waitedEnough = now - lastQueryTimeMs >= MIN_INTERVAL_MS
+        return movedEnough || waitedEnough
+    }
+
+    private fun gridKey(latitude: Double, longitude: Double): String {
+        val latCell = (latitude * GRID_SCALE).toLong()
+        val lngCell = (longitude * GRID_SCALE).toLong()
+        return "${latCell}_$lngCell"
+    }
+
+    private fun haversineMeters(
+        lat1: Double,
+        lon1: Double,
+        lat2: Double,
+        lon2: Double
+    ): Double {
+        val earthRadiusM = 6_371_000.0
+        val dLat = Math.toRadians(lat2 - lat1)
+        val dLon = Math.toRadians(lon2 - lon1)
+        val a = sin(dLat / 2).pow(2) +
+            cos(Math.toRadians(lat1)) * cos(Math.toRadians(lat2)) * sin(dLon / 2).pow(2)
+        return earthRadiusM * 2 * asin(sqrt(a))
+    }
+
+    companion object {
+        private const val MIN_MOVE_METERS = 35.0
+        private const val MIN_INTERVAL_MS = 15_000L
+        private const val GRID_SCALE = 500.0
+    }
+}

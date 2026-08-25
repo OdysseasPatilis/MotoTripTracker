@@ -1,5 +1,6 @@
 package com.odys.mototriptracker.ui.route
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.CircularProgressIndicator
@@ -12,7 +13,7 @@ import androidx.compose.ui.Modifier
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.odys.mototriptracker.ui.dashboard.FullRouteScreenGMaps
-import com.odys.mototriptracker.ui.dashboard.TextMuted
+import com.odys.mototriptracker.ui.theme.LocalAppPalette
 
 @Composable
 fun FullRouteRoute(
@@ -20,6 +21,7 @@ fun FullRouteRoute(
     viewModel: FullRouteViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val palette = LocalAppPalette.current
 
     LaunchedEffect(uiState.notFound) {
         if (uiState.notFound) onBack()
@@ -28,10 +30,12 @@ fun FullRouteRoute(
     when {
         uiState.isLoading -> {
             Box(
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(palette.bgDeep),
                 contentAlignment = Alignment.Center
             ) {
-                CircularProgressIndicator()
+                CircularProgressIndicator(color = palette.neonGreen)
             }
         }
 
@@ -46,10 +50,12 @@ fun FullRouteRoute(
 
         else -> {
             Box(
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(palette.bgDeep),
                 contentAlignment = Alignment.Center
             ) {
-                Text("Route not found", color = TextMuted)
+                Text("Route not found", color = palette.textMuted)
             }
         }
     }

@@ -1,58 +1,74 @@
 package com.odys.mototriptracker.ui.theme
 
-import android.app.Activity
-import android.os.Build
+import androidx.activity.compose.LocalActivity
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.dynamicDarkColorScheme
-import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.platform.LocalView
+import androidx.core.view.WindowCompat
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
-private val DarkColorScheme = darkColorScheme(
-    primary = Purple80,
-    secondary = PurpleGrey80,
-    tertiary = Pink80
+private val DarkMaterialScheme = darkColorScheme(
+    primary = AppPalettes.dark.neonGreen,
+    secondary = AppPalettes.dark.neonBlue,
+    background = AppPalettes.dark.bgDeep,
+    surface = AppPalettes.dark.bgPanel
 )
 
-private val LightColorScheme = lightColorScheme(
-    primary = Purple40,
-    secondary = PurpleGrey40,
-    tertiary = Pink40
-
-    /* Other default colors to override
-    background = Color(0xFFFFFBFE),
-    surface = Color(0xFFFFFBFE),
-    onPrimary = Color.White,
-    onSecondary = Color.White,
-    onTertiary = Color.White,
-    onBackground = Color(0xFF1C1B1F),
-    onSurface = Color(0xFF1C1B1F),
-    */
+private val LightMaterialScheme = lightColorScheme(
+    primary = AppPalettes.light.neonGreen,
+    secondary = AppPalettes.light.neonBlue,
+    background = AppPalettes.light.bgDeep,
+    surface = AppPalettes.light.bgPanel
 )
 
 @Composable
 fun MotoTripTrackerTheme(
-    darkTheme: Boolean = isSystemInDarkTheme(),
-    // Dynamic color is available on Android 12+
-    dynamicColor: Boolean = true,
+    themeStore: ThemeStore,
     content: @Composable () -> Unit
 ) {
-    val colorScheme = when {
-        dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
-            val context = LocalContext.current
-            if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
-        }
+    val mode by themeStore.mode.collectAsStateWithLifecycle()
+    val palette = themeStore.paletteFor(mode)
+    val darkTheme = mode == ThemeMode.DARK
 
-        darkTheme -> DarkColorScheme
-        else -> LightColorScheme
+    val view = LocalView.current
+    val activity = LocalActivity.current
+    SideEffect {
+        val window = activity?.window ?: return@SideEffect
+        WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = !darkTheme
+        window.statusBarColor = palette.bgDeep.toArgb()
+        window.navigationBarColor = palette.bgDeep.toArgb()
     }
 
-    MaterialTheme(
-        colorScheme = colorScheme,
-        typography = Typography,
-        content = content
-    )
+    CompositionLocalProvider(
+        LocalAppPalette provides palette,
+        LocalThemeStore provides themeStore
+    ) {
+        MaterialTheme(
+            colorScheme = if (darkTheme) DarkMaterialScheme else LightMaterialScheme,
+            typography = Typography,
+            content = content
+        )
+    }
+}
+
+@Composable
+fun MotoTripTrackerTheme(
+    darkTheme: Boolean = isSystemInDarkTheme(),
+    content: @Composable () -> Unit
+) {
+    val palette = if (darkTheme) AppPalettes.dark else AppPalettes.light
+    CompositionLocalProvider(LocalAppPalette provides palette) {
+        MaterialTheme(
+            colorScheme = if (darkTheme) DarkMaterialScheme else LightMaterialScheme,
+            typography = Typography,
+            content = content
+        )
+    }
 }

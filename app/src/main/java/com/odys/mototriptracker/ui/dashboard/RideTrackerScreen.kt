@@ -26,6 +26,11 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.DarkMode
+import androidx.compose.material.icons.filled.LightMode
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -45,7 +50,12 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.odys.mototriptracker.domain.TripStats
+import com.odys.mototriptracker.ui.theme.AppPalette
+import com.odys.mototriptracker.ui.theme.LocalAppPalette
+import com.odys.mototriptracker.ui.theme.LocalThemeStore
+import com.odys.mototriptracker.ui.theme.ThemeMode
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -65,20 +75,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.geometry.CornerRadius
 import kotlinx.coroutines.delay
+import android.view.HapticFeedbackConstants
+import androidx.compose.ui.platform.LocalView
 import java.util.Calendar
-
-// --- Color palette ---
-val BgDeep    = Color(0xFF0A0A0F)
-val BgCard    = Color(0xFF111120)
-val BgSurface = Color(0xFF4050E5)
-val TextPrimary = Color.White
-val TextMuted   = Color(0xFF4A4A6A)
-val NeonGreen   = Color(0xFF00E5A0)
-val NeonBlue    = Color(0xFF00B4FF)
-val NeonRed     = Color(0xFFFF4A6A)
-
-val GradientButton     = Brush.horizontalGradient(listOf(NeonGreen, NeonBlue))
-
 
 @Composable
 fun RideTrackerScreen(
@@ -91,14 +90,23 @@ fun RideTrackerScreen(
     onPauseRide: () -> Unit,
     isPaused: Boolean
 ) {
+    val palette = LocalAppPalette.current
+    val themeStore = LocalThemeStore.current
+    val fallbackSpeedLimitKmh by themeStore.speedLimitKmh.collectAsStateWithLifecycle()
+    val themeMode by themeStore.mode.collectAsStateWithLifecycle()
+    val view = LocalView.current
+
+    val effectiveSpeedLimitKmh = (stats.roadSpeedLimitKmh ?: fallbackSpeedLimitKmh).toFloat()
+    val isLiveSpeedLimit = isTracking && stats.roadSpeedLimitKmh != null
+
     KeepScreenOn()
     Scaffold(
-        containerColor = BgDeep,
+        containerColor = palette.bgDeep,
         bottomBar = {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(BgDeep)
+                    .background(palette.bgDeep)
                     .navigationBarsPadding()
                     .padding(start = 20.dp, end = 20.dp, bottom = 24.dp, top = 12.dp)
             ) {
@@ -112,45 +120,43 @@ fun RideTrackerScreen(
                             onClick = onPauseRide,
                             modifier = Modifier.weight(1f).height(56.dp),
                             shape = RoundedCornerShape(28.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1A1A2E)),
-                            border = BorderStroke(1.dp, Color(0x1FFFFFFF))
+                            colors = ButtonDefaults.buttonColors(containerColor = palette.bgPanel),
+                            border = BorderStroke(1.dp, palette.pauseBorder)
                         ) {
                             if (!isPaused) {
-                                // Recording dot
                                 Canvas(Modifier.size(8.dp)) {
-                                    drawCircle(Color(0xFFE24B4A))
+                                    drawCircle(palette.stopRed)
                                 }
                                 Spacer(Modifier.width(6.dp))
                             }
                             Text(
                                 if (isPaused) "RESUME" else "PAUSE",
-                                color = TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Bold
+                                color = palette.textPrimary, fontSize = 14.sp, fontWeight = FontWeight.Bold
                             )
                         }
-                        // Stop
                         Button(
                             onClick = onStopRide,
                             modifier = Modifier.weight(1f).height(56.dp),
                             shape = RoundedCornerShape(28.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0x26E24B4A)),
-                            border = BorderStroke(1.dp, Color(0x4DE24B4A))
+                            colors = ButtonDefaults.buttonColors(containerColor = palette.stopRed.copy(alpha = 0.15f)),
+                            border = BorderStroke(1.dp, palette.stopRed.copy(alpha = 0.3f))
                         ) {
-                            Text("STOP", color = Color(0xFFE24B4A),
+                            Text("STOP", color = palette.stopRed,
                                 fontSize = 14.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
                         }
                     } else {
-                        // Your existing single START RIDE button — keep unchanged
                         Button(
                             onClick = onStartRide,
                             modifier = Modifier.fillMaxWidth().height(56.dp)
-                                .clip(RoundedCornerShape(28.dp)).background(GradientButton),
+                                .clip(RoundedCornerShape(28.dp))
+                                .background(if (isLocationEnabled) palette.startGradient else Brush.linearGradient(listOf(palette.startButtonDisabledBg, palette.startButtonDisabledBg))),
                             colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent),
                             contentPadding = PaddingValues(0.dp),
                             enabled = isLocationEnabled
                         ) {
                             Text(
                                 if (!isLocationEnabled) "ENABLE GPS TO START" else "START RIDE",
-                                color = if (isLocationEnabled) BgDeep else Color.Gray,
+                                color = if (isLocationEnabled) palette.bgDeep else palette.startButtonDisabledText,
                                 fontSize = 16.sp, fontWeight = FontWeight.Bold, letterSpacing = 2.sp
                             )
                         }
@@ -179,57 +185,88 @@ fun RideTrackerScreen(
             ) {
                 Column {
                     Text(
-                        "RIDE TRACKER", color = TextMuted, fontSize = 10.sp,
+                        "RIDE TRACKER", color = palette.textMuted, fontSize = 10.sp,
                         fontWeight = FontWeight.Medium, letterSpacing = 2.sp
                     )
                     Text(
-                        currentTime, color = TextPrimary, fontSize = 22.sp,
+                        currentTime, color = palette.textPrimary, fontSize = 22.sp,
                         fontWeight = FontWeight.Bold, lineHeight = 24.sp
                     )
                 }
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    BatteryIndicator(batteryLevel)
+                    BatteryIndicator(batteryLevel, palette)
+                    IconButton(
+                        onClick = { themeStore.toggleTheme() },
+                        modifier = Modifier.size(32.dp)
+                    ) {
+                        Icon(
+                            imageVector = if (themeMode == ThemeMode.DARK) {
+                                Icons.Filled.LightMode
+                            } else {
+                                Icons.Filled.DarkMode
+                            },
+                            contentDescription = if (themeMode == ThemeMode.DARK) {
+                                "Switch to light theme"
+                            } else {
+                                "Switch to dark theme"
+                            },
+                            tint = palette.textMuted
+                        )
+                    }
                     TextButton(onClick = onViewHistory) {
-                        Text("HISTORY", color = NeonGreen, fontSize = 11.sp,
+                        Text("HISTORY", color = palette.neonGreen, fontSize = 11.sp,
                             fontWeight = FontWeight.Medium, letterSpacing = 1.sp)
                     }
                 }
             }
-            // Speedometer card
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(28.dp))
-                    .background(Color(0xFF1A1A2E))
+                    .background(palette.bgPanel)
                     .padding(24.dp, 8.dp),
                 contentAlignment = Alignment.Center
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                    SpeedometerArc(stats.speed, stats.maxSpeed)
-                    //Spacer(Modifier.height(8.dp))
-                    GForceBar(value = stats.currentGForce, maxValue = stats.maxGForce)
+                    SpeedometerArc(
+                        speedKmh = stats.speed,
+                        maxSpeedKmh = maxOf(stats.maxSpeed, 260f),
+                        speedLimitKmh = effectiveSpeedLimitKmh,
+                        isLiveSpeedLimit = isLiveSpeedLimit,
+                        palette = palette,
+                        onCycleSpeedLimit = if (isLiveSpeedLimit) {
+                            null
+                        } else {
+                            {
+                                themeStore.cycleSpeedLimit()
+                                view.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK)
+                            }
+                        }
+                    )
+                    GForceBar(
+                        value = stats.currentGForce,
+                        maxValue = stats.maxGForce,
+                        palette = palette
+                    )
                 }
             }
 
-            // Stats grid
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                StatCard("DISTANCE", "${String.format("%.1f km", stats.distanceKm)}", Modifier.weight(1f))
-                StatCard("TOTAL TIME", formatSecondsToTime(stats.tripTime), Modifier.weight(1f))
+                StatCard("DISTANCE", "${String.format("%.1f km", stats.distanceKm)}", Modifier.weight(1f), palette = palette)
+                StatCard("TOTAL TIME", formatSecondsToTime(stats.tripTime), Modifier.weight(1f), palette = palette)
             }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                StatCard("MOVING",
-                    formatSecondsToTime(stats.movingTime), Modifier.weight(1f), valueColor = NeonGreen)
-                StatCard("STOPPED",
-                    formatSecondsToTime(stats.stoppedTime), Modifier.weight(1f), valueColor = NeonRed)
+                StatCard("MOVING", formatSecondsToTime(stats.movingTime), Modifier.weight(1f), valueColor = palette.neonGreen, palette = palette)
+                StatCard("STOPPED", formatSecondsToTime(stats.stoppedTime), Modifier.weight(1f), valueColor = palette.neonRed, palette = palette)
             }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                StatCard("AVG SPEED", "${stats.avgSpeed.toInt()} km/h", Modifier.weight(1f))
-                StatCard("MAX SPEED", "${stats.maxSpeed.toInt()} km/h", Modifier.weight(1f))
+                StatCard("AVG SPEED", "${stats.avgSpeed.toInt()} km/h", Modifier.weight(1f), palette = palette)
+                StatCard("MAX SPEED", "${stats.maxSpeed.toInt()} km/h", Modifier.weight(1f), palette = palette)
             }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                StatCard("ELEVATION", "${stats.totalElevationGain.toInt()} m", Modifier.weight(1f))
-                StatCard("MAX G", String.format("%.2f G", stats.maxGForce), Modifier.weight(1f), valueColor = NeonBlue)
+                StatCard("ELEVATION", "${stats.totalElevationGain.toInt()} m", Modifier.weight(1f), palette = palette)
+                StatCard("MAX G", String.format("%.2f G", stats.maxGForce), Modifier.weight(1f), valueColor = palette.neonBlue, palette = palette)
             }
             Spacer(Modifier.height(4.dp))
         }
@@ -240,20 +277,23 @@ fun StatCard(
     label: String,
     value: String,
     modifier: Modifier = Modifier,
-    valueColor: Color = TextPrimary
+    valueColor: Color? = null,
+    palette: AppPalette = LocalAppPalette.current
 ) {
+    val resolvedValueColor = valueColor ?: palette.textPrimary
     Box(
         modifier = modifier
             .clip(RoundedCornerShape(20.dp))
-            .background(BgCard)
+            .background(palette.bgCard)
+            .border(1.dp, palette.borderSubtle, RoundedCornerShape(20.dp))
             .padding(vertical = 18.dp),
         contentAlignment = Alignment.Center
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(label, color = TextMuted, fontSize = 11.sp,
+            Text(label, color = palette.textMuted, fontSize = 11.sp,
                 fontWeight = FontWeight.Medium, letterSpacing = 1.sp)
             Spacer(Modifier.height(6.dp))
-            Text(value, color = valueColor, fontSize = 22.sp, fontWeight = FontWeight.SemiBold)
+            Text(value, color = resolvedValueColor, fontSize = 22.sp, fontWeight = FontWeight.SemiBold)
         }
     }
 }
@@ -262,63 +302,32 @@ fun StatCard(
 fun SpeedometerArc(
     speedKmh: Float,
     maxSpeedKmh: Float = 260f,
-    speedLimitKmh: Float = 90f
+    speedLimitKmh: Float = 50f,
+    isLiveSpeedLimit: Boolean = false,
+    palette: AppPalette = LocalAppPalette.current,
+    onCycleSpeedLimit: (() -> Unit)? = null
 ) {
     val isOverLimit = speedKmh > speedLimitKmh
     val limitPercent = (speedLimitKmh / maxSpeedKmh).coerceIn(0f, 1f)
     val speedPercent = (speedKmh / maxSpeedKmh).coerceIn(0f, 1f)
 
-    val badgeBg by animateColorAsState(
-        targetValue = if (isOverLimit) Color(0x26E24B4A) else Color(0x0FFFFFFF),
-        animationSpec = tween(300),
-        label = "badgeBg"
-    )
-    val badgeBorder by animateColorAsState(
-        targetValue = if (isOverLimit) Color(0x66E24B4A) else Color(0x1FFFFFFF),
-        animationSpec = tween(300),
-        label = "badgeBorder"
-    )
-    val badgeNumColor by animateColorAsState(
-        targetValue = if (isOverLimit) Color(0xFFE24B4A) else Color(0x55FFFFFF),
-        animationSpec = tween(300),
-        label = "badgeNum"
-    )
     val speedNumColor by animateColorAsState(
-        targetValue = if (isOverLimit) Color(0xFFE24B4A) else TextPrimary,
+        targetValue = if (isOverLimit) palette.stopRed else palette.textPrimary,
         animationSpec = tween(300),
         label = "speedNum"
     )
     Box(modifier = Modifier.size(260.dp), contentAlignment = Alignment.Center) {
 
-        // Speed limit badge — top left of the arc box
-        /*Box(
+        SpeedLimitSign(
+            limitKmh = speedLimitKmh.toInt(),
+            isOverLimit = isOverLimit,
+            isLive = isLiveSpeedLimit,
+            palette = palette,
+            onClick = onCycleSpeedLimit,
             modifier = Modifier
-                .align(Alignment.TopEnd)
-                .padding(end = 0.dp, top = 0.dp)  // ← nudges it away from the arc tip
-        ) {
-            Row(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(badgeBg)
-                    .border(
-                        width = 0.5.dp,
-                        color = badgeBorder,
-                        shape = RoundedCornerShape(8.dp)
-                    )
-                    .padding(horizontal = 8.dp, vertical = 4.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(
-                        text = speedLimitKmh.toInt().toString(),
-                        color = badgeNumColor,
-                        fontSize = 13.sp, fontWeight = FontWeight.Bold
-                    )
-                    Text("LIMIT", color = Color(0x40FFFFFF), fontSize = 8.sp, letterSpacing = 0.5.sp)
-                }
-            }
-        }*/
+                .align(Alignment.TopStart)
+                .padding(start = 4.dp, top = 8.dp)
+        )
 
         Canvas(modifier = Modifier.fillMaxSize()) {
             val strokeWidth = 14.dp.toPx()
@@ -329,17 +338,15 @@ fun SpeedometerArc(
             val startAngle = 150f
             val totalSweep = 240f
 
-            // Background track
-            drawArc(color = Color(0xFF252547), startAngle = startAngle,
+            drawArc(color = palette.arcTrack, startAngle = startAngle,
                 sweepAngle = totalSweep, useCenter = false,
                 topLeft = topLeft, size = arcSize, style = style)
 
             if (speedPercent > 0f) {
                 if (!isOverLimit) {
-                    // Normal green→blue arc
                     drawArc(
                         brush = Brush.sweepGradient(
-                            colorStops = arrayOf(0f to NeonGreen, 1f to NeonBlue),
+                            colorStops = arrayOf(0f to palette.neonGreen, 1f to palette.neonBlue),
                             center = Offset(size.width / 2, size.height / 2)
                         ),
                         startAngle = startAngle,
@@ -347,16 +354,14 @@ fun SpeedometerArc(
                         useCenter = false, topLeft = topLeft, size = arcSize, style = style
                     )
                 } else {
-                    // Teal arc up to the limit
                     drawArc(
-                        color = NeonGreen.copy(alpha = 0.35f),
+                        color = palette.neonGreen.copy(alpha = 0.35f),
                         startAngle = startAngle,
                         sweepAngle = totalSweep * limitPercent,
                         useCenter = false, topLeft = topLeft, size = arcSize, style = style
                     )
-                    // Red arc from limit to current speed
                     drawArc(
-                        color = Color(0xFFE24B4A),
+                        color = palette.stopRed,
                         startAngle = startAngle + totalSweep * limitPercent,
                         sweepAngle = totalSweep * (speedPercent - limitPercent),
                         useCenter = false, topLeft = topLeft, size = arcSize, style = style
@@ -364,18 +369,16 @@ fun SpeedometerArc(
                 }
             }
 
-            // Indicator dot — keep your existing dot code here unchanged
             val angleRad = Math.toRadians((startAngle + totalSweep * speedPercent).toDouble())
             val radius = arcSize.width / 2
             val cx = topLeft.x + radius + radius * cos(angleRad).toFloat()
             val cy = topLeft.y + arcSize.height / 2 + radius * sin(angleRad).toFloat()
             drawCircle(
-                color = if (isOverLimit) Color(0xFFE24B4A) else NeonGreen,
+                color = if (isOverLimit) palette.stopRed else palette.neonGreen,
                 radius = 7.dp.toPx(), center = Offset(cx, cy)
             )
         }
 
-        // Your existing animated speed number — keep unchanged
         val animatedSpeed by animateIntAsState(
             targetValue = speedKmh.toInt(),
             animationSpec = tween(1000, easing = FastOutSlowInEasing),
@@ -384,26 +387,29 @@ fun SpeedometerArc(
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text(
                 text = animatedSpeed.toString(),
-                color = speedNumColor,              // ← animated
+                color = speedNumColor,
                 fontSize = 72.sp, fontWeight = FontWeight.Bold, lineHeight = 72.sp
             )
             Text(
-                "KM/H", color = TextMuted, fontSize = 14.sp,
+                "KM/H", color = palette.textMuted, fontSize = 14.sp,
                 fontWeight = FontWeight.Medium, letterSpacing = 3.sp
             )
         }
     }
 }
 @Composable
-fun GForceBar(value: Float, maxValue: Float) {
+fun GForceBar(
+    value: Float,
+    maxValue: Float,
+    palette: AppPalette = LocalAppPalette.current
+) {
     val fillFraction = if (maxValue > 0f) (value / maxValue).coerceIn(0f, 1f) else 0f
-    val barGradient  = Brush.horizontalGradient(listOf(NeonGreen, NeonBlue))
 
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier.fillMaxWidth()
     ) {
-        Text(String.format("%.2f G", value), color = TextPrimary,
+        Text(String.format("%.2f G", value), color = palette.textPrimary,
             fontSize = 15.sp, fontWeight = FontWeight.Medium)
         Spacer(Modifier.height(8.dp))
         Box(
@@ -411,7 +417,7 @@ fun GForceBar(value: Float, maxValue: Float) {
                 .fillMaxWidth(0.72f)
                 .height(6.dp)
                 .clip(RoundedCornerShape(3.dp))
-                .background(Color(0xFF252547))
+                .background(palette.arcTrack)
         ) {
             if (fillFraction > 0f) {
                 Box(
@@ -419,21 +425,20 @@ fun GForceBar(value: Float, maxValue: Float) {
                         .fillMaxWidth(fillFraction)
                         .fillMaxHeight()
                         .clip(RoundedCornerShape(3.dp))
-                        .background(barGradient)
+                        .background(palette.startGradient)
                 )
             }
-            // Centre tick mark
             Box(
                 modifier = Modifier
                     .align(Alignment.Center)
                     .width(1.dp)
                     .fillMaxHeight()
-                    .background(Color(0xFF3A3A5A))
+                    .background(palette.gForceTick)
             )
         }
         Spacer(Modifier.height(6.dp))
         Text("MAX: ${String.format("%.2f", maxValue)} G",
-            color = TextMuted, fontSize = 11.sp)
+            color = palette.textMuted, fontSize = 11.sp)
     }
 }
 
@@ -490,11 +495,11 @@ fun rememberBatteryLevel(): Int {
 }
 
 @Composable
-fun BatteryIndicator(level: Int) {
+fun BatteryIndicator(level: Int, palette: AppPalette = LocalAppPalette.current) {
     val color = when {
-        level <= 20 -> NeonRed
-        level <= 50 -> Color(0xFFEF9F27)
-        else        -> NeonGreen
+        level <= 20 -> palette.neonRed
+        level <= 50 -> palette.routeAmber
+        else        -> palette.neonGreen
     }
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
         Canvas(modifier = Modifier.size(width = 24.dp, height = 13.dp)) {
@@ -502,21 +507,18 @@ fun BatteryIndicator(level: Int) {
             val bodyH = size.height
             val termW = 3.dp.toPx()
             val termH = 5.dp.toPx()
-            // Body outline
             drawRoundRect(
-                color = Color(0x55FFFFFF),
+                color = palette.batteryOutline,
                 size = Size(bodyW, bodyH),
                 cornerRadius = CornerRadius(2.dp.toPx()),
                 style = Stroke(width = 1.5.dp.toPx())
             )
-            // Terminal nub
             drawRoundRect(
-                color = Color(0x55FFFFFF),
+                color = palette.batteryOutline,
                 topLeft = Offset(bodyW, (bodyH - termH) / 2),
                 size = Size(termW, termH),
                 cornerRadius = CornerRadius(1.dp.toPx())
             )
-            // Fill
             val fillW = ((bodyW - 4.dp.toPx()) * level / 100f).coerceAtLeast(0f)
             drawRoundRect(
                 color = color,
@@ -525,7 +527,7 @@ fun BatteryIndicator(level: Int) {
                 cornerRadius = CornerRadius(1.dp.toPx())
             )
         }
-        Text("$level%", color = Color(0x80FFFFFF), fontSize = 11.sp)
+        Text("$level%", color = palette.batteryLabel, fontSize = 11.sp)
     }
 }
 fun formatSecondsToTime(totalSeconds: Long): String {

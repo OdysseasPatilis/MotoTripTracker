@@ -27,47 +27,52 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.odys.mototriptracker.data.trip.TripEntity
+import com.odys.mototriptracker.ui.theme.AppPalette
+import com.odys.mototriptracker.ui.theme.LocalAppPalette
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun RideSummaryScreen(summary: TripEntity, onBack: () -> Unit, onDelete: () -> Unit) {
+    val palette = LocalAppPalette.current
     val totalTime = summary.movingTime + summary.stoppedTime
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(BgDeep)
+            .background(palette.bgDeep)
     ) {
-        // Top bar with delete button
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(Color(0xFF0F0F1A))
+                .background(palette.bgBar)
                 .padding(horizontal = 20.dp, vertical = 16.dp)
                 .statusBarsPadding()
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 IconButton(onClick = onBack) {
-                    Icon(Icons.Rounded.ArrowBack, contentDescription = "Back", tint = TextPrimary)
+                    Icon(Icons.Rounded.ArrowBack, contentDescription = "Back", tint = palette.textPrimary)
                 }
-                Text("Ride Summary", color = TextPrimary, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+                Text("Ride Summary", color = palette.textPrimary, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
             }
             Box(
                 modifier = Modifier
                     .align(Alignment.CenterEnd)
                     .clip(RoundedCornerShape(8.dp))
-                    .background(NeonRed.copy(alpha = 0.15f))
+                    .background(palette.neonRed.copy(alpha = 0.15f))
                     .clickable(onClick = onDelete)
                     .padding(8.dp)
             ) {
-                Icon(Icons.Rounded.Delete, contentDescription = "Delete",
-                    tint = NeonRed, modifier = Modifier.size(18.dp))
+                Icon(
+                    Icons.Rounded.Delete,
+                    contentDescription = "Delete",
+                    tint = palette.neonRed,
+                    modifier = Modifier.size(18.dp)
+                )
             }
         }
 
@@ -80,45 +85,47 @@ fun RideSummaryScreen(summary: TripEntity, onBack: () -> Unit, onDelete: () -> U
         ) {
             Spacer(Modifier.height(4.dp))
 
-            // Hero date card
-            val heroGradient = Brush.horizontalGradient(listOf(NeonGreen, NeonBlue))
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(24.dp))
-                    .background(BgSurface)
+                    .background(palette.bgSurface)
                     .padding(vertical = 20.dp),
                 contentAlignment = Alignment.Center
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("DATE & TIME", color = TextMuted, fontSize = 11.sp,
-                        letterSpacing = 2.sp, fontWeight = FontWeight.Medium)
+                    Text(
+                        "DATE & TIME",
+                        color = palette.textMuted,
+                        fontSize = 11.sp,
+                        letterSpacing = 2.sp,
+                        fontWeight = FontWeight.Medium
+                    )
                     Spacer(Modifier.height(4.dp))
                     Text(
                         formatTimestampToDate(summary.startTime),
                         fontSize = 20.sp,
                         fontWeight = FontWeight.Bold,
-                        style = TextStyle(brush = heroGradient)
+                        style = TextStyle(brush = palette.heroGradient)
                     )
                 }
             }
 
-            // Stats grid
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                SummaryStatCard("DISTANCE", "${String.format("%.1f ", summary.distanceMeters / 1000f)}", "km", Modifier.weight(1f))
-                SummaryStatCard("TOTAL TIME", formatSecondsToTime(totalTime), "mm:ss", Modifier.weight(1f))
+                SummaryStatCard("DISTANCE", "${String.format("%.1f ", summary.distanceMeters / 1000f)}", "km", Modifier.weight(1f), palette = palette)
+                SummaryStatCard("TOTAL TIME", formatSecondsToTime(totalTime), "mm:ss", Modifier.weight(1f), palette = palette)
             }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                SummaryStatCard("MOVING", formatSecondsToTime(summary.movingTime), "mm:ss", Modifier.weight(1f), valueColor = NeonGreen)
-                SummaryStatCard("STOPPED", formatSecondsToTime(summary.stoppedTime), "mm:ss", Modifier.weight(1f), valueColor = NeonRed)
+                SummaryStatCard("MOVING", formatSecondsToTime(summary.movingTime), "mm:ss", Modifier.weight(1f), valueColor = palette.neonGreen, palette = palette)
+                SummaryStatCard("STOPPED", formatSecondsToTime(summary.stoppedTime), "mm:ss", Modifier.weight(1f), valueColor = palette.neonRed, palette = palette)
             }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                SummaryStatCard("AVG SPEED", summary.avgSpeed.toInt().toString(), "km/h", Modifier.weight(1f))
-                SummaryStatCard("MAX SPEED", summary.maxSpeed.toInt().toString(), "km/h", Modifier.weight(1f), valueColor = NeonBlue)
+                SummaryStatCard("AVG SPEED", summary.avgSpeed.toInt().toString(), "km/h", Modifier.weight(1f), palette = palette)
+                SummaryStatCard("MAX SPEED", summary.maxSpeed.toInt().toString(), "km/h", Modifier.weight(1f), valueColor = palette.neonBlue, palette = palette)
             }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                SummaryStatCard("ELEVATION", "+${summary.elevationGain.toInt()}", "meters", Modifier.weight(1f))
-                SummaryStatCard("MAX G", String.format("%.2f", summary.maxGForce), "G-force", Modifier.weight(1f), valueColor = NeonGreen)
+                SummaryStatCard("ELEVATION", "+${summary.elevationGain.toInt()}", "meters", Modifier.weight(1f), palette = palette)
+                SummaryStatCard("MAX G", String.format("%.2f", summary.maxGForce), "G-force", Modifier.weight(1f), valueColor = palette.neonGreen, palette = palette)
             }
             Spacer(Modifier.height(16.dp))
         }
@@ -131,21 +138,27 @@ fun SummaryStatCard(
     value: String,
     unit: String,
     modifier: Modifier = Modifier,
-    valueColor: Color = TextPrimary
+    valueColor: Color = LocalAppPalette.current.textPrimary,
+    palette: AppPalette = LocalAppPalette.current
 ) {
     Box(
         modifier = modifier
             .clip(RoundedCornerShape(20.dp))
-            .background(BgCard)
+            .background(palette.bgCard)
             .padding(vertical = 18.dp),
         contentAlignment = Alignment.Center
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(label, color = TextMuted, fontSize = 11.sp,
-                letterSpacing = 1.sp, fontWeight = FontWeight.Medium)
+            Text(
+                label,
+                color = palette.textMuted,
+                fontSize = 11.sp,
+                letterSpacing = 1.sp,
+                fontWeight = FontWeight.Medium
+            )
             Spacer(Modifier.height(8.dp))
             Text(value, color = valueColor, fontSize = 28.sp, fontWeight = FontWeight.Bold)
-            Text(unit, color = TextMuted, fontSize = 12.sp)
+            Text(unit, color = palette.textMuted, fontSize = 12.sp)
         }
     }
 }

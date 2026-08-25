@@ -52,6 +52,14 @@ class TripManager @Inject constructor(
         publishSession()
     }
 
+    fun updateRoadSpeedLimit(kmh: Int) {
+        if (!isTracking || isPaused) return
+        if (_tripStats.value.roadSpeedLimitKmh == kmh) return
+
+        _tripStats.update { it.copy(roadSpeedLimitKmh = kmh) }
+        publishSession()
+    }
+
     fun pauseTrip() {
         if (!isTracking || isPaused) return
 
