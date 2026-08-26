@@ -1,5 +1,6 @@
 package com.odys.mototriptracker.domain
 
+import com.odys.mototriptracker.util.AppLogger
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
@@ -29,6 +30,7 @@ class SpeedLimitResolver @Inject constructor(
         lastQueryLat = null
         lastQueryLng = null
         lastQueryTimeMs = 0L
+        AppLogger.d(AppLogger.Category.SPEED_LIMIT, "Resolver reset")
     }
 
     fun onLocationUpdate(latitude: Double, longitude: Double, scope: CoroutineScope) {
@@ -36,22 +38,45 @@ class SpeedLimitResolver @Inject constructor(
 
         val cacheKey = gridKey(latitude, longitude)
         if (cacheKey in cache) {
-            cache[cacheKey]?.let { tripManager.updateRoadSpeedLimit(it) }
+            val cached = cache[cacheKey]
+            cached?.let { tripManager.updateRoadSpeedLimit(it) }
             lastQueryLat = latitude
             lastQueryLng = longitude
             lastQueryTimeMs = System.currentTimeMillis()
+            AppLogger.d(
+                AppLogger.Category.SPEED_LIMIT,
+                "Cache hit key=$cacheKey limit=${cached ?: "none"} @ ${AppLogger.coordinate(latitude, longitude)}"
+            )
             return
         }
 
         lookupJob?.cancel()
         lookupJob = scope.launch {
-            val limit = speedLimitProvider.getSpeedLimitKmh(latitude, longitude)
+            AppLogger.d(
+                AppLogger.Category.SPEED_LIMIT,
+                "Lookup start @ ${AppLogger.coordinate(latitude, longitude)}"
+            )
+            val limit = try {
+                speedLimitProvider.getSpeedLimitKmh(latitude, longitude)
+            } catch (t: Throwable) {
+                AppLogger.e(AppLogger.Category.SPEED_LIMIT, "Lookup failed", t)
+                null
+            }
             cache[cacheKey] = limit
             lastQueryLat = latitude
             lastQueryLng = longitude
             lastQueryTimeMs = System.currentTimeMillis()
             if (limit != null) {
                 tripManager.updateRoadSpeedLimit(limit)
+                AppLogger.i(
+                    AppLogger.Category.SPEED_LIMIT,
+                    "Lookup ok → $limit km/h @ ${AppLogger.coordinate(latitude, longitude)}"
+                )
+            } else {
+                AppLogger.w(
+                    AppLogger.Category.SPEED_LIMIT,
+                    "No maxspeed @ ${AppLogger.coordinate(latitude, longitude)}"
+                )
             }
         }
     }

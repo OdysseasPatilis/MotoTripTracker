@@ -7,6 +7,7 @@ import com.odys.mototriptracker.domain.usecase.PauseRideUseCase
 import com.odys.mototriptracker.domain.usecase.ResumeRideUseCase
 import com.odys.mototriptracker.domain.usecase.StartRideUseCase
 import com.odys.mototriptracker.domain.usecase.StopRideUseCase
+import com.odys.mototriptracker.util.AppLogger
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -38,26 +39,42 @@ class RideTrackerViewModel @Inject constructor(
         )
 
     fun startRide() {
-        if (uiState.value.isTracking) return
+        if (uiState.value.isTracking) {
+            AppLogger.d(AppLogger.Category.UI, "startRide ignored — already tracking")
+            return
+        }
+        AppLogger.i(AppLogger.Category.UI, "startRide requested")
         startRideUseCase()
     }
 
     fun stopRide() {
-        if (!uiState.value.isTracking) return
+        if (!uiState.value.isTracking) {
+            AppLogger.d(AppLogger.Category.UI, "stopRide ignored — not tracking")
+            return
+        }
 
+        AppLogger.i(AppLogger.Category.UI, "stopRide requested")
         val result = stopRideUseCase()
         if (result.isTooShort) {
-            println("Ride was less than 50 meters. Too short!")
+            AppLogger.w(
+                AppLogger.Category.UI,
+                "Ride too short (${result.distanceMeters}m < ${StopRideUseCase.MIN_DISTANCE_METERS}m)"
+            )
         }
     }
 
     fun togglePause() {
         val state = uiState.value
-        if (!state.isTracking) return
+        if (!state.isTracking) {
+            AppLogger.d(AppLogger.Category.UI, "togglePause ignored — not tracking")
+            return
+        }
 
         if (state.isPaused) {
+            AppLogger.i(AppLogger.Category.UI, "resumeRide requested")
             resumeRideUseCase()
         } else {
+            AppLogger.i(AppLogger.Category.UI, "pauseRide requested")
             pauseRideUseCase()
         }
     }

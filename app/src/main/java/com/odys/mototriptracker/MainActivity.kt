@@ -7,6 +7,7 @@ import androidx.activity.enableEdgeToEdge
 import com.odys.mototriptracker.ui.navigation.MotoTripNavHost
 import com.odys.mototriptracker.ui.theme.MotoTripTrackerTheme
 import com.odys.mototriptracker.ui.theme.ThemeStore
+import com.odys.mototriptracker.util.AppLogger
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
 
@@ -18,6 +19,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        AppLogger.i(AppLogger.Category.APP, "MainActivity onCreate")
         enableEdgeToEdge()
         setContent {
             MotoTripTrackerTheme(themeStore = themeStore) {

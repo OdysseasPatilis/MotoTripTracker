@@ -2,6 +2,7 @@ package com.odys.mototriptracker.data.road
 
 import com.odys.mototriptracker.domain.SpeedLimitParser
 import com.odys.mototriptracker.domain.SpeedLimitProvider
+import com.odys.mototriptracker.util.AppLogger
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
@@ -18,7 +19,18 @@ class OverpassSpeedLimitProvider @Inject constructor() : SpeedLimitProvider {
         withContext(Dispatchers.IO) {
             for (radiusMeters in QUERY_RADII_METERS) {
                 val rawLimit = queryNearestMaxSpeed(latitude, longitude, radiusMeters) ?: continue
-                SpeedLimitParser.parse(rawLimit)?.let { return@withContext it }
+                val parsed = SpeedLimitParser.parse(rawLimit)
+                if (parsed != null) {
+                    AppLogger.d(
+                        AppLogger.Category.SPEED_LIMIT,
+                        "Overpass raw='$rawLimit' → $parsed km/h (r=${radiusMeters}m)"
+                    )
+                    return@withContext parsed
+                }
+                AppLogger.d(
+                    AppLogger.Category.SPEED_LIMIT,
+                    "Overpass raw='$rawLimit' unparseable (r=${radiusMeters}m)"
+                )
             }
             null
         }
@@ -34,10 +46,15 @@ class OverpassSpeedLimitProvider @Inject constructor() : SpeedLimitProvider {
         }
 
         return try {
-            if (connection.responseCode != HttpURLConnection.HTTP_OK) return null
+            val code = connection.responseCode
+            if (code != HttpURLConnection.HTTP_OK) {
+                AppLogger.w(AppLogger.Category.SPEED_LIMIT, "Overpass HTTP $code (r=${radiusMeters}m)")
+                return null
+            }
             val body = connection.inputStream.bufferedReader().use { it.readText() }
             parseBestMaxSpeed(body)
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            AppLogger.w(AppLogger.Category.SPEED_LIMIT, "Overpass request failed: ${e.message}")
             null
         } finally {
             connection.disconnect()

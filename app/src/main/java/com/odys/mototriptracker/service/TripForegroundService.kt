@@ -16,6 +16,7 @@ import com.odys.mototriptracker.R
 import com.odys.mototriptracker.data.location.LocationRepository
 import com.odys.mototriptracker.domain.SpeedLimitResolver
 import com.odys.mototriptracker.domain.TripManager
+import com.odys.mototriptracker.util.AppLogger
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
@@ -39,13 +40,17 @@ class TripForegroundService : LifecycleService() {
     override fun onCreate() {
         super.onCreate()
         createNotificationChannel()
+        AppLogger.i(AppLogger.Category.SERVICE, "Service onCreate")
     }
 
     @RequiresPermission(allOf = [Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION])
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         super.onStartCommand(intent, flags, startId)
 
-        when (intent?.action) {
+        val action = intent?.action ?: ACTION_START
+        AppLogger.i(AppLogger.Category.SERVICE, "onStartCommand action=$action")
+
+        when (action) {
             ACTION_PAUSE -> pauseTracking()
             ACTION_RESUME -> resumeTracking()
             else -> startTracking()
@@ -59,36 +64,50 @@ class TripForegroundService : LifecycleService() {
         speedLimitResolver.reset()
         ensureForeground(contentText = "Tracking your ride")
         startLocationCollection()
+        AppLogger.i(AppLogger.Category.SERVICE, "Tracking started")
     }
 
     private fun pauseTracking() {
         stopLocationCollection()
         ensureForeground(contentText = "Ride paused")
+        AppLogger.i(AppLogger.Category.SERVICE, "Tracking paused")
     }
 
     @RequiresPermission(allOf = [Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION])
     private fun resumeTracking() {
         ensureForeground(contentText = "Tracking your ride")
         startLocationCollection()
+        AppLogger.i(AppLogger.Category.SERVICE, "Tracking resumed")
     }
 
     @RequiresPermission(allOf = [Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION])
     private fun startLocationCollection() {
-        if (locationJob?.isActive == true) return
+        if (locationJob?.isActive == true) {
+            AppLogger.d(AppLogger.Category.SERVICE, "Location collection already active")
+            return
+        }
 
         locationJob = lifecycleScope.launch {
-            locationRepository.getLocationFlow().collect { location ->
-                tripManager.onLocationUpdate(location)
-                speedLimitResolver.onLocationUpdate(
-                    latitude = location.latitude,
-                    longitude = location.longitude,
-                    scope = lifecycleScope
-                )
+            AppLogger.i(AppLogger.Category.SERVICE, "Location collection flow started")
+            try {
+                locationRepository.getLocationFlow().collect { location ->
+                    tripManager.onLocationUpdate(location)
+                    speedLimitResolver.onLocationUpdate(
+                        latitude = location.latitude,
+                        longitude = location.longitude,
+                        scope = lifecycleScope
+                    )
+                }
+            } catch (t: Throwable) {
+                AppLogger.e(AppLogger.Category.SERVICE, "Location collection failed", t)
             }
         }
     }
 
     private fun stopLocationCollection() {
+        if (locationJob != null) {
+            AppLogger.d(AppLogger.Category.SERVICE, "Location collection stopped")
+        }
         locationJob?.cancel()
         locationJob = null
     }
@@ -135,12 +154,14 @@ class TripForegroundService : LifecycleService() {
     }
 
     override fun onDestroy() {
+        AppLogger.i(AppLogger.Category.SERVICE, "Service onDestroy")
         stopLocationCollection()
         isForegroundStarted = false
         super.onDestroy()
     }
 
     override fun onTaskRemoved(rootIntent: Intent?) {
+        AppLogger.w(AppLogger.Category.SERVICE, "Task removed — stopping service")
         super.onTaskRemoved(rootIntent)
         stopLocationCollection()
         stopForeground(STOP_FOREGROUND_REMOVE)

@@ -7,6 +7,7 @@ import android.location.Geocoder
 import android.os.Build
 import androidx.annotation.RequiresApi
 import com.odys.mototriptracker.data.checkpoint.RoutePointEntity
+import com.odys.mototriptracker.util.AppLogger
 import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
@@ -24,7 +25,15 @@ class AdvancedWaypointAnalyzer {
             totalDistanceMeters: Float
         ): List<RoutePointEntity> {
 
-            if (points.isEmpty()) return emptyList()
+            if (points.isEmpty()) {
+                AppLogger.d(AppLogger.Category.WAYPOINT, "No points to analyze")
+                return emptyList()
+            }
+
+            AppLogger.i(
+                AppLogger.Category.WAYPOINT,
+                "Analyzing ${points.size} points (dist=${totalDistanceMeters}m)"
+            )
 
             val pointsToUpdate = mutableListOf<RoutePointEntity>()
 
@@ -61,7 +70,10 @@ class AdvancedWaypointAnalyzer {
                         }
                     }
                 } catch (e: Exception) {
-                    println("WaypointAnalyzer: Maps API failed (${e.message}). Falling back to native OS Geocoder...")
+                    AppLogger.w(
+                        AppLogger.Category.WAYPOINT,
+                        "Maps geocode failed (${e.message}) — falling back to native Geocoder"
+                    )
                 }
 
                 // ==========================================
@@ -81,13 +93,16 @@ class AdvancedWaypointAnalyzer {
                             val nativeAddress = address.thoroughfare ?: address.subLocality ?: address.locality
 
                             if (nativeAddress != null) {
-                                println("WaypointAnalyzer: Recovered address using Native Geocoder!")
+                                AppLogger.d(AppLogger.Category.WAYPOINT, "Native geocode ok: $nativeAddress")
                                 return nativeAddress
                             }
                         }
                     }
                 } catch (e: Exception) {
-                    println("WaypointAnalyzer: Native OS Geocoder also failed (${e.message}). Using coordinates.")
+                    AppLogger.w(
+                        AppLogger.Category.WAYPOINT,
+                        "Native geocode failed (${e.message}) — using coordinates"
+                    )
                 }
 
                 // ==========================================

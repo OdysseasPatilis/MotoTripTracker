@@ -7,6 +7,7 @@ import com.odys.mototriptracker.data.checkpoint.RoutePointEntity
 import com.odys.mototriptracker.data.checkpoint.RoutePointEntity_
 import com.odys.mototriptracker.data.waypoint.AdvancedWaypointAnalyzer
 import com.odys.mototriptracker.domain.TripStats
+import com.odys.mototriptracker.util.AppLogger
 import dagger.hilt.android.qualifiers.ApplicationContext
 import io.objectbox.BoxStore
 import javax.inject.Inject
@@ -24,7 +25,9 @@ class TripRepository @Inject constructor(
     // 1. START: Create the blank trip immediately so it's safe on disk
     fun startNewTrip(startTimeMs: Long): Long {
         val newTrip = TripEntity(startTime = startTimeMs)
-        return tripBox.put(newTrip) // Returns the generated ID
+        val id = tripBox.put(newTrip)
+        AppLogger.i(AppLogger.Category.PERSISTENCE, "Created trip id=$id start=$startTimeMs")
+        return id
     }
 
     // 2. UPDATE: Save a new GPS ping and update the running totals
@@ -37,7 +40,11 @@ class TripRepository @Inject constructor(
         timeMs: Long,
         runningStats: TripStats
     ) {
-        val trip = tripBox.get(tripId) ?: return
+        val trip = tripBox.get(tripId)
+        if (trip == null) {
+            AppLogger.e(AppLogger.Category.PERSISTENCE, "addRoutePoint: trip id=$tripId not found")
+            return
+        }
 
         // A. Save the raw GPS point
         val point = RoutePointEntity(
@@ -64,7 +71,11 @@ class TripRepository @Inject constructor(
 
     // 3. STOP: Finalize the stats and compress the Google Maps polyline
     fun saveTrip(tripId: Long, finalStats: TripStats) {
-        val trip = tripBox.get(tripId) ?: return
+        val trip = tripBox.get(tripId)
+        if (trip == null) {
+            AppLogger.e(AppLogger.Category.PERSISTENCE, "saveTrip: trip id=$tripId not found")
+            return
+        }
 
         trip.endTime = System.currentTimeMillis()
         trip.movingTime = finalStats.movingTime
@@ -73,15 +84,28 @@ class TripRepository @Inject constructor(
 
         // 1. Fetch all the raw GPS points
         val savedPoints = trip.routePoints
-        // --- NEW: GENERATE WAYPOINTS ---
-        val updatedWaypoints = AdvancedWaypointAnalyzer.analyzeAndMarkWaypoints(
-             context = context, // Pass the context here!
-            points = savedPoints,
-            totalDistanceMeters = finalStats.distanceMeters
+        AppLogger.d(
+            AppLogger.Category.PERSISTENCE,
+            "Finalizing trip id=$tripId points=${savedPoints.size} ${AppLogger.tripSummary(finalStats)}"
         )
+        // --- NEW: GENERATE WAYPOINTS ---
+        val updatedWaypoints = try {
+            AdvancedWaypointAnalyzer.analyzeAndMarkWaypoints(
+                context = context,
+                points = savedPoints,
+                totalDistanceMeters = finalStats.distanceMeters
+            )
+        } catch (t: Throwable) {
+            AppLogger.e(AppLogger.Category.WAYPOINT, "Waypoint analysis failed", t)
+            emptyList()
+        }
         // Save only the modified points back to the database
         if (updatedWaypoints.isNotEmpty()) {
             routePointBox.put(updatedWaypoints)
+            AppLogger.i(
+                AppLogger.Category.WAYPOINT,
+                "Marked ${updatedWaypoints.size} waypoints for trip id=$tripId"
+            )
         }
 
         val latLngList = savedPoints.map { LatLng(it.latitude, it.longitude) }
@@ -90,20 +114,29 @@ class TripRepository @Inject constructor(
         }
 
         tripBox.put(trip)
-        println("TripRepository: Ride saved! Polyline encoded. Distance: ${trip.distanceMeters}m")
+        AppLogger.i(
+            AppLogger.Category.PERSISTENCE,
+            "Ride saved id=$tripId dist=${trip.distanceMeters}m polyline=${!trip.encodedRoutePolyline.isNullOrBlank()}"
+        )
     }
 
     fun getTrips(): List<TripEntity> {
-        return tripBox.all
+        val trips = tripBox.all
+        AppLogger.d(AppLogger.Category.PERSISTENCE, "Loaded ${trips.size} trips")
+        return trips
     }
 
     fun getTrip(id: Long): TripEntity? {
-        return tripBox.get(id)
+        val trip = tripBox.get(id)
+        if (trip == null) {
+            AppLogger.w(AppLogger.Category.PERSISTENCE, "getTrip: id=$id not found")
+        }
+        return trip
     }
 
     fun deleteTrip(id: Long) {
         tripBox.remove(id)
-        println("TripRepository: Deleted trip with ID $id")
+        AppLogger.i(AppLogger.Category.PERSISTENCE, "Deleted trip id=$id")
     }
     fun getWaypointsForTrip(tripId: Long): List<RoutePointEntity> {
         return routePointBox.query()

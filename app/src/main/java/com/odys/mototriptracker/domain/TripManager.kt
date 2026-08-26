@@ -2,6 +2,8 @@ package com.odys.mototriptracker.domain
 
 import android.location.Location
 import com.odys.mototriptracker.data.trip.TripRepository
+import com.odys.mototriptracker.util.AppLogger
+import com.odys.mototriptracker.util.LogThrottle
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -46,6 +48,8 @@ class TripManager @Inject constructor(
         val startTimeMs = System.currentTimeMillis()
         _tripStats.value = TripStats(tripStartTime = startTimeMs)
         currentTripId = tripRepository.startNewTrip(startTimeMs)
+        LogThrottle.resetAll()
+        AppLogger.i(AppLogger.Category.TRIP, "Trip started id=$currentTripId")
         publishSession()
     }
 
@@ -54,11 +58,18 @@ class TripManager @Inject constructor(
         if (_tripStats.value.roadSpeedLimitKmh == kmh) return
 
         _tripStats.update { it.copy(roadSpeedLimitKmh = kmh) }
+        AppLogger.i(AppLogger.Category.SPEED_LIMIT, "Road limit updated → $kmh km/h")
         publishSession()
     }
 
     fun pauseTrip() {
-        if (!isTracking || isPaused) return
+        if (!isTracking || isPaused) {
+            AppLogger.d(
+                AppLogger.Category.TRIP,
+                "Pause ignored — tracking=$isTracking paused=$isPaused"
+            )
+            return
+        }
 
         isPaused = true
         gForceTracker.stopTracking()
@@ -68,24 +79,41 @@ class TripManager @Inject constructor(
         lastLocation = null
 
         _tripStats.update { it.copy(speed = 0f, currentGForce = 0f) }
+        AppLogger.i(AppLogger.Category.TRIP, "Trip paused ${AppLogger.tripSummary(_tripStats.value)}")
         publishSession()
     }
 
     fun resumeTrip() {
-        if (!isTracking || !isPaused) return
+        if (!isTracking || !isPaused) {
+            AppLogger.d(
+                AppLogger.Category.TRIP,
+                "Resume ignored — tracking=$isTracking paused=$isPaused"
+            )
+            return
+        }
 
         isPaused = false
         stopDetector.reset()
         speedSmoother.reset()
         lastLocation = null
         gForceTracker.startTracking(resetSession = false)
+        AppLogger.i(AppLogger.Category.TRIP, "Trip resumed ${AppLogger.tripSummary(_tripStats.value)}")
         publishSession()
     }
 
     fun onLocationUpdate(location: Location) {
         if (!isTracking || isPaused) return
 
-        if (!speedFilter.isValid(location)) return
+        if (!speedFilter.isValid(location)) {
+            if (LogThrottle.shouldLog("trip.invalidGPS", 15_000L)) {
+                AppLogger.d(
+                    AppLogger.Category.TRIP,
+                    "GPS rejected accuracy=${location.accuracy}m " +
+                        "speed=${location.speed}m/s @ ${AppLogger.coordinate(location.latitude, location.longitude)}"
+                )
+            }
+            return
+        }
 
         val currentSpeedMps = speedFilter.getProcessedSpeed(location)
         val currentTime = location.time
@@ -115,6 +143,12 @@ class TripManager @Inject constructor(
                 // Reject teleport jumps from bad GPS fixes.
                 if (step in 0f..MAX_STEP_METERS) {
                     distanceDelta = step
+                } else if (step > MAX_STEP_METERS) {
+                    AppLogger.w(
+                        AppLogger.Category.TRIP,
+                        "Rejected GPS teleport step=${"%.1f".format(step)}m " +
+                            "(max ${MAX_STEP_METERS}m)"
+                    )
                 }
             }
         }
@@ -164,15 +198,27 @@ class TripManager @Inject constructor(
             runningStats = _tripStats.value
         )
         publishSession()
+
+        if (LogThrottle.shouldLog("trip.location", 30_000L)) {
+            AppLogger.i(
+                AppLogger.Category.TRIP,
+                "Tick @ ${AppLogger.coordinate(location.latitude, location.longitude)} — " +
+                    AppLogger.tripSummary(_tripStats.value)
+            )
+        }
     }
 
     fun stopTrip() {
-        if (!isTracking) return
+        if (!isTracking) {
+            AppLogger.d(AppLogger.Category.TRIP, "Stop ignored — not tracking")
+            return
+        }
         isTracking = false
         isPaused = false
         speedSmoother.reset()
         gForceTracker.stopTracking()
         val endTimeMs = System.currentTimeMillis()
+        val stoppedTripId = currentTripId
 
         _tripStats.update { currentStats ->
             var finalMoving = currentStats.movingTime
@@ -198,8 +244,13 @@ class TripManager @Inject constructor(
             )
         }
 
-        tripRepository.saveTrip(currentTripId, _tripStats.value)
+        tripRepository.saveTrip(stoppedTripId, _tripStats.value)
         stopDetector.reset()
+        AppLogger.i(
+            AppLogger.Category.TRIP,
+            "Trip stopped id=$stoppedTripId — ${AppLogger.tripSummary(_tripStats.value)}"
+        )
+        LogThrottle.resetAll()
         publishSession()
     }
 

@@ -22,6 +22,7 @@ import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.odys.mototriptracker.ui.dashboard.RideTrackerScreen
+import com.odys.mototriptracker.util.AppLogger
 
 @Composable
 fun RideTrackerRoute(
@@ -46,7 +47,7 @@ fun RideTrackerRoute(
             if (hasLocation) {
                 viewModel.startRide()
             } else {
-                println("Cannot start ride: Location permission missing.")
+                AppLogger.w(AppLogger.Category.UI, "Cannot start ride — location permission missing")
             }
         },
         onStopRide = viewModel::stopRide,
