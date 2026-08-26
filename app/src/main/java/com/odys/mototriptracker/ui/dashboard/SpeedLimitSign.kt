@@ -6,10 +6,12 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Text
@@ -27,17 +29,11 @@ import androidx.compose.ui.unit.sp
 import com.odys.mototriptracker.ui.theme.AppPalette
 import kotlin.math.roundToInt
 
-private enum class FlashPhase { RED, BLUE, WHITE }
+enum class SpeedLimitFlashPhase { RED, BLUE, WHITE }
 
+/** Shared red / blue / white flash cycle used by the sign and the full-screen overlay. */
 @Composable
-fun SpeedLimitSign(
-    limitKmh: Int,
-    isOverLimit: Boolean,
-    palette: AppPalette,
-    modifier: Modifier = Modifier,
-    isLive: Boolean = false,
-    onClick: (() -> Unit)? = null
-) {
+fun rememberSpeedLimitFlashPhase(isOverLimit: Boolean): SpeedLimitFlashPhase {
     val transition = rememberInfiniteTransition(label = "speedLimitFlash")
     val phaseProgress by transition.animateFloat(
         initialValue = 0f,
@@ -48,15 +44,62 @@ fun SpeedLimitSign(
         ),
         label = "flashPhase"
     )
-    val phase = if (isOverLimit) {
-        FlashPhase.entries[(phaseProgress.roundToInt() % 3)]
+    return if (isOverLimit) {
+        SpeedLimitFlashPhase.entries[(phaseProgress.roundToInt() % 3)]
     } else {
-        FlashPhase.WHITE
+        SpeedLimitFlashPhase.WHITE
     }
+}
 
-    val fill = if (isOverLimit) flashFill(phase) else Color.White
-    val ring = if (isOverLimit) flashRing(phase) else palette.speedLimitRing
-    val number = if (isOverLimit) flashNumber(phase) else Color.Black
+fun speedLimitFlashFill(phase: SpeedLimitFlashPhase): Color = when (phase) {
+    SpeedLimitFlashPhase.RED -> Color(0xFFE30613)
+    SpeedLimitFlashPhase.BLUE -> Color(0xFF0055FF)
+    SpeedLimitFlashPhase.WHITE -> Color.White
+}
+
+fun speedLimitFlashRing(phase: SpeedLimitFlashPhase): Color = when (phase) {
+    SpeedLimitFlashPhase.RED, SpeedLimitFlashPhase.BLUE -> Color.White
+    SpeedLimitFlashPhase.WHITE -> Color(0xFFE30613)
+}
+
+fun speedLimitFlashNumber(phase: SpeedLimitFlashPhase): Color = when (phase) {
+    SpeedLimitFlashPhase.RED, SpeedLimitFlashPhase.BLUE -> Color.White
+    SpeedLimitFlashPhase.WHITE -> Color.Black
+}
+
+private const val SCREEN_FLASH_ALPHA = 0.28f
+
+/**
+ * Full-screen translucent flash matching the speed-limit sign.
+ * Uses [Canvas] (no pointer handlers) so Pause / Stop stay tappable underneath.
+ */
+@Composable
+fun OverLimitScreenFlash(
+    isOverLimit: Boolean,
+    flashPhase: SpeedLimitFlashPhase,
+    modifier: Modifier = Modifier
+) {
+    if (!isOverLimit) return
+
+    val color = speedLimitFlashFill(flashPhase).copy(alpha = SCREEN_FLASH_ALPHA)
+    Canvas(modifier = modifier.fillMaxSize()) {
+        drawRect(color)
+    }
+}
+
+@Composable
+fun SpeedLimitSign(
+    limitKmh: Int,
+    isOverLimit: Boolean,
+    palette: AppPalette,
+    modifier: Modifier = Modifier,
+    isLive: Boolean = false,
+    flashPhase: SpeedLimitFlashPhase = rememberSpeedLimitFlashPhase(isOverLimit),
+    onClick: (() -> Unit)? = null
+) {
+    val fill = if (isOverLimit) speedLimitFlashFill(flashPhase) else Color.White
+    val ring = if (isOverLimit) speedLimitFlashRing(flashPhase) else palette.speedLimitRing
+    val number = if (isOverLimit) speedLimitFlashNumber(flashPhase) else Color.Black
 
     val clickableModifier = if (onClick != null) {
         Modifier.clickable(onClick = onClick)
@@ -91,20 +134,4 @@ fun SpeedLimitSign(
             fontWeight = FontWeight.Bold
         )
     }
-}
-
-private fun flashFill(phase: FlashPhase): Color = when (phase) {
-    FlashPhase.RED -> Color(0xFFE30613)
-    FlashPhase.BLUE -> Color(0xFF0055FF)
-    FlashPhase.WHITE -> Color.White
-}
-
-private fun flashRing(phase: FlashPhase): Color = when (phase) {
-    FlashPhase.RED, FlashPhase.BLUE -> Color.White
-    FlashPhase.WHITE -> Color(0xFFE30613)
-}
-
-private fun flashNumber(phase: FlashPhase): Color = when (phase) {
-    FlashPhase.RED, FlashPhase.BLUE -> Color.White
-    FlashPhase.WHITE -> Color.Black
 }

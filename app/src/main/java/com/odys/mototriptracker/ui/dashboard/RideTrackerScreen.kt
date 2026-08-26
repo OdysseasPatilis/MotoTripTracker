@@ -98,8 +98,11 @@ fun RideTrackerScreen(
 
     val effectiveSpeedLimitKmh = (stats.roadSpeedLimitKmh ?: fallbackSpeedLimitKmh).toFloat()
     val isLiveSpeedLimit = isTracking && stats.roadSpeedLimitKmh != null
+    val isOverLimit = isTracking && !isPaused && stats.speed > effectiveSpeedLimitKmh
+    val flashPhase = rememberSpeedLimitFlashPhase(isOverLimit)
 
     KeepScreenOn()
+    Box(modifier = Modifier.fillMaxSize()) {
     Scaffold(
         containerColor = palette.bgDeep,
         bottomBar = {
@@ -234,6 +237,7 @@ fun RideTrackerScreen(
                         maxSpeedKmh = maxOf(stats.maxSpeed, 260f),
                         speedLimitKmh = effectiveSpeedLimitKmh,
                         isLiveSpeedLimit = isLiveSpeedLimit,
+                        flashPhase = flashPhase,
                         palette = palette,
                         onCycleSpeedLimit = if (isLiveSpeedLimit) {
                             null
@@ -271,6 +275,14 @@ fun RideTrackerScreen(
             Spacer(Modifier.height(4.dp))
         }
     }
+
+        // Full-screen translucent flash — same red/blue/white cycle as the sign.
+        OverLimitScreenFlash(
+            isOverLimit = isOverLimit,
+            flashPhase = flashPhase,
+            modifier = Modifier.fillMaxSize()
+        )
+    }
 }
 @Composable
 fun StatCard(
@@ -304,6 +316,7 @@ fun SpeedometerArc(
     maxSpeedKmh: Float = 260f,
     speedLimitKmh: Float = 50f,
     isLiveSpeedLimit: Boolean = false,
+    flashPhase: SpeedLimitFlashPhase = rememberSpeedLimitFlashPhase(speedKmh > speedLimitKmh),
     palette: AppPalette = LocalAppPalette.current,
     onCycleSpeedLimit: (() -> Unit)? = null
 ) {
@@ -322,6 +335,7 @@ fun SpeedometerArc(
             limitKmh = speedLimitKmh.toInt(),
             isOverLimit = isOverLimit,
             isLive = isLiveSpeedLimit,
+            flashPhase = flashPhase,
             palette = palette,
             onClick = onCycleSpeedLimit,
             modifier = Modifier
