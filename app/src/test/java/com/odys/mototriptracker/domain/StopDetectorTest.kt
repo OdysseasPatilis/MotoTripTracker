@@ -1,0 +1,78 @@
+package com.odys.mototriptracker.domain
+
+import org.junit.Assert.assertEquals
+import org.junit.Before
+import org.junit.Test
+
+class StopDetectorTest {
+
+    private lateinit var detector: StopDetector
+    private var movingAccum = 0L
+    private var stoppedAccum = 0L
+
+    @Before
+    fun setUp() {
+        detector = StopDetector()
+        movingAccum = 0L
+        stoppedAccum = 0L
+    }
+
+    @Test
+    fun movingSpeed_accumulatesMovingTime() {
+        detector.updateTimes(1_000L, isMoving = true, ::accumulate)
+        detector.updateTimes(2_000L, isMoving = true, ::accumulate)
+        detector.updateTimes(3_000L, isMoving = true, ::accumulate)
+
+        assertEquals(2_000L, movingAccum)
+        assertEquals(0L, stoppedAccum)
+    }
+
+    @Test
+    fun zeroSpeed_accumulatesStoppedTime() {
+        detector.updateTimes(1_000L, isMoving = false, ::accumulate)
+        detector.updateTimes(2_000L, isMoving = false, ::accumulate)
+        detector.updateTimes(4_000L, isMoving = false, ::accumulate)
+
+        assertEquals(0L, movingAccum)
+        assertEquals(3_000L, stoppedAccum)
+    }
+
+    @Test
+    fun mixedMotion_splitsCorrectly() {
+        detector.updateTimes(0L, isMoving = true, ::accumulate)
+        detector.updateTimes(1_000L, isMoving = true, ::accumulate)   // +1000 moving
+        detector.updateTimes(3_000L, isMoving = false, ::accumulate)  // +2000 stopped
+        detector.updateTimes(4_000L, isMoving = true, ::accumulate)   // +1000 moving
+
+        assertEquals(2_000L, movingAccum)
+        assertEquals(2_000L, stoppedAccum)
+    }
+
+    @Test
+    fun largeGap_isIgnored() {
+        detector.updateTimes(0L, isMoving = true, ::accumulate)
+        detector.updateTimes(400_000L, isMoving = true, ::accumulate) // > 5 min
+
+        assertEquals(0L, movingAccum)
+        assertEquals(0L, stoppedAccum)
+    }
+
+    @Test
+    fun reset_clearsBaseline() {
+        detector.updateTimes(0L, isMoving = true, ::accumulate)
+        detector.updateTimes(1_000L, isMoving = true, ::accumulate)
+        assertEquals(1_000L, movingAccum)
+
+        detector.reset()
+        movingAccum = 0L
+        detector.updateTimes(10_000L, isMoving = true, ::accumulate)
+        detector.updateTimes(11_000L, isMoving = true, ::accumulate)
+
+        assertEquals(1_000L, movingAccum)
+    }
+
+    private fun accumulate(moving: Long, stopped: Long) {
+        movingAccum += moving
+        stoppedAccum += stopped
+    }
+}

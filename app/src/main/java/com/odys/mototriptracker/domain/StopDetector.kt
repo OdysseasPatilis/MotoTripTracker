@@ -3,53 +3,54 @@ package com.odys.mototriptracker.domain
 import javax.inject.Inject
 import javax.inject.Singleton
 
+/**
+ * Classifies elapsed time between GPS updates as moving vs stopped using speed,
+ * matching the iOS StopDetector.
+ *
+ * The old gap-based approach (treat >4s silence as stopped) was designed for
+ * [setMinUpdateDistanceMeters] and breaks when updates arrive every ~1s or when
+ * accuracy filtering creates irregular gaps while riding.
+ */
 @Singleton
 class StopDetector @Inject constructor() {
     private var lastUpdateTime = 0L
+    private var hasBaseline = false
 
-    // If we request pings every 2s, any gap larger than 4s means we stopped moving 2 meters.
-    private val MAX_MOVING_GAP_MS = 4_000L
-
-    // The "Tunnel / Sleep" filter. If the gap is longer than 5 minutes, ignore it entirely.
-    // Adjust this based on your needs (e.g., 300,000L = 5 minutes).
-    private val MAX_VALID_DELTA_MS = 300_000L
-    val speedSmoother = SpeedSmoother()
+    /** Gaps longer than this are ignored (tunnel / sleep / background kill). */
+    private val maxValidDeltaMs = 300_000L
 
     fun reset() {
         lastUpdateTime = 0L
+        hasBaseline = false
     }
 
+    /**
+     * @param currentTimeMs location timestamp in epoch millis
+     * @param isMoving true when filtered speed indicates real motion
+     * @param onTimeUpdated (movingMillis, stoppedMillis)
+     */
     fun updateTimes(
         currentTimeMs: Long,
+        isMoving: Boolean,
         onTimeUpdated: (movingMillis: Long, stoppedMillis: Long) -> Unit
     ) {
-        if (lastUpdateTime == 0L) {
+        if (!hasBaseline) {
             lastUpdateTime = currentTimeMs
+            hasBaseline = true
             return
         }
 
         val timeDelta = currentTimeMs - lastUpdateTime
         lastUpdateTime = currentTimeMs
 
-        // 1. SAFETY NET: Prevent the massive background spikes
-        if (timeDelta <= 0L || timeDelta > MAX_VALID_DELTA_MS) {
-            println("StopDetector: Ignored massive time gap of $timeDelta ms")
+        if (timeDelta <= 0L || timeDelta > maxValidDeltaMs) {
             return
         }
 
-        // 2. GAP LOGIC:
-        if (timeDelta <= MAX_MOVING_GAP_MS) {
-            // Continuous pings are coming in. We are driving.
+        if (isMoving) {
             onTimeUpdated(timeDelta, 0L)
         } else {
-            speedSmoother.reset()
-            // There was a gap! The GPS went silent because we didn't move 2 meters.
-            // We give 2 seconds to "moving" (the time it took to finally move those 2 meters and trigger this ping),
-            // and the rest of the silent gap goes to "stopped".
-            val movingPortion = 2000L
-            val stoppedPortion = timeDelta - movingPortion
-
-            onTimeUpdated(movingPortion, stoppedPortion)
+            onTimeUpdated(0L, timeDelta)
         }
     }
 }

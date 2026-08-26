@@ -26,22 +26,19 @@ class TripManager @Inject constructor(
     private var lastLocation: Location? = null
     private var isTracking = false
     private var isPaused = false
-    private var lastLocationTime: Long = 0L
-    private var lastSpeedMps: Float = 0f
 
-    val speedSmoother = SpeedSmoother()
+    private val speedSmoother = SpeedSmoother()
     private var elevationSmoother = ElevationSmoother()
 
-    var sessionMaxSpeedKmh = 0
+    private var sessionMaxSpeedKmh = 0f
 
     fun startTrip() {
         isTracking = true
         isPaused = false
         lastLocation = null
-        lastLocationTime = 0L
-        lastSpeedMps = 0f
-        sessionMaxSpeedKmh = 0
+        sessionMaxSpeedKmh = 0f
         stopDetector.reset()
+        speedSmoother.reset()
 
         elevationSmoother = ElevationSmoother()
         gForceTracker.startTracking(resetSession = true)
@@ -66,10 +63,9 @@ class TripManager @Inject constructor(
         isPaused = true
         gForceTracker.stopTracking()
         stopDetector.reset()
+        speedSmoother.reset()
         // Avoid a teleport jump across the pause gap when GPS resumes.
         lastLocation = null
-        lastLocationTime = 0L
-        lastSpeedMps = 0f
 
         _tripStats.update { it.copy(speed = 0f, currentGForce = 0f) }
         publishSession()
@@ -80,8 +76,8 @@ class TripManager @Inject constructor(
 
         isPaused = false
         stopDetector.reset()
+        speedSmoother.reset()
         lastLocation = null
-        lastLocationTime = 0L
         gForceTracker.startTracking(resetSession = false)
         publishSession()
     }
@@ -89,17 +85,21 @@ class TripManager @Inject constructor(
     fun onLocationUpdate(location: Location) {
         if (!isTracking || isPaused) return
 
-        // 1. Accuracy Check
         if (!speedFilter.isValid(location)) return
 
-        // 2. Extract Data
         val currentSpeedMps = speedFilter.getProcessedSpeed(location)
-        val currentSpeedKmh = currentSpeedMps * 3.6f
         val currentTime = location.time
+        val isMoving = currentSpeedMps > MOVING_SPEED_MPS
 
-        val rawSpeedKmh = (location.speed * 3.6f).toInt()
-        if (rawSpeedKmh > sessionMaxSpeedKmh) {
-            sessionMaxSpeedKmh = rawSpeedKmh
+        val displaySpeedKmh = if (isMoving) {
+            speedSmoother.getSmoothedSpeedKmh(currentSpeedMps).toFloat()
+        } else {
+            speedSmoother.reset()
+            0f
+        }
+
+        if (isMoving && displaySpeedKmh in 0f..MAX_PLAUSIBLE_SPEED_KMH) {
+            sessionMaxSpeedKmh = maxOf(sessionMaxSpeedKmh, displaySpeedKmh)
         }
 
         var elevationDelta = 0.0
@@ -109,8 +109,13 @@ class TripManager @Inject constructor(
             if (location.hasAltitude()) {
                 elevationDelta = elevationSmoother.calculateGain(location.altitude)
             }
-            if (currentSpeedMps > 0.1f) {
-                distanceDelta = prev.distanceTo(location)
+            // Only accumulate distance while actually moving to avoid GPS drift at stops.
+            if (isMoving) {
+                val step = prev.distanceTo(location)
+                // Reject teleport jumps from bad GPS fixes.
+                if (step in 0f..MAX_STEP_METERS) {
+                    distanceDelta = step
+                }
             }
         }
 
@@ -118,25 +123,28 @@ class TripManager @Inject constructor(
             var newMoving = currentStats.movingTime
             var newStopped = currentStats.stoppedTime
 
-            stopDetector.updateTimes(currentTime) { movingDeltaMs, stoppedDeltaMs ->
-                newMoving += (movingDeltaMs / 1000L)
-                newStopped += (stoppedDeltaMs / 1000L)
-                speedSmoother.reset()
+            stopDetector.updateTimes(currentTime, isMoving) { movingDeltaMs, stoppedDeltaMs ->
+                newMoving += movingDeltaMs / 1000L
+                newStopped += stoppedDeltaMs / 1000L
             }
 
+            val newDistance = currentStats.distanceMeters + distanceDelta
             val movingHours = newMoving / 3600f
-            val totalKm = (currentStats.distanceMeters + distanceDelta) / 1000f
-            val newAvgSpeed = if (movingHours > 0) totalKm / movingHours else 0f
+            val newAvgSpeed = if (movingHours > 0f) {
+                (newDistance / 1000f) / movingHours
+            } else {
+                0f
+            }
 
             val hardwareCurrentG = gForceTracker.currentGForce
             val hardwareMaxG = maxOf(currentStats.maxGForce, gForceTracker.maxSessionGForce)
 
             currentStats.copy(
-                speed = currentSpeedKmh,
+                speed = displaySpeedKmh,
                 movingTime = newMoving,
                 stoppedTime = newStopped,
-                distanceMeters = currentStats.distanceMeters + distanceDelta,
-                maxSpeed = maxOf(currentStats.maxSpeed, sessionMaxSpeedKmh.toFloat()),
+                distanceMeters = newDistance,
+                maxSpeed = maxOf(currentStats.maxSpeed, sessionMaxSpeedKmh),
                 avgSpeed = newAvgSpeed,
                 totalElevationGain = (currentStats.totalElevationGain + elevationDelta).toFloat(),
                 currentGForce = hardwareCurrentG,
@@ -144,8 +152,6 @@ class TripManager @Inject constructor(
             )
         }
 
-        lastSpeedMps = currentSpeedMps
-        lastLocationTime = currentTime
         lastLocation = location
 
         tripRepository.addRoutePointAndUpdateStats(
@@ -172,14 +178,16 @@ class TripManager @Inject constructor(
             var finalMoving = currentStats.movingTime
             var finalStopped = currentStats.stoppedTime
 
-            stopDetector.updateTimes(endTimeMs) { movingDeltaMs, stoppedDeltaMs ->
-                finalMoving += (movingDeltaMs / 1000L)
-                finalStopped += (stoppedDeltaMs / 1000L)
+            // Flush remaining interval after last GPS tick as stopped (button pressed while idle)
+            // or leave attribution to last known state if still moving — treat as stopped at end.
+            stopDetector.updateTimes(endTimeMs, isMoving = false) { movingDeltaMs, stoppedDeltaMs ->
+                finalMoving += movingDeltaMs / 1000L
+                finalStopped += stoppedDeltaMs / 1000L
             }
 
             val movingHours = finalMoving / 3600f
             val totalKm = currentStats.distanceMeters / 1000f
-            val finalAvgSpeed = if (movingHours > 0) totalKm / movingHours else 0f
+            val finalAvgSpeed = if (movingHours > 0f) totalKm / movingHours else 0f
 
             currentStats.copy(
                 speed = 0f,
@@ -201,5 +209,12 @@ class TripManager @Inject constructor(
             isActive = isTracking,
             isPaused = isPaused
         )
+    }
+
+    companion object {
+        /** Matches SpeedFilter floor (~0.1 m/s after zeroing drift under 3 km/h). */
+        private const val MOVING_SPEED_MPS = 0.1f
+        private const val MAX_PLAUSIBLE_SPEED_KMH = 300f
+        private const val MAX_STEP_METERS = 80f
     }
 }
