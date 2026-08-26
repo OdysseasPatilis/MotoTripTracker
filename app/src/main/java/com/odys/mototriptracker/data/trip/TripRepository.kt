@@ -65,6 +65,8 @@ class TripRepository @Inject constructor(
         trip.maxGForce = runningStats.maxGForce
         trip.elevationGain = runningStats.totalElevationGain
         trip.avgSpeed = runningStats.avgSpeed
+        trip.maxLateralGForce = runningStats.maxLateralGForce
+        trip.cornerCount = runningStats.cornerCount
 
         tripBox.put(trip)
     }
@@ -81,6 +83,12 @@ class TripRepository @Inject constructor(
         trip.movingTime = finalStats.movingTime
         trip.stoppedTime = finalStats.stoppedTime
         trip.avgSpeed = finalStats.avgSpeed
+        trip.maxSpeed = finalStats.maxSpeed
+        trip.maxGForce = finalStats.maxGForce
+        trip.elevationGain = finalStats.totalElevationGain
+        trip.distanceMeters = finalStats.distanceMeters
+        trip.maxLateralGForce = finalStats.maxLateralGForce
+        trip.cornerCount = finalStats.cornerCount
 
         // 1. Fetch all the raw GPS points
         val savedPoints = trip.routePoints
@@ -121,7 +129,8 @@ class TripRepository @Inject constructor(
     }
 
     fun getTrips(): List<TripEntity> {
-        val trips = tripBox.all
+        // Newest first — favorites live on their own History tab.
+        val trips = tripBox.all.sortedByDescending { it.startTime }
         AppLogger.d(AppLogger.Category.PERSISTENCE, "Loaded ${trips.size} trips")
         return trips
     }
@@ -132,6 +141,21 @@ class TripRepository @Inject constructor(
             AppLogger.w(AppLogger.Category.PERSISTENCE, "getTrip: id=$id not found")
         }
         return trip
+    }
+
+    fun updateTripTitle(id: Long, title: String) {
+        val trip = tripBox.get(id) ?: return
+        trip.title = title.trim()
+        tripBox.put(trip)
+        AppLogger.i(AppLogger.Category.PERSISTENCE, "Renamed trip id=$id to '${trip.title}'")
+    }
+
+    fun toggleFavorite(id: Long): Boolean {
+        val trip = tripBox.get(id) ?: return false
+        trip.isFavorite = !trip.isFavorite
+        tripBox.put(trip)
+        AppLogger.i(AppLogger.Category.PERSISTENCE, "Favorite trip id=$id → ${trip.isFavorite}")
+        return trip.isFavorite
     }
 
     fun deleteTrip(id: Long) {

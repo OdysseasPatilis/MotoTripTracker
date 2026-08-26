@@ -18,20 +18,27 @@ class GForceTracker @Inject constructor(
     private val sensorManager = context.getSystemService(Context.SENSOR_SERVICE) as SensorManager
     private val linearAccelSensor: Sensor? = sensorManager.getDefaultSensor(Sensor.TYPE_LINEAR_ACCELERATION)
 
-    // Store the data for the GPS loop to read
     var currentGForce: Float = 0f
         private set
 
     var maxSessionGForce: Float = 0f
         private set
 
+    /** Horizontal acceleration magnitude (approx lateral / braking plane). */
+    var currentLateralGForce: Float = 0f
+        private set
+
+    var maxSessionLateralGForce: Float = 0f
+        private set
+
     fun startTracking(resetSession: Boolean = true) {
         if (resetSession) {
             currentGForce = 0f
             maxSessionGForce = 0f
+            currentLateralGForce = 0f
+            maxSessionLateralGForce = 0f
         }
 
-        // Register the listener at a standard UI rate (~15-20ms per tick)
         linearAccelSensor?.let {
             sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_UI)
         }
@@ -40,34 +47,33 @@ class GForceTracker @Inject constructor(
     fun stopTracking() {
         sensorManager.unregisterListener(this)
         currentGForce = 0f
+        currentLateralGForce = 0f
     }
 
     override fun onSensorChanged(event: SensorEvent?) {
-        if (event?.sensor?.type == Sensor.TYPE_LINEAR_ACCELERATION) {
-            val x = event.values[0]
-            val y = event.values[1]
-            val z = event.values[2]
+        if (event?.sensor?.type != Sensor.TYPE_LINEAR_ACCELERATION) return
 
-            // 1. Calculate the true 3D magnitude
-            val accelerationMps2 = sqrt((x * x) + (y * y) + (z * z))
-            val rawG = accelerationMps2 / 9.81f
+        val x = event.values[0]
+        val y = event.values[1]
+        val z = event.values[2]
 
-            // 2. Filter out tiny micro-vibrations (engine rumble, etc.)
-            // Only register Gs above 0.05 to avoid UI noise when sitting still
-            val meaningfulG = if (rawG > 0.05f) rawG else 0f
+        val accelerationMps2 = sqrt((x * x) + (y * y) + (z * z))
+        val rawG = accelerationMps2 / 9.81f
+        val meaningfulG = if (rawG > 0.05f) rawG else 0f
+        currentGForce = (currentGForce * 0.8f) + (meaningfulG * 0.2f)
+        if (meaningfulG > maxSessionGForce) {
+            maxSessionGForce = meaningfulG
+        }
 
-            // 3. Smooth the current G for the UI (Low-Pass Filter)
-            // This prevents the number on the screen from flickering wildly
-            currentGForce = (currentGForce * 0.8f) + (meaningfulG * 0.2f)
-
-            // 4. Catch the absolute peak instantly
-            if (meaningfulG > maxSessionGForce) {
-                maxSessionGForce = meaningfulG
-            }
+        // Horizontal plane relative to typical portrait mount (x/y).
+        val lateralMps2 = sqrt((x * x) + (y * y))
+        val rawLateralG = lateralMps2 / 9.81f
+        val meaningfulLateral = if (rawLateralG > 0.05f) rawLateralG else 0f
+        currentLateralGForce = (currentLateralGForce * 0.8f) + (meaningfulLateral * 0.2f)
+        if (meaningfulLateral > maxSessionLateralGForce) {
+            maxSessionLateralGForce = meaningfulLateral
         }
     }
 
-    override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {
-        // Not needed for linear acceleration
-    }
+    override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) = Unit
 }

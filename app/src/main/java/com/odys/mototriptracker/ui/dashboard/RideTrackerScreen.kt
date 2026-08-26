@@ -51,6 +51,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.odys.mototriptracker.domain.GpsQuality
 import com.odys.mototriptracker.domain.TripStats
 import com.odys.mototriptracker.ui.theme.AppPalette
 import com.odys.mototriptracker.ui.theme.LocalAppPalette
@@ -67,12 +68,17 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.os.BatteryManager
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.border
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.geometry.CornerRadius
 import kotlinx.coroutines.delay
 import android.view.HapticFeedbackConstants
@@ -195,6 +201,14 @@ fun RideTrackerScreen(
                         currentTime, color = palette.textPrimary, fontSize = 22.sp,
                         fontWeight = FontWeight.Bold, lineHeight = 24.sp
                     )
+                    Spacer(Modifier.height(6.dp))
+                    TrackingStatusRow(
+                        isTracking = isTracking,
+                        isPaused = isPaused,
+                        gpsQuality = stats.gpsQuality,
+                        gpsAccuracyMeters = stats.gpsAccuracyMeters,
+                        palette = palette
+                    )
                 }
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     BatteryIndicator(batteryLevel, palette)
@@ -272,6 +286,16 @@ fun RideTrackerScreen(
                 StatCard("ELEVATION", "${stats.totalElevationGain.toInt()} m", Modifier.weight(1f), palette = palette)
                 StatCard("MAX G", String.format("%.2f G", stats.maxGForce), Modifier.weight(1f), valueColor = palette.neonBlue, palette = palette)
             }
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                StatCard(
+                    "LATERAL G",
+                    String.format("%.2f G", if (isTracking) stats.currentLateralGForce else stats.maxLateralGForce),
+                    Modifier.weight(1f),
+                    valueColor = palette.neonGreen,
+                    palette = palette
+                )
+                StatCard("CORNERS", "${stats.cornerCount}", Modifier.weight(1f), palette = palette)
+            }
             Spacer(Modifier.height(4.dp))
         }
     }
@@ -281,6 +305,75 @@ fun RideTrackerScreen(
             isOverLimit = isOverLimit,
             flashPhase = flashPhase,
             modifier = Modifier.fillMaxSize()
+        )
+    }
+}
+
+@Composable
+private fun TrackingStatusRow(
+    isTracking: Boolean,
+    isPaused: Boolean,
+    gpsQuality: GpsQuality,
+    gpsAccuracyMeters: Float?,
+    palette: AppPalette
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        if (isTracking) {
+            val pulse = rememberInfiniteTransition(label = "recPulse")
+            val alpha by pulse.animateFloat(
+                initialValue = 0.35f,
+                targetValue = 1f,
+                animationSpec = infiniteRepeatable(
+                    animation = tween(700),
+                    repeatMode = RepeatMode.Reverse
+                ),
+                label = "recAlpha"
+            )
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                modifier = Modifier.alpha(if (isPaused) 1f else alpha)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(8.dp)
+                        .clip(RoundedCornerShape(50))
+                        .background(if (isPaused) palette.textMuted else palette.stopRed)
+                )
+                Text(
+                    text = if (isPaused) "PAUSED" else "RECORDING",
+                    color = if (isPaused) palette.textMuted else palette.stopRed,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 1.sp
+                )
+            }
+        }
+
+        val gpsLabel = when {
+            !isTracking -> if (gpsAccuracyMeters == null) "GPS READY" else "GPS"
+            gpsQuality == GpsQuality.GOOD -> "GPS GOOD"
+            gpsQuality == GpsQuality.FAIR -> "GPS FAIR"
+            gpsQuality == GpsQuality.POOR -> "GPS WEAK"
+            else -> "GPS…"
+        }
+        val gpsColor = when (gpsQuality) {
+            GpsQuality.GOOD -> palette.neonGreen
+            GpsQuality.FAIR -> palette.routeAmber
+            GpsQuality.POOR -> palette.stopRed
+            GpsQuality.UNKNOWN -> palette.textMuted
+        }
+        Text(
+            text = buildString {
+                append(gpsLabel)
+                gpsAccuracyMeters?.let { append(" ±${it.toInt()}m") }
+            },
+            color = gpsColor,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Medium
         )
     }
 }

@@ -7,5 +7,5 @@ import javax.inject.Inject
 class GetTripHistoryUseCase @Inject constructor(
     private val tripRepository: TripRepository
 ) {
-    operator fun invoke(): List<TripEntity> = tripRepository.getTrips().reversed()
+    operator fun invoke(): List<TripEntity> = tripRepository.getTrips()
 }

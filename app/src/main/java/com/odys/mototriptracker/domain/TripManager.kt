@@ -31,6 +31,7 @@ class TripManager @Inject constructor(
 
     private val speedSmoother = SpeedSmoother()
     private var elevationSmoother = ElevationSmoother()
+    private val cornerDetector = CornerDetector()
 
     private var sessionMaxSpeedKmh = 0f
 
@@ -41,6 +42,7 @@ class TripManager @Inject constructor(
         sessionMaxSpeedKmh = 0f
         stopDetector.reset()
         speedSmoother.reset()
+        cornerDetector.reset()
 
         elevationSmoother = ElevationSmoother()
         gForceTracker.startTracking(resetSession = true)
@@ -75,10 +77,15 @@ class TripManager @Inject constructor(
         gForceTracker.stopTracking()
         stopDetector.reset()
         speedSmoother.reset()
-        // Avoid a teleport jump across the pause gap when GPS resumes.
         lastLocation = null
 
-        _tripStats.update { it.copy(speed = 0f, currentGForce = 0f) }
+        _tripStats.update {
+            it.copy(
+                speed = 0f,
+                currentGForce = 0f,
+                currentLateralGForce = 0f
+            )
+        }
         AppLogger.i(AppLogger.Category.TRIP, "Trip paused ${AppLogger.tripSummary(_tripStats.value)}")
         publishSession()
     }
@@ -104,7 +111,14 @@ class TripManager @Inject constructor(
     fun onLocationUpdate(location: Location) {
         if (!isTracking || isPaused) return
 
+        val accuracy = if (location.hasAccuracy()) location.accuracy else null
+        val gpsQuality = GpsQuality.fromAccuracyMeters(accuracy)
+
         if (!speedFilter.isValid(location)) {
+            _tripStats.update {
+                it.copy(gpsAccuracyMeters = accuracy, gpsQuality = gpsQuality)
+            }
+            publishSession()
             if (LogThrottle.shouldLog("trip.invalidGPS", 15_000L)) {
                 AppLogger.d(
                     AppLogger.Category.TRIP,
@@ -130,6 +144,10 @@ class TripManager @Inject constructor(
             sessionMaxSpeedKmh = maxOf(sessionMaxSpeedKmh, displaySpeedKmh)
         }
 
+        if (isMoving) {
+            cornerDetector.onLocation(location, currentSpeedMps)
+        }
+
         var elevationDelta = 0.0
         var distanceDelta = 0f
 
@@ -137,10 +155,8 @@ class TripManager @Inject constructor(
             if (location.hasAltitude()) {
                 elevationDelta = elevationSmoother.calculateGain(location.altitude)
             }
-            // Only accumulate distance while actually moving to avoid GPS drift at stops.
             if (isMoving) {
                 val step = prev.distanceTo(location)
-                // Reject teleport jumps from bad GPS fixes.
                 if (step in 0f..MAX_STEP_METERS) {
                     distanceDelta = step
                 } else if (step > MAX_STEP_METERS) {
@@ -170,8 +186,11 @@ class TripManager @Inject constructor(
                 0f
             }
 
-            val hardwareCurrentG = gForceTracker.currentGForce
-            val hardwareMaxG = maxOf(currentStats.maxGForce, gForceTracker.maxSessionGForce)
+            val maxLateral = maxOf(
+                currentStats.maxLateralGForce,
+                gForceTracker.maxSessionLateralGForce,
+                cornerDetector.maxEstimatedLateralG
+            )
 
             currentStats.copy(
                 speed = displaySpeedKmh,
@@ -181,8 +200,13 @@ class TripManager @Inject constructor(
                 maxSpeed = maxOf(currentStats.maxSpeed, sessionMaxSpeedKmh),
                 avgSpeed = newAvgSpeed,
                 totalElevationGain = (currentStats.totalElevationGain + elevationDelta).toFloat(),
-                currentGForce = hardwareCurrentG,
-                maxGForce = hardwareMaxG
+                currentGForce = gForceTracker.currentGForce,
+                maxGForce = maxOf(currentStats.maxGForce, gForceTracker.maxSessionGForce),
+                currentLateralGForce = gForceTracker.currentLateralGForce,
+                maxLateralGForce = maxLateral,
+                cornerCount = cornerDetector.cornerCount,
+                gpsAccuracyMeters = accuracy,
+                gpsQuality = gpsQuality
             )
         }
 
@@ -224,8 +248,6 @@ class TripManager @Inject constructor(
             var finalMoving = currentStats.movingTime
             var finalStopped = currentStats.stoppedTime
 
-            // Flush remaining interval after last GPS tick as stopped (button pressed while idle)
-            // or leave attribution to last known state if still moving — treat as stopped at end.
             stopDetector.updateTimes(endTimeMs, isMoving = false) { movingDeltaMs, stoppedDeltaMs ->
                 finalMoving += movingDeltaMs / 1000L
                 finalStopped += stoppedDeltaMs / 1000L
@@ -238,9 +260,15 @@ class TripManager @Inject constructor(
             currentStats.copy(
                 speed = 0f,
                 currentGForce = 0f,
+                currentLateralGForce = 0f,
                 movingTime = finalMoving,
                 stoppedTime = finalStopped,
-                avgSpeed = finalAvgSpeed
+                avgSpeed = finalAvgSpeed,
+                cornerCount = cornerDetector.cornerCount,
+                maxLateralGForce = maxOf(
+                    currentStats.maxLateralGForce,
+                    cornerDetector.maxEstimatedLateralG
+                )
             )
         }
 
@@ -263,7 +291,6 @@ class TripManager @Inject constructor(
     }
 
     companion object {
-        /** Matches SpeedFilter floor (~0.1 m/s after zeroing drift under 3 km/h). */
         private const val MOVING_SPEED_MPS = 0.1f
         private const val MAX_PLAUSIBLE_SPEED_KMH = 300f
         private const val MAX_STEP_METERS = 80f

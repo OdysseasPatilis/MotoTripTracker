@@ -20,8 +20,16 @@ fun RideHistoryRoute(
     }
 
     RideHistoryScreen(
-        rides = uiState.rides,
+        rides = uiState.visibleRides,
+        selectedTab = uiState.selectedTab,
+        searchQuery = uiState.searchQuery,
+        filters = uiState.filters,
         onBack = onBack,
-        onRideClick = { ride -> onRideClick(ride.id) }
+        onRideClick = { ride -> onRideClick(ride.id) },
+        onToggleFavorite = viewModel::toggleFavorite,
+        onSelectTab = viewModel::selectTab,
+        onSearchQueryChange = viewModel::updateSearchQuery,
+        onFiltersChange = viewModel::updateFilters,
+        onClearFilters = viewModel::clearFilters
     )
 }

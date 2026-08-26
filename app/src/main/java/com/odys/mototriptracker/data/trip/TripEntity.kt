@@ -17,14 +17,15 @@ data class TripEntity(
     var stoppedTime: Long = 0,
     var maxSpeed: Float = 0f,
     var maxGForce: Float = 0f,
-    var elevationGain: Float = 0f, // Total meters climbed
-    var avgSpeed: Float = 0f,       // Calculated as distance movingTime
-
-    // NEW: The compressed Google Maps string for the "Ride Summary" screen
-    var encodedRoutePolyline: String? = ""
-){
-    // NEW: This holds the thousands of GPS points for the "Full Route" screen.
-    // The @Backlink annotation makes ObjectBox highly efficient at querying this.
+    var elevationGain: Float = 0f,
+    var avgSpeed: Float = 0f,
+    var encodedRoutePolyline: String? = "",
+    /** Nullable for ObjectBox migration — older trips have null until renamed. */
+    var title: String? = null,
+    var isFavorite: Boolean = false,
+    var maxLateralGForce: Float = 0f,
+    var cornerCount: Int = 0
+) {
     @Backlink(to = "trip")
     lateinit var routePoints: ToMany<RoutePointEntity>
 }

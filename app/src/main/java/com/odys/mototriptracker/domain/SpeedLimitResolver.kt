@@ -1,5 +1,6 @@
 package com.odys.mototriptracker.domain
 
+import com.odys.mototriptracker.data.road.SpeedLimitCacheStore
 import com.odys.mototriptracker.util.AppLogger
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -15,22 +16,33 @@ import kotlin.math.sqrt
 @Singleton
 class SpeedLimitResolver @Inject constructor(
     private val speedLimitProvider: SpeedLimitProvider,
-    private val tripManager: TripManager
+    private val tripManager: TripManager,
+    private val cacheStore: SpeedLimitCacheStore
 ) {
-    private val cache = mutableMapOf<String, Int?>()
+    private val cache: MutableMap<String, Int?> = mutableMapOf<String, Int?>().apply {
+        putAll(cacheStore.load())
+    }
+
     private var lastQueryLat: Double? = null
     private var lastQueryLng: Double? = null
     private var lastQueryTimeMs: Long = 0L
     private var lookupJob: Job? = null
+    private var dirty = false
+
+    init {
+        AppLogger.i(AppLogger.Category.SPEED_LIMIT, "Loaded ${cache.size} cached speed-limit cells")
+    }
 
     fun reset() {
         lookupJob?.cancel()
         lookupJob = null
-        cache.clear()
+        // Keep disk cache — only clear in-memory "none" misses for this ride.
+        cache.keys.filter { cache[it] == null }.forEach { cache.remove(it) }
         lastQueryLat = null
         lastQueryLng = null
         lastQueryTimeMs = 0L
-        AppLogger.d(AppLogger.Category.SPEED_LIMIT, "Resolver reset")
+        persistIfNeeded()
+        AppLogger.d(AppLogger.Category.SPEED_LIMIT, "Resolver reset (kept ${cache.size} offline cells)")
     }
 
     fun onLocationUpdate(latitude: Double, longitude: Double, scope: CoroutineScope) {
@@ -50,6 +62,15 @@ class SpeedLimitResolver @Inject constructor(
             return
         }
 
+        // Soft offline fallback: nearest neighbouring cell with a known limit.
+        nearestCachedLimit(latitude, longitude)?.let { nearby ->
+            tripManager.updateRoadSpeedLimit(nearby)
+            AppLogger.d(
+                AppLogger.Category.SPEED_LIMIT,
+                "Offline neighbour limit=$nearby @ ${AppLogger.coordinate(latitude, longitude)}"
+            )
+        }
+
         lookupJob?.cancel()
         lookupJob = scope.launch {
             AppLogger.d(
@@ -63,11 +84,13 @@ class SpeedLimitResolver @Inject constructor(
                 null
             }
             cache[cacheKey] = limit
+            dirty = true
             lastQueryLat = latitude
             lastQueryLng = longitude
             lastQueryTimeMs = System.currentTimeMillis()
             if (limit != null) {
                 tripManager.updateRoadSpeedLimit(limit)
+                persistIfNeeded()
                 AppLogger.i(
                     AppLogger.Category.SPEED_LIMIT,
                     "Lookup ok → $limit km/h @ ${AppLogger.coordinate(latitude, longitude)}"
@@ -79,6 +102,25 @@ class SpeedLimitResolver @Inject constructor(
                 )
             }
         }
+    }
+
+    private fun nearestCachedLimit(latitude: Double, longitude: Double): Int? {
+        val latCell = (latitude * GRID_SCALE).toLong()
+        val lngCell = (longitude * GRID_SCALE).toLong()
+        for (dLat in -1..1) {
+            for (dLng in -1..1) {
+                if (dLat == 0 && dLng == 0) continue
+                val key = "${latCell + dLat}_${lngCell + dLng}"
+                cache[key]?.let { return it }
+            }
+        }
+        return null
+    }
+
+    private fun persistIfNeeded() {
+        if (!dirty) return
+        cacheStore.save(cache)
+        dirty = false
     }
 
     private fun shouldQuery(latitude: Double, longitude: Double): Boolean {

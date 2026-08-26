@@ -41,7 +41,7 @@ object AppLogger {
         String.format("%.5f,%.5f", lat, lon)
 
     fun tripSummary(stats: TripStats): String = String.format(
-        "dist=%.2fkm speed=%.0f avg=%.0f max=%.0f moving=%ds stopped=%ds elev=%.0fm maxG=%.2f limit=%s",
+        "dist=%.2fkm speed=%.0f avg=%.0f max=%.0f moving=%ds stopped=%ds elev=%.0fm maxG=%.2f latG=%.2f corners=%d gps=%s limit=%s",
         stats.distanceKm,
         stats.speed,
         stats.avgSpeed,
@@ -50,6 +50,9 @@ object AppLogger {
         stats.stoppedTime,
         stats.totalElevationGain,
         stats.maxGForce,
+        stats.maxLateralGForce,
+        stats.cornerCount,
+        stats.gpsQuality.name,
         stats.roadSpeedLimitKmh?.toString() ?: "-"
     )
 

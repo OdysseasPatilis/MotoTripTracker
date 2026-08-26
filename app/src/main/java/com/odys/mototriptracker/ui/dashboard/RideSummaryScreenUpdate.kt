@@ -21,6 +21,10 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.outlined.StarOutline
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -37,6 +41,7 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.google.android.gms.maps.CameraUpdateFactory
@@ -49,21 +54,16 @@ import com.google.maps.android.compose.MapProperties
 import com.google.maps.android.compose.MapUiSettings
 import com.google.maps.android.compose.Polyline
 import com.google.maps.android.compose.rememberCameraPositionState
+import com.odys.mototriptracker.data.export.displayTitle
 import com.odys.mototriptracker.data.trip.TripEntity
+import com.odys.mototriptracker.domain.RideMoment
+import com.odys.mototriptracker.domain.RideMoments
 import com.odys.mototriptracker.ui.theme.AppPalette
 import com.odys.mototriptracker.ui.theme.LocalAppPalette
 
 // ── Colours ──────────────────────────────────────────────────────────────────
-private val BackgroundDark = Color(0xFF0E0E14)
-private val SurfaceDark = Color(0xFF1A1A26)
-private val CardDark = Color(0xFF1C1C2A)
-private val PurpleAccent = Color(0xFF5B5FEF)
 private val Mint = Color(0xFF5EFFC8)
-private val Red = Color(0xFFFF5F5F)
 private val Blue = Color(0xFF5B9EF7)
-private val Purple = Color(0xFFC084FC)
-
-private val TextHint = Color(0x40FFFFFF)
 private val RouteAmber = Color(0xFFEF9F27)
 private val RouteTeal = Color(0xFF1D9E75)
 private val RouteCoral = Color(0xFFD85A30)
@@ -72,8 +72,12 @@ private val RouteCoral = Color(0xFFD85A30)
 @Composable
 fun RideSummaryScreenUpdate(
     summary: TripEntity,
+    moments: RideMoments = RideMoments(emptyList()),
     onBack: () -> Unit = {},
     onDelete: () -> Unit = {},
+    onShare: () -> Unit = {},
+    onRename: () -> Unit = {},
+    onToggleFavorite: () -> Unit = {},
     onViewRoute: () -> Unit = {}
 ) {
     val palette = LocalAppPalette.current
@@ -84,7 +88,15 @@ fun RideSummaryScreenUpdate(
             .verticalScroll(rememberScrollState())
             .padding(bottom = 32.dp)
     ) {
-        TopBar(onBack = onBack, onDelete = onDelete, palette = palette)
+        TopBar(
+            isFavorite = summary.isFavorite,
+            onBack = onBack,
+            onDelete = onDelete,
+            onShare = onShare,
+            onRename = onRename,
+            onToggleFavorite = onToggleFavorite,
+            palette = palette
+        )
         Spacer(Modifier.height(4.dp))
         DateCard(summary)
         Spacer(Modifier.height(10.dp))
@@ -93,22 +105,95 @@ fun RideSummaryScreenUpdate(
             summary.encodedRoutePolyline,
             onClick = onViewRoute
         )
+        if (moments.moments.isNotEmpty()) {
+            Spacer(Modifier.height(16.dp))
+            RideMomentsSection(moments = moments, palette = palette)
+        }
         Spacer(Modifier.height(10.dp))
         StatsGrid(summary, palette)
+    }
+}
+
+@Composable
+private fun RideMomentsSection(
+    moments: RideMoments,
+    palette: AppPalette
+) {
+    Column(
+        modifier = Modifier.padding(horizontal = 20.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        Text(
+            text = "RIDE MOMENTS",
+            color = palette.textMuted,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Medium,
+            letterSpacing = 2.sp
+        )
+        moments.moments.forEach { moment ->
+            MomentCard(moment = moment, palette = palette)
+        }
+    }
+}
+
+@Composable
+private fun MomentCard(
+    moment: RideMoment,
+    palette: AppPalette
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .background(palette.bgCard)
+            .padding(horizontal = 16.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            modifier = Modifier
+                .width(4.dp)
+                .height(36.dp)
+                .clip(RoundedCornerShape(2.dp))
+                .background(palette.neonGreen)
+        )
+        Spacer(Modifier.width(12.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = moment.title,
+                color = palette.textPrimary,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.SemiBold
+            )
+            Text(
+                text = moment.detail,
+                color = palette.textMuted,
+                fontSize = 12.sp
+            )
+        }
+        Text(
+            text = moment.value,
+            color = palette.neonGreen,
+            fontSize = 16.sp,
+            fontWeight = FontWeight.Bold
+        )
     }
 }
 
 // ── Top bar ───────────────────────────────────────────────────────────────────
 @Composable
 private fun TopBar(
+    isFavorite: Boolean,
     onBack: () -> Unit,
     onDelete: () -> Unit,
+    onShare: () -> Unit,
+    onRename: () -> Unit,
+    onToggleFavorite: () -> Unit,
     palette: AppPalette
 ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 20.dp, vertical = 14.dp)
+            .padding(horizontal = 16.dp, vertical = 14.dp)
             .statusBarsPadding(),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween
@@ -136,21 +221,61 @@ private fun TopBar(
             fontWeight = FontWeight.Medium
         )
 
-        Box(
-            modifier = Modifier
-                .size(36.dp)
-                .clip(RoundedCornerShape(8.dp))
-                .background(palette.deleteButtonBg)
-                .clickable { onDelete() },
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                imageVector = Icons.Default.Delete,
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            TopIconButton(
+                onClick = onToggleFavorite,
+                background = palette.bgCard,
+                contentDescription = if (isFavorite) "Unfavorite" else "Favorite",
+                tint = if (isFavorite) palette.neonGreen else palette.textPrimary,
+                icon = if (isFavorite) Icons.Filled.Star else Icons.Outlined.StarOutline
+            )
+            TopIconButton(
+                onClick = onRename,
+                background = palette.bgCard,
+                contentDescription = "Rename",
+                tint = palette.textPrimary,
+                icon = Icons.Default.Edit
+            )
+            TopIconButton(
+                onClick = onShare,
+                background = palette.bgCard,
+                contentDescription = "Share",
+                tint = palette.textPrimary,
+                icon = Icons.Default.Share
+            )
+            TopIconButton(
+                onClick = onDelete,
+                background = palette.deleteButtonBg,
                 contentDescription = "Delete",
                 tint = palette.stopRed,
-                modifier = Modifier.size(18.dp)
+                icon = Icons.Default.Delete
             )
         }
+    }
+}
+
+@Composable
+private fun TopIconButton(
+    onClick: () -> Unit,
+    background: Color,
+    contentDescription: String,
+    tint: Color,
+    icon: androidx.compose.ui.graphics.vector.ImageVector
+) {
+    Box(
+        modifier = Modifier
+            .size(36.dp)
+            .clip(RoundedCornerShape(8.dp))
+            .background(background)
+            .clickable { onClick() },
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = contentDescription,
+            tint = tint,
+            modifier = Modifier.size(18.dp)
+        )
     }
 }
 
@@ -180,11 +305,21 @@ private fun DateCard(summary: TripEntity) {
             )
             Spacer(Modifier.height(4.dp))
             Text(
-                text = formatTimestampToDate(summary.startTime),
+                text = summary.displayTitle(),
                 color = Mint,
-                fontSize = 22.sp,
-                fontWeight = FontWeight.SemiBold
+                fontSize = 20.sp,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
+            if (summary.title?.isNotBlank() == true) {
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    text = formatTimestampToDate(summary.startTime),
+                    color = Color(0xAAFFFFFF),
+                    fontSize = 12.sp
+                )
+            }
         }
     }
 }
@@ -392,6 +527,8 @@ private fun StatsGrid(
         StatItem("Max speed",  summary.maxSpeed.toInt().toString(),  "km/h",  palette.neonBlue),
         StatItem("Elevation",  "+${summary.elevationGain.toInt()}",  "meters", palette.textPrimary),
         StatItem("Max G",      String.format("%.2f", summary.maxGForce), "G-force", palette.purpleAccent),
+        StatItem("Lateral G",  String.format("%.2f", summary.maxLateralGForce), "G-force", palette.neonBlue),
+        StatItem("Corners",    summary.cornerCount.toString(), "turns", palette.mint),
     )
 
     Column(
