@@ -25,6 +25,20 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.outlined.StarOutline
+import androidx.compose.material.icons.rounded.Air
+import androidx.compose.material.icons.rounded.AutoAwesome
+import androidx.compose.material.icons.rounded.Bolt
+import androidx.compose.material.icons.rounded.Flag
+import androidx.compose.material.icons.rounded.NightsStay
+import androidx.compose.material.icons.rounded.PauseCircle
+import androidx.compose.material.icons.rounded.Route
+import androidx.compose.material.icons.rounded.Speed
+import androidx.compose.material.icons.rounded.Straighten
+import androidx.compose.material.icons.rounded.Terrain
+import androidx.compose.material.icons.rounded.Traffic
+import androidx.compose.material.icons.rounded.TrendingDown
+import androidx.compose.material.icons.rounded.TurnSlightRight
+import androidx.compose.material.icons.rounded.WbTwilight
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -40,6 +54,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -124,7 +139,7 @@ private fun RideMomentsSection(
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         Text(
-            text = "RIDE MOMENTS",
+            text = "MOMENTS",
             color = palette.textMuted,
             fontSize = 11.sp,
             fontWeight = FontWeight.Medium,
@@ -146,37 +161,73 @@ private fun MomentCard(
             .fillMaxWidth()
             .clip(RoundedCornerShape(14.dp))
             .background(palette.bgCard)
-            .padding(horizontal = 16.dp, vertical = 14.dp),
+            .padding(horizontal = 14.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Box(
             modifier = Modifier
-                .width(4.dp)
-                .height(36.dp)
-                .clip(RoundedCornerShape(2.dp))
-                .background(palette.neonGreen)
-        )
+                .size(40.dp)
+                .clip(RoundedCornerShape(12.dp))
+                .background(palette.neonGreen.copy(alpha = 0.14f)),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = momentIcon(moment.iconKey),
+                contentDescription = null,
+                tint = palette.neonGreen,
+                modifier = Modifier.size(20.dp)
+            )
+        }
         Spacer(Modifier.width(12.dp))
         Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = moment.title,
-                color = palette.textPrimary,
-                fontSize = 14.sp,
-                fontWeight = FontWeight.SemiBold
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = moment.title,
+                    color = palette.textPrimary,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false)
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    text = moment.value,
+                    color = palette.neonBlue,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
             Text(
                 text = moment.detail,
                 color = palette.textMuted,
-                fontSize = 12.sp
+                fontSize = 12.sp,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
             )
         }
-        Text(
-            text = moment.value,
-            color = palette.neonGreen,
-            fontSize = 16.sp,
-            fontWeight = FontWeight.Bold
-        )
     }
+}
+
+private fun momentIcon(iconKey: String): ImageVector = when (iconKey) {
+    "speed" -> Icons.Rounded.Speed
+    "bolt" -> Icons.Rounded.Bolt
+    "terrain" -> Icons.Rounded.Terrain
+    "descent" -> Icons.Rounded.TrendingDown
+    "flag" -> Icons.Rounded.Flag
+    "pause" -> Icons.Rounded.PauseCircle
+    "wind" -> Icons.Rounded.Air
+    "twisties" -> Icons.Rounded.TurnSlightRight
+    "open_road" -> Icons.Rounded.Route
+    "stop_go" -> Icons.Rounded.Traffic
+    "dawn" -> Icons.Rounded.WbTwilight
+    "night" -> Icons.Rounded.NightsStay
+    "distance" -> Icons.Rounded.Straighten
+    else -> Icons.Rounded.AutoAwesome
 }
 
 // ── Top bar ───────────────────────────────────────────────────────────────────

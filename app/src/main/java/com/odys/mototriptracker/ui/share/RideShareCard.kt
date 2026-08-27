@@ -6,27 +6,43 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.LinearGradient
 import android.graphics.Paint
+import android.graphics.Path
 import android.graphics.RectF
 import android.graphics.Shader
 import android.graphics.Typeface
 import androidx.core.content.FileProvider
 import androidx.core.graphics.createBitmap
+import com.google.android.gms.maps.model.LatLng
+import com.google.maps.android.PolyUtil
+import com.odys.mototriptracker.data.checkpoint.RoutePointEntity
+import com.odys.mototriptracker.data.export.displayTitle
 import com.odys.mototriptracker.data.trip.TripEntity
+import com.odys.mototriptracker.domain.RideMoment
 import com.odys.mototriptracker.domain.RideMoments
-import com.odys.mototriptracker.ui.dashboard.formatSecondsToTime
 import com.odys.mototriptracker.ui.dashboard.formatTimestampToDate
 import com.odys.mototriptracker.util.AppLogger
 import java.io.File
 import java.io.FileOutputStream
 
+/**
+ * Share PNG card — map + moments layout matching iOS `RideShareCardRenderer`.
+ */
 object RideShareCard {
 
     private const val WIDTH = 1080
-    private const val HEIGHT = 1350
+    private const val HEIGHT = 1620
+    private const val MINT = 0xFF00E5A0.toInt()
+    private const val BLUE = 0xFF00B4FF.toInt()
+    private const val BG = 0xFF101014.toInt()
 
-    fun share(context: Context, trip: TripEntity, moments: RideMoments) {
+    fun share(
+        context: Context,
+        trip: TripEntity,
+        moments: RideMoments,
+        points: List<RoutePointEntity> = emptyList()
+    ) {
         try {
-            val bitmap = render(trip, moments)
+            val bitmap = render(trip, moments, points)
             val cacheDir = File(context.cacheDir, "share").apply { mkdirs() }
             val file = File(cacheDir, "ride_${trip.id}.png")
             FileOutputStream(file).use { out ->
@@ -42,10 +58,7 @@ object RideShareCard {
             val send = Intent(Intent.ACTION_SEND).apply {
                 type = "image/png"
                 putExtra(Intent.EXTRA_STREAM, uri)
-                putExtra(
-                    Intent.EXTRA_TEXT,
-                    buildShareText(trip)
-                )
+                putExtra(Intent.EXTRA_TEXT, buildShareText(trip))
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             }
             context.startActivity(Intent.createChooser(send, "Share ride"))
@@ -57,174 +70,260 @@ object RideShareCard {
 
     private fun buildShareText(trip: TripEntity): String {
         val km = trip.distanceMeters / 1000f
-        return "MotoTripTracker ride — ${String.format("%.1f", km)} km · " +
-            "max ${trip.maxSpeed.toInt()} km/h · ${formatTimestampToDate(trip.startTime)}"
+        return "MotoTripTracker ride — ${String.format("%.1f", km)} km · ${formatTimestampToDate(trip.startTime)}"
     }
 
-    fun render(trip: TripEntity, moments: RideMoments): Bitmap {
+    fun render(
+        trip: TripEntity,
+        moments: RideMoments,
+        points: List<RoutePointEntity> = emptyList()
+    ): Bitmap {
         val bitmap = createBitmap(WIDTH, HEIGHT)
         val canvas = Canvas(bitmap)
 
-        val bgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = 0xFF0A0A0F.toInt()
-            style = Paint.Style.FILL
-        }
-        canvas.drawRect(0f, 0f, WIDTH.toFloat(), HEIGHT.toFloat(), bgPaint)
+        canvas.drawColor(BG)
 
-        // Hero gradient band
-        val heroRect = RectF(48f, 64f, WIDTH - 48f, 280f)
-        val heroPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            shader = LinearGradient(
-                heroRect.left, heroRect.top, heroRect.right, heroRect.bottom,
-                intArrayOf(0xFF5B5FEF.toInt(), 0xFF7C4DFF.toInt()),
-                null,
-                Shader.TileMode.CLAMP
-            )
-        }
-        canvas.drawRoundRect(heroRect, 48f, 48f, heroPaint)
-
-        val titlePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = 0xAAFFFFFF.toInt()
-            textSize = 34f
-            typeface = Typeface.create(Typeface.DEFAULT, Typeface.NORMAL)
-            letterSpacing = 0.12f
-        }
-        canvas.drawText("MOTOTRIPTRACKER", 88f, 130f, titlePaint)
-
-        val datePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = 0xFF5EFFC8.toInt()
-            textSize = 56f
+        val brandPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = 0x73FFFFFF
+            textSize = 24f
             typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
         }
-        canvas.drawText(formatTimestampToDate(trip.startTime), 88f, 210f, datePaint)
+        canvas.drawText("MOTOTRIPTRACKER", 48f, 80f, brandPaint)
 
-        val distanceKm = trip.distanceMeters / 1000f
-        val totalTime = trip.movingTime + trip.stoppedTime
-        val stats = listOf(
-            Triple("DISTANCE", String.format("%.1f", distanceKm), "km"),
-            Triple("MAX SPEED", trip.maxSpeed.toInt().toString(), "km/h"),
-            Triple("AVG SPEED", trip.avgSpeed.toInt().toString(), "km/h"),
-            Triple("MOVING", formatSecondsToTime(trip.movingTime), ""),
-            Triple("ELEVATION", "+${trip.elevationGain.toInt()}", "m"),
-            Triple("MAX G", String.format("%.2f", trip.maxGForce), "G")
-        )
-
-        var y = 340f
-        stats.chunked(2).forEach { row ->
-            var x = 48f
-            row.forEach { (label, value, unit) ->
-                drawStatTile(canvas, x, y, (WIDTH - 48f * 2 - 24f) / 2f, 170f, label, value, unit)
-                x += (WIDTH - 48f * 2 - 24f) / 2f + 24f
-            }
-            y += 194f
+        val titlePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = 0xFFFFFFFF.toInt()
+            textSize = 40f
+            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+            isFakeBoldText = true
         }
+        canvas.drawText(truncate(trip.displayTitle(), titlePaint, WIDTH - 96f), 48f, 140f, titlePaint)
 
-        if (moments.moments.isNotEmpty()) {
-            val sectionPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                color = 0xFF6B6B82.toInt()
-                textSize = 32f
-                typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
-                letterSpacing = 0.1f
+        val datePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = MINT
+            textSize = 28f
+            typeface = Typeface.create(Typeface.DEFAULT, Typeface.NORMAL)
+        }
+        canvas.drawText(formatTimestampToDate(trip.startTime), 48f, 190f, datePaint)
+
+        val mapRect = RectF(48f, 220f, WIDTH - 48f, 780f)
+        drawRouteMap(canvas, mapRect, trip, points)
+
+        // Distance pill
+        val pill = String.format("%.1f km", trip.distanceMeters / 1000f)
+        val pillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = 0xFFFFFFFF.toInt()
+            textSize = 24f
+            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+        }
+        val pillW = pillPaint.measureText(pill) + 36f
+        val pillRect = RectF(
+            mapRect.left + 24f,
+            mapRect.bottom - 64f,
+            mapRect.left + 24f + pillW,
+            mapRect.bottom - 20f
+        )
+        val pillBg = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0x73000000 }
+        canvas.drawRoundRect(pillRect, 22f, 22f, pillBg)
+        canvas.drawText(pill, pillRect.left + 18f, pillRect.top + 30f, pillPaint)
+
+        var y = mapRect.bottom + 48f
+        val sectionPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = 0x73FFFFFF
+            textSize = 22f
+            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+        }
+        canvas.drawText("MOMENTS", 48f, y, sectionPaint)
+        y += 36f
+
+        val shown = moments.moments.take(5)
+        if (shown.isEmpty()) {
+            val emptyPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = 0x59FFFFFF
+                textSize = 26f
             }
-            canvas.drawText("RIDE MOMENTS", 48f, y + 24f, sectionPaint)
-            y += 56f
-
-            moments.moments.take(3).forEach { moment ->
-                drawMomentRow(canvas, 48f, y, WIDTH - 96f, moment.title, moment.value, moment.detail)
-                y += 120f
+            canvas.drawText("No moments for this ride", 48f, y + 28f, emptyPaint)
+        } else {
+            for (moment in shown) {
+                y = drawMomentCard(canvas, moment, RectF(48f, y, WIDTH - 48f, y + 118f)) + 16f
             }
         }
 
         val footerPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = 0xFF4A4A6A.toInt()
-            textSize = 28f
+            color = 0x47FFFFFF
+            textSize = 22f
         }
-        canvas.drawText(
-            "Total ${formatSecondsToTime(totalTime)}  ·  Recorded with MotoTripTracker",
-            48f,
-            HEIGHT - 56f,
-            footerPaint
-        )
+        canvas.drawText("Recorded with MotoTripTracker", 48f, HEIGHT - 48f, footerPaint)
 
         return bitmap
     }
 
-    private fun drawStatTile(
+    private fun drawRouteMap(
         canvas: Canvas,
-        x: Float,
-        y: Float,
-        w: Float,
-        h: Float,
-        label: String,
-        value: String,
-        unit: String
+        rect: RectF,
+        trip: TripEntity,
+        points: List<RoutePointEntity>
     ) {
-        val tilePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = 0xFF1A1A2E.toInt()
-        }
-        canvas.drawRoundRect(RectF(x, y, x + w, y + h), 36f, 36f, tilePaint)
+        val coords = routeCoordinates(trip, points)
+        val mapBg = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFF1C1C22.toInt() }
+        canvas.drawRoundRect(rect, 36f, 36f, mapBg)
 
-        val labelPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = 0xFF6B6B82.toInt()
-            textSize = 26f
-            letterSpacing = 0.08f
-        }
-        canvas.drawText(label, x + 28f, y + 48f, labelPaint)
-
-        val valuePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = 0xFFFFFFFF.toInt()
-            textSize = 64f
-            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
-        }
-        canvas.drawText(value, x + 28f, y + 118f, valuePaint)
-
-        if (unit.isNotBlank()) {
-            val unitPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                color = 0xFF6B6B82.toInt()
-                textSize = 26f
+        if (coords.size < 2) {
+            val empty = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = 0x66FFFFFF
+                textSize = 28f
+                textAlign = Paint.Align.CENTER
             }
-            canvas.drawText(unit, x + 28f, y + 152f, unitPaint)
+            canvas.drawText("No route map", rect.centerX(), rect.centerY() + 10f, empty)
+        } else {
+            canvas.save()
+            val clip = Path().apply { addRoundRect(rect, 36f, 36f, Path.Direction.CW) }
+            canvas.clipPath(clip)
+
+            // Subtle grid
+            val grid = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = 0x14FFFFFF
+                strokeWidth = 2f
+            }
+            var gx = rect.left + 40f
+            while (gx < rect.right) {
+                canvas.drawLine(gx, rect.top, gx, rect.bottom, grid)
+                gx += 48f
+            }
+            var gy = rect.top + 40f
+            while (gy < rect.bottom) {
+                canvas.drawLine(rect.left, gy, rect.right, gy, grid)
+                gy += 48f
+            }
+
+            val projected = project(coords, rect)
+            val routePath = Path().apply {
+                moveTo(projected[0].first, projected[0].second)
+                for (i in 1 until projected.size) {
+                    lineTo(projected[i].first, projected[i].second)
+                }
+            }
+
+            val under = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                style = Paint.Style.STROKE
+                strokeWidth = 10f
+                strokeCap = Paint.Cap.ROUND
+                strokeJoin = Paint.Join.ROUND
+                color = 0x59000000
+            }
+            canvas.drawPath(routePath, under)
+
+            val routePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                style = Paint.Style.STROKE
+                strokeWidth = 6f
+                strokeCap = Paint.Cap.ROUND
+                strokeJoin = Paint.Join.ROUND
+                shader = LinearGradient(
+                    rect.left, rect.centerY(), rect.right, rect.centerY(),
+                    intArrayOf(MINT, BLUE),
+                    null,
+                    Shader.TileMode.CLAMP
+                )
+            }
+            canvas.drawPath(routePath, routePaint)
+
+            drawEndpoint(canvas, projected.first(), MINT)
+            drawEndpoint(canvas, projected.last(), 0xFFE24B4A.toInt())
+            canvas.restore()
         }
+
+        val border = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.STROKE
+            strokeWidth = 2f
+            color = 0x14FFFFFF
+        }
+        canvas.drawRoundRect(rect, 36f, 36f, border)
     }
 
-    private fun drawMomentRow(
-        canvas: Canvas,
-        x: Float,
-        y: Float,
-        w: Float,
-        title: String,
-        value: String,
-        detail: String
-    ) {
-        val tilePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = 0xFF111120.toInt()
-        }
-        canvas.drawRoundRect(RectF(x, y, x + w, y + 104f), 28f, 28f, tilePaint)
+    private fun drawEndpoint(canvas: Canvas, point: Pair<Float, Float>, color: Int) {
+        val outer = Paint(Paint.ANTI_ALIAS_FLAG).apply { this.color = BG }
+        canvas.drawCircle(point.first, point.second, 9f, outer)
+        val fill = Paint(Paint.ANTI_ALIAS_FLAG).apply { this.color = color }
+        canvas.drawCircle(point.first, point.second, 6f, fill)
+    }
 
-        val accent = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = 0xFF00E5A0.toInt()
-        }
-        canvas.drawRoundRect(RectF(x, y + 24f, x + 8f, y + 80f), 8f, 8f, accent)
+    private fun drawMomentCard(canvas: Canvas, moment: RideMoment, rect: RectF): Float {
+        val bg = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0x0FFFFFFF }
+        canvas.drawRoundRect(rect, 24f, 24f, bg)
 
         val titlePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = 0xFFFFFFFF.toInt()
+            color = 0x8CFFFFFF.toInt()
+            textSize = 22f
+            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+        }
+        canvas.drawText(truncate(moment.title, titlePaint, rect.width() * 0.55f), rect.left + 28f, rect.top + 38f, titlePaint)
+
+        val valuePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = MINT
             textSize = 34f
             typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
         }
-        canvas.drawText(title, x + 28f, y + 44f, titlePaint)
+        canvas.drawText(truncate(moment.value, valuePaint, rect.width() - 56f), rect.left + 28f, rect.top + 76f, valuePaint)
 
         val detailPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = 0xFF6B6B82.toInt()
-            textSize = 26f
+            color = 0x66FFFFFF
+            textSize = 20f
         }
-        canvas.drawText(detail, x + 28f, y + 80f, detailPaint)
+        canvas.drawText(truncate(moment.detail, detailPaint, rect.width() - 56f), rect.left + 28f, rect.top + 104f, detailPaint)
+        return rect.bottom
+    }
 
-        val valuePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = 0xFF00E5A0.toInt()
-            textSize = 40f
-            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
-            textAlign = Paint.Align.RIGHT
+    private fun routeCoordinates(
+        trip: TripEntity,
+        points: List<RoutePointEntity>
+    ): List<LatLng> {
+        val encoded = trip.encodedRoutePolyline
+        if (!encoded.isNullOrBlank()) {
+            return try {
+                PolyUtil.decode(encoded)
+            } catch (_: Throwable) {
+                emptyList()
+            }
         }
-        canvas.drawText(value, x + w - 28f, y + 62f, valuePaint)
+        return points
+            .sortedBy { it.timestamp }
+            .map { LatLng(it.latitude, it.longitude) }
+    }
+
+    private fun project(coords: List<LatLng>, rect: RectF): List<Pair<Float, Float>> {
+        var minLat = coords[0].latitude
+        var maxLat = coords[0].latitude
+        var minLng = coords[0].longitude
+        var maxLng = coords[0].longitude
+        for (c in coords) {
+            minLat = minOf(minLat, c.latitude)
+            maxLat = maxOf(maxLat, c.latitude)
+            minLng = minOf(minLng, c.longitude)
+            maxLng = maxOf(maxLng, c.longitude)
+        }
+        val latPad = maxOf((maxLat - minLat) * 0.12, 0.002)
+        val lngPad = maxOf((maxLng - minLng) * 0.12, 0.002)
+        minLat -= latPad
+        maxLat += latPad
+        minLng -= lngPad
+        maxLng += lngPad
+
+        val latSpan = (maxLat - minLat).coerceAtLeast(1e-6)
+        val lngSpan = (maxLng - minLng).coerceAtLeast(1e-6)
+        val inset = 28f
+        val w = rect.width() - inset * 2
+        val h = rect.height() - inset * 2
+
+        return coords.map { c ->
+            val x = rect.left + inset + (((c.longitude - minLng) / lngSpan) * w).toFloat()
+            val y = rect.bottom - inset - (((c.latitude - minLat) / latSpan) * h).toFloat()
+            x to y
+        }
+    }
+
+    private fun truncate(text: String, paint: Paint, maxWidth: Float): String {
+        if (paint.measureText(text) <= maxWidth) return text
+        var end = text.length
+        while (end > 1 && paint.measureText(text.take(end) + "…") > maxWidth) end--
+        return text.take(end) + "…"
     }
 }

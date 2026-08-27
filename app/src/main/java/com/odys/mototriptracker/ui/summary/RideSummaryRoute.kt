@@ -136,7 +136,12 @@ fun RideSummaryRoute(
                         TextButton(
                             onClick = {
                                 showShareOptions = false
-                                RideShareCard.share(context, trip, uiState.moments)
+                                RideShareCard.share(
+                                    context,
+                                    trip,
+                                    uiState.moments,
+                                    uiState.routePoints
+                                )
                             }
                         ) {
                             Text("Share card")
