@@ -3,6 +3,7 @@ package com.odys.mototriptracker.ui.navigation
 object Routes {
     const val TRACKER = "tracker"
     const val HISTORY = "history"
+    const val LEADERBOARD = "leaderboard"
     const val SUMMARY = "summary/{tripId}"
     const val FULL_ROUTE = "full_route/{tripId}"
 

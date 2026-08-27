@@ -42,6 +42,10 @@ Android motorcycle ride tracker. Records high-accuracy GPS rides, shows a live d
 - Day dividers when the calendar day changes
 - Favorite toggle from the list or summary
 
+### Leaderboard
+- Personal rankings across saved rides in three categories: **Speed** (max km/h), **Distance** (km), **Turns** (corner count)
+- Tap an entry to open the same ride summary as from history
+
 ### Ride summary & map
 - Post-ride summary with stats, rename, favorite, delete
 - **Ride moments** highlights (e.g. top speed, max G, elevation, longest stop, corners, lean G)
@@ -122,6 +126,7 @@ com.odys.mototriptracker/
 |-------|--------|
 | `tracker` | Live ride dashboard |
 | `history` | Trip list (tabs, search, date filters) |
+| `leaderboard` | Personal rankings (speed / distance / turns) |
 | `summary/{tripId}` | Ride summary, moments, share / rename / delete |
 | `full_route/{tripId}` | Google Maps route + waypoints |
 

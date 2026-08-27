@@ -27,6 +27,7 @@ import com.odys.mototriptracker.util.AppLogger
 @Composable
 fun RideTrackerRoute(
     onViewHistory: () -> Unit,
+    onViewLeaderboard: () -> Unit = {},
     viewModel: RideTrackerViewModel = hiltViewModel()
 ) {
     val context = LocalContext.current
@@ -52,6 +53,7 @@ fun RideTrackerRoute(
         },
         onStopRide = viewModel::stopRide,
         onViewHistory = onViewHistory,
+        onViewLeaderboard = onViewLeaderboard,
         onPauseRide = viewModel::togglePause,
         isPaused = uiState.isPaused
     )

@@ -28,6 +28,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.DarkMode
+import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -93,6 +94,7 @@ fun RideTrackerScreen(
     onStartRide: () -> Unit,
     onStopRide: () -> Unit,
     onViewHistory: () -> Unit,
+    onViewLeaderboard: () -> Unit = {},
     onPauseRide: () -> Unit,
     isPaused: Boolean
 ) {
@@ -228,6 +230,16 @@ fun RideTrackerScreen(
                                 "Switch to dark theme"
                             },
                             tint = palette.textMuted
+                        )
+                    }
+                    IconButton(
+                        onClick = onViewLeaderboard,
+                        modifier = Modifier.size(32.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.EmojiEvents,
+                            contentDescription = "Leaderboard",
+                            tint = palette.neonGreen
                         )
                     }
                     TextButton(onClick = onViewHistory) {

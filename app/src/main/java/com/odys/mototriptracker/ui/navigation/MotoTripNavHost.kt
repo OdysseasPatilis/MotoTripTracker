@@ -7,6 +7,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.odys.mototriptracker.ui.history.RideHistoryRoute
+import com.odys.mototriptracker.ui.leaderboard.LeaderboardRoute
 import com.odys.mototriptracker.ui.route.FullRouteRoute
 import com.odys.mototriptracker.ui.summary.RideSummaryRoute
 import com.odys.mototriptracker.ui.tracker.RideTrackerRoute
@@ -23,12 +24,24 @@ fun MotoTripNavHost() {
             RideTrackerRoute(
                 onViewHistory = {
                     navController.navigate(Routes.HISTORY)
+                },
+                onViewLeaderboard = {
+                    navController.navigate(Routes.LEADERBOARD)
                 }
             )
         }
 
         composable(Routes.HISTORY) {
             RideHistoryRoute(
+                onBack = { navController.popBackStack() },
+                onRideClick = { tripId ->
+                    navController.navigate(Routes.summary(tripId))
+                }
+            )
+        }
+
+        composable(Routes.LEADERBOARD) {
+            LeaderboardRoute(
                 onBack = { navController.popBackStack() },
                 onRideClick = { tripId ->
                     navController.navigate(Routes.summary(tripId))
