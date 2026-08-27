@@ -82,6 +82,7 @@ dependencies {
     implementation(libs.maps.compose)
     implementation(libs.androidx.ui)
     implementation(libs.okhttp)
+    implementation(libs.androidx.core.splashscreen)
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
