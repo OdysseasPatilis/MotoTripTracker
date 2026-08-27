@@ -56,7 +56,7 @@ class TripManager @Inject constructor(
     }
 
     fun updateRoadSpeedLimit(kmh: Int) {
-        if (!isTracking || isPaused) return
+        if (!isTracking) return
         if (_tripStats.value.roadSpeedLimitKmh == kmh) return
 
         _tripStats.update { it.copy(roadSpeedLimitKmh = kmh) }
@@ -109,10 +109,19 @@ class TripManager @Inject constructor(
     }
 
     fun onLocationUpdate(location: Location) {
-        if (!isTracking || isPaused) return
+        if (!isTracking) return
 
         val accuracy = if (location.hasAccuracy()) location.accuracy else null
         val gpsQuality = GpsQuality.fromAccuracyMeters(accuracy)
+
+        // Keep the GPS signal indicator live while paused (iOS parity).
+        if (isPaused) {
+            _tripStats.update {
+                it.copy(gpsAccuracyMeters = accuracy, gpsQuality = gpsQuality)
+            }
+            publishSession()
+            return
+        }
 
         if (!speedFilter.isValid(location)) {
             _tripStats.update {

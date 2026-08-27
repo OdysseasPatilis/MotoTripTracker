@@ -75,16 +75,13 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.border
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.geometry.CornerRadius
-import kotlinx.coroutines.delay
 import android.view.HapticFeedbackConstants
 import androidx.compose.ui.platform.LocalView
-import java.util.Calendar
 
 @Composable
 fun RideTrackerScreen(
@@ -185,25 +182,17 @@ fun RideTrackerScreen(
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             // Top bar
-            val currentTime = rememberCurrentTime()
             val batteryLevel = rememberBatteryLevel()
 
-// Replace your existing top bar Row with:
             Row(
                 Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Column {
-                    Text(
-                        "RIDE TRACKER", color = palette.textMuted, fontSize = 10.sp,
-                        fontWeight = FontWeight.Medium, letterSpacing = 2.sp
-                    )
-                    Text(
-                        currentTime, color = palette.textPrimary, fontSize = 22.sp,
-                        fontWeight = FontWeight.Bold, lineHeight = 24.sp
-                    )
-                    Spacer(Modifier.height(6.dp))
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
                     TrackingStatusRow(
                         isTracking = isTracking,
                         isPaused = isPaused,
@@ -211,9 +200,9 @@ fun RideTrackerScreen(
                         gpsAccuracyMeters = stats.gpsAccuracyMeters,
                         palette = palette
                     )
+                    BatteryIndicator(batteryLevel, palette)
                 }
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    BatteryIndicator(batteryLevel, palette)
                     IconButton(
                         onClick = { themeStore.toggleTheme() },
                         modifier = Modifier.size(32.dp)
@@ -365,28 +354,60 @@ private fun TrackingStatusRow(
             }
         }
 
-        val gpsLabel = when {
-            !isTracking -> if (gpsAccuracyMeters == null) "GPS READY" else "GPS"
-            gpsQuality == GpsQuality.GOOD -> "GPS GOOD"
-            gpsQuality == GpsQuality.FAIR -> "GPS FAIR"
-            gpsQuality == GpsQuality.POOR -> "GPS WEAK"
-            else -> "GPS…"
-        }
-        val gpsColor = when (gpsQuality) {
-            GpsQuality.GOOD -> palette.neonGreen
-            GpsQuality.FAIR -> palette.routeAmber
-            GpsQuality.POOR -> palette.stopRed
-            GpsQuality.UNKNOWN -> palette.textMuted
-        }
-        Text(
-            text = buildString {
-                append(gpsLabel)
-                gpsAccuracyMeters?.let { append(" ±${it.toInt()}m") }
-            },
-            color = gpsColor,
-            fontSize = 11.sp,
-            fontWeight = FontWeight.Medium
+        GpsSignalIndicator(
+            quality = gpsQuality,
+            accuracyMeters = gpsAccuracyMeters,
+            palette = palette
         )
+    }
+}
+
+@Composable
+private fun GpsSignalIndicator(
+    quality: GpsQuality,
+    accuracyMeters: Float?,
+    palette: AppPalette
+) {
+    val tint = when (quality) {
+        GpsQuality.EXCELLENT, GpsQuality.GOOD -> palette.neonGreen
+        GpsQuality.FAIR -> palette.routeAmber
+        GpsQuality.POOR -> palette.neonRed
+        GpsQuality.UNKNOWN -> palette.textMuted
+    }
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        GpsBarsIcon(filledBars = quality.barCount, tint = tint)
+        Text(
+            text = if (accuracyMeters != null && accuracyMeters > 0f) {
+                "±${accuracyMeters.toInt()}m"
+            } else {
+                "GPS"
+            },
+            color = tint,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.SemiBold
+        )
+    }
+}
+
+@Composable
+private fun GpsBarsIcon(filledBars: Int, tint: Color) {
+    Row(
+        verticalAlignment = Alignment.Bottom,
+        horizontalArrangement = Arrangement.spacedBy(1.5.dp),
+        modifier = Modifier.height(13.dp)
+    ) {
+        repeat(4) { index ->
+            Box(
+                modifier = Modifier
+                    .width(2.5.dp)
+                    .height((5 + index * 2.5).dp)
+                    .clip(RoundedCornerShape(1.dp))
+                    .background(if (index < filledBars) tint else tint.copy(alpha = 0.25f))
+            )
+        }
     }
 }
 @Composable
@@ -576,23 +597,6 @@ fun KeepScreenOn() {
             window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         }
     }
-}
-
-@Composable
-fun rememberCurrentTime(): String {
-    var time by remember { mutableStateOf(currentTimeString()) }
-    LaunchedEffect(Unit) {
-        while (true) {
-            delay(10_000)
-            time = currentTimeString()
-        }
-    }
-    return time
-}
-
-fun currentTimeString(): String {
-    val cal = Calendar.getInstance()
-    return String.format("%02d:%02d", cal.get(Calendar.HOUR_OF_DAY), cal.get(Calendar.MINUTE))
 }
 
 @Composable

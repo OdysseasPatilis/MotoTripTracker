@@ -68,9 +68,9 @@ class TripForegroundService : LifecycleService() {
     }
 
     private fun pauseTracking() {
-        stopLocationCollection()
+        // Keep GPS running so the dashboard signal indicator stays live (iOS parity).
         ensureForeground(contentText = "Ride paused")
-        AppLogger.i(AppLogger.Category.SERVICE, "Tracking paused")
+        AppLogger.i(AppLogger.Category.SERVICE, "Tracking paused (GPS still active)")
     }
 
     @RequiresPermission(allOf = [Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION])

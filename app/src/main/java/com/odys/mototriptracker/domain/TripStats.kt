@@ -2,16 +2,47 @@ package com.odys.mototriptracker.domain
 
 enum class GpsQuality {
     UNKNOWN,
+    EXCELLENT,
     GOOD,
     FAIR,
     POOR;
 
+    /** Filled signal bars out of 4 — matches iOS. */
+    val barCount: Int
+        get() = when (this) {
+            EXCELLENT -> 4
+            GOOD -> 3
+            FAIR -> 2
+            POOR -> 1
+            UNKNOWN -> 0
+        }
+
+    val shortLabel: String
+        get() = when (this) {
+            UNKNOWN -> "No fix"
+            EXCELLENT -> "Excellent"
+            GOOD -> "Good"
+            FAIR -> "Fair"
+            POOR -> "Weak"
+        }
+
+    val label: String
+        get() = when (this) {
+            UNKNOWN -> "GPS —"
+            EXCELLENT -> "GPS EXCELLENT"
+            GOOD -> "GPS GOOD"
+            FAIR -> "GPS FAIR"
+            POOR -> "GPS WEAK"
+        }
+
     companion object {
+        /** Accuracy buckets match iOS: ≤5 / ≤10 / ≤20 m. */
         fun fromAccuracyMeters(accuracy: Float?): GpsQuality {
             if (accuracy == null || accuracy <= 0f) return UNKNOWN
             return when {
-                accuracy <= 8f -> GOOD
-                accuracy <= 15f -> FAIR
+                accuracy <= 5f -> EXCELLENT
+                accuracy <= 10f -> GOOD
+                accuracy <= 20f -> FAIR
                 else -> POOR
             }
         }

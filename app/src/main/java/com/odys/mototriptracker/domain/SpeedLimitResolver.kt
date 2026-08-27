@@ -1,7 +1,9 @@
 package com.odys.mototriptracker.domain
 
 import com.odys.mototriptracker.data.road.SpeedLimitCacheStore
+import com.odys.mototriptracker.data.road.SpeedLimitRegionPackStore
 import com.odys.mototriptracker.util.AppLogger
+import com.odys.mototriptracker.util.LogThrottle
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
@@ -12,12 +14,14 @@ import kotlin.math.cos
 import kotlin.math.pow
 import kotlin.math.sin
 import kotlin.math.sqrt
+import kotlin.math.truncate
 
 @Singleton
 class SpeedLimitResolver @Inject constructor(
     private val speedLimitProvider: SpeedLimitProvider,
     private val tripManager: TripManager,
-    private val cacheStore: SpeedLimitCacheStore
+    private val cacheStore: SpeedLimitCacheStore,
+    private val regionPackStore: SpeedLimitRegionPackStore
 ) {
     private val cache: MutableMap<String, Int?> = mutableMapOf<String, Int?>().apply {
         putAll(cacheStore.load())
@@ -30,7 +34,10 @@ class SpeedLimitResolver @Inject constructor(
     private var dirty = false
 
     init {
-        AppLogger.i(AppLogger.Category.SPEED_LIMIT, "Loaded ${cache.size} cached speed-limit cells")
+        AppLogger.i(
+            AppLogger.Category.SPEED_LIMIT,
+            "Loaded ${cache.size} cached speed-limit cells; ${regionPackStore.packs.size} region pack(s)"
+        )
     }
 
     fun reset() {
@@ -46,6 +53,12 @@ class SpeedLimitResolver @Inject constructor(
     }
 
     fun onLocationUpdate(latitude: Double, longitude: Double, scope: CoroutineScope) {
+        // Bundled city packs (e.g. Greater Athens) — offline only, no Overpass.
+        if (regionPackStore.isInsideBundledRegion(latitude, longitude)) {
+            applyBundledRegionLimit(latitude, longitude)
+            return
+        }
+
         if (!shouldQuery(latitude, longitude)) return
 
         val cacheKey = gridKey(latitude, longitude)
@@ -104,9 +117,38 @@ class SpeedLimitResolver @Inject constructor(
         }
     }
 
+    private fun applyBundledRegionLimit(latitude: Double, longitude: Double) {
+        val hit = regionPackStore.limit(latitude, longitude)
+        if (hit != null) {
+            val (pack, kmh) = hit
+            tripManager.updateRoadSpeedLimit(kmh)
+            lastQueryLat = latitude
+            lastQueryLng = longitude
+            lastQueryTimeMs = System.currentTimeMillis()
+            if (LogThrottle.shouldLog("speedLimit.pack.${pack.id}", 20_000L)) {
+                AppLogger.d(
+                    AppLogger.Category.SPEED_LIMIT,
+                    "Region pack ${pack.id} → $kmh km/h"
+                )
+            }
+            return
+        }
+
+        // Inside pack bbox but no tagged cell nearby — keep last auto limit; never Overpass.
+        if (LogThrottle.shouldLog("speedLimit.pack.miss", 30_000L)) {
+            AppLogger.d(
+                AppLogger.Category.SPEED_LIMIT,
+                "Inside region pack with no cell @ ${AppLogger.coordinate(latitude, longitude)}"
+            )
+        }
+        lastQueryLat = latitude
+        lastQueryLng = longitude
+        lastQueryTimeMs = System.currentTimeMillis()
+    }
+
     private fun nearestCachedLimit(latitude: Double, longitude: Double): Int? {
-        val latCell = (latitude * GRID_SCALE).toLong()
-        val lngCell = (longitude * GRID_SCALE).toLong()
+        val latCell = truncate(latitude * GRID_SCALE).toLong()
+        val lngCell = truncate(longitude * GRID_SCALE).toLong()
         for (dLat in -1..1) {
             for (dLng in -1..1) {
                 if (dLat == 0 && dLng == 0) continue
@@ -135,8 +177,8 @@ class SpeedLimitResolver @Inject constructor(
     }
 
     private fun gridKey(latitude: Double, longitude: Double): String {
-        val latCell = (latitude * GRID_SCALE).toLong()
-        val lngCell = (longitude * GRID_SCALE).toLong()
+        val latCell = truncate(latitude * GRID_SCALE).toLong()
+        val lngCell = truncate(longitude * GRID_SCALE).toLong()
         return "${latCell}_$lngCell"
     }
 

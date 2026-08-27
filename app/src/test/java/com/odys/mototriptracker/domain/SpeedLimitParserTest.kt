@@ -18,10 +18,17 @@ class SpeedLimitParserTest {
     }
 
     @Test
+    fun parse_implicitCountryLimits() {
+        assertEquals(50, SpeedLimitParser.parse("GR:urban"))
+        assertEquals(90, SpeedLimitParser.parse("gr:rural"))
+        assertEquals(130, SpeedLimitParser.parse("gr:motorway"))
+        assertEquals(20, SpeedLimitParser.parse("living_street"))
+    }
+
+    @Test
     fun parse_unsupportedValues() {
         assertNull(SpeedLimitParser.parse("signals"))
         assertNull(SpeedLimitParser.parse("variable"))
-        assertNull(SpeedLimitParser.parse("GR:urban"))
         assertNull(SpeedLimitParser.parse("none"))
     }
 

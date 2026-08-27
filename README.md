@@ -20,14 +20,17 @@ Android motorcycle ride tracker. Records high-accuracy GPS rides, shows a live d
 - Foreground service keeps GPS alive when the screen is off or the app is backgrounded
 - Live stats: distance, moving & stopped time, average / max speed, elevation gain
 - Speedometer arc, G-force bar, battery and clock
-- GPS quality indicator and recording pulse
+- GPS signal bars (Excellent ≤5 m / Good ≤10 m / Fair ≤20 m / Weak) with ±m accuracy — live while idle and paused
+- Recording pulse while tracking
 - Screen stays on during an active ride
 
 ### Road speed limits
-- Live limits from OpenStreetMap via Overpass (not Google Roads)
+- Live limits from OpenStreetMap via Overpass (mirrors, 30 m then 60 m radii, 35 m / 15 s throttle)
 - On-screen speed-limit sign; translucent flash when over the limit
-- Manual fallback limit (cycled in settings / theme store) when no live value
-- Offline grid cache (`SpeedLimitCacheStore`) so recent cells work without network
+- Manual fallback limit (cycled) when no live value
+- Offline SharedPreferences grid cache + neighbour soft fallback
+- Bundled Greater Athens region pack (`athens_speed_limits.json`) — offline-only inside that bbox (no Overpass)
+- OSM tag parsing includes country implicits (`GR:urban`, etc.)
 
 ### Sensors & dynamics
 - Linear acceleration → current / max G and lateral G (`GForceTracker`)
