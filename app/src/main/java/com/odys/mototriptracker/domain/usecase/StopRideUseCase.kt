@@ -5,8 +5,8 @@ import com.odys.mototriptracker.domain.TripManager
 import javax.inject.Inject
 
 data class StopRideResult(
-    val distanceMeters: Float,
-    val isTooShort: Boolean
+    val saved: Boolean,
+    val distanceMeters: Float
 )
 
 class StopRideUseCase @Inject constructor(
@@ -14,17 +14,13 @@ class StopRideUseCase @Inject constructor(
     private val serviceController: TripServiceController
 ) {
     operator fun invoke(minDistanceMeters: Float = MIN_DISTANCE_METERS): StopRideResult {
-        tripManager.stopTrip()
-        serviceController.stopService()
-
         val distanceMeters = tripManager.tripStats.value.distanceMeters
-        return StopRideResult(
-            distanceMeters = distanceMeters,
-            isTooShort = distanceMeters < minDistanceMeters
-        )
+        val saved = tripManager.stopTrip(minDistanceMeters)
+        serviceController.stopService()
+        return StopRideResult(saved = saved, distanceMeters = distanceMeters)
     }
 
     companion object {
-        const val MIN_DISTANCE_METERS = 50f
+        const val MIN_DISTANCE_METERS = TripManager.MIN_SAVE_DISTANCE_METERS
     }
 }

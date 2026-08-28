@@ -9,7 +9,8 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.size
@@ -26,6 +27,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.ExperimentalFoundationApi
 import com.odys.mototriptracker.ui.theme.AppPalette
 import kotlin.math.roundToInt
 
@@ -87,6 +89,7 @@ fun OverLimitScreenFlash(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun SpeedLimitSign(
     limitKmh: Int,
@@ -95,14 +98,20 @@ fun SpeedLimitSign(
     modifier: Modifier = Modifier,
     isLive: Boolean = false,
     flashPhase: SpeedLimitFlashPhase = rememberSpeedLimitFlashPhase(isOverLimit),
-    onClick: (() -> Unit)? = null
+    onClick: (() -> Unit)? = null,
+    onLongClick: (() -> Unit)? = null
 ) {
     val fill = if (isOverLimit) speedLimitFlashFill(flashPhase) else Color.White
     val ring = if (isOverLimit) speedLimitFlashRing(flashPhase) else palette.speedLimitRing
     val number = if (isOverLimit) speedLimitFlashNumber(flashPhase) else Color.Black
 
-    val clickableModifier = if (onClick != null) {
-        Modifier.clickable(onClick = onClick)
+    val interactionModifier = if (onClick != null || onLongClick != null) {
+        Modifier.combinedClickable(
+            interactionSource = MutableInteractionSource(),
+            indication = null,
+            onClick = { onClick?.invoke() },
+            onLongClick = { onLongClick?.invoke() }
+        )
     } else {
         Modifier
     }
@@ -117,12 +126,13 @@ fun SpeedLimitSign(
             )
             .background(fill, CircleShape)
             .border(width = 5.5.dp, color = ring, shape = CircleShape)
-            .then(clickableModifier)
+            .then(interactionModifier)
             .semantics {
                 contentDescription = buildString {
                     append("Speed limit $limitKmh kilometers per hour")
                     if (isLive) append(", live road data")
                     if (onClick != null) append(". Tap to change manually.")
+                    if (onLongClick != null) append(" Long press to use road limit from map data.")
                 }
             },
         contentAlignment = Alignment.Center

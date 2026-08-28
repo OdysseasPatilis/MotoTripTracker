@@ -159,6 +159,13 @@ class TripRepository @Inject constructor(
     }
 
     fun deleteTrip(id: Long) {
+        val points = routePointBox.query()
+            .equal(RoutePointEntity_.tripId, id)
+            .build()
+            .find()
+        if (points.isNotEmpty()) {
+            routePointBox.remove(points)
+        }
         tripBox.remove(id)
         AppLogger.i(AppLogger.Category.PERSISTENCE, "Deleted trip id=$id")
     }

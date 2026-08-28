@@ -9,6 +9,12 @@ enum class ThemeMode {
     LIGHT;
 
     fun toggled(): ThemeMode = if (this == DARK) LIGHT else DARK
+
+    val label: String
+        get() = when (this) {
+            DARK -> "Dark"
+            LIGHT -> "Light"
+        }
 }
 
 data class AppPalette(

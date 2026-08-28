@@ -3,7 +3,10 @@ package com.odys.mototriptracker.ui.tracker
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.odys.mototriptracker.data.location.LocationRepository
+import com.odys.mototriptracker.data.navigation.NavigationSearchResult
+import com.odys.mototriptracker.data.navigation.NavigationService
 import com.odys.mototriptracker.domain.GpsQuality
+import com.odys.mototriptracker.domain.TripManager
 import com.odys.mototriptracker.domain.usecase.ObserveRideSessionUseCase
 import com.odys.mototriptracker.domain.usecase.PauseRideUseCase
 import com.odys.mototriptracker.domain.usecase.ResumeRideUseCase
@@ -12,6 +15,7 @@ import com.odys.mototriptracker.domain.usecase.StopRideUseCase
 import com.odys.mototriptracker.util.AppLogger
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -23,6 +27,8 @@ import javax.inject.Inject
 @HiltViewModel
 class RideTrackerViewModel @Inject constructor(
     observeRideSessionUseCase: ObserveRideSessionUseCase,
+    private val tripManager: TripManager,
+    private val navigationService: NavigationService,
     private val locationRepository: LocationRepository,
     private val startRideUseCase: StartRideUseCase,
     private val stopRideUseCase: StopRideUseCase,
@@ -31,26 +37,45 @@ class RideTrackerViewModel @Inject constructor(
 ) : ViewModel() {
 
     private val dashboardGpsAccuracy = MutableStateFlow<Float?>(null)
+    private val showDestinationSearch = MutableStateFlow(false)
+    private val discardBanner = MutableStateFlow<String?>(null)
     private var dashboardLocationJob: Job? = null
 
-    val uiState: StateFlow<RideTrackerUiState> = combine(
+    private val dashboardInputs = combine(
         observeRideSessionUseCase(),
+        tripManager.routeCoordinates,
+        navigationService.state,
         dashboardGpsAccuracy,
         locationRepository.lastLocation
-    ) { session, dashAccuracy, lastLocation ->
-        // Prefer live fused location so the indicator updates when idle / paused (iOS parity).
-        val liveAccuracy = lastLocation?.takeIf { it.hasAccuracy() && it.accuracy >= 0f }?.accuracy
-            ?: dashAccuracy
-            ?: session.stats.gpsAccuracyMeters
+    ) { session, routeCoordinates, navigation, dashAccuracy, lastLocation ->
+        DashboardInputs(session, routeCoordinates, navigation, dashAccuracy, lastLocation)
+    }
+
+    val uiState: StateFlow<RideTrackerUiState> = combine(
+        dashboardInputs,
+        showDestinationSearch,
+        discardBanner
+    ) { inputs, showSearch, banner ->
+        val liveAccuracy = inputs.lastLocation?.takeIf { it.hasAccuracy() && it.accuracy >= 0f }?.accuracy
+            ?: inputs.dashAccuracy
+            ?: inputs.session.stats.gpsAccuracyMeters
         val liveQuality = GpsQuality.fromAccuracyMeters(liveAccuracy)
 
         RideTrackerUiState(
-            stats = session.stats.copy(
+            stats = inputs.session.stats.copy(
                 gpsAccuracyMeters = liveAccuracy,
                 gpsQuality = liveQuality
             ),
-            isTracking = session.isActive,
-            isPaused = session.isPaused
+            isTracking = inputs.session.isActive,
+            isPaused = inputs.session.isPaused,
+            routeCoordinates = inputs.routeCoordinates,
+            navigation = inputs.navigation,
+            discardBanner = banner,
+            showDestinationSearch = showSearch,
+            lastLatitude = inputs.lastLocation?.latitude,
+            lastLongitude = inputs.lastLocation?.longitude,
+            lastBearing = inputs.lastLocation?.bearing ?: 0f,
+            lastSpeedMps = inputs.lastLocation?.speed ?: 0f
         )
     }.stateIn(
         scope = viewModelScope,
@@ -60,9 +85,15 @@ class RideTrackerViewModel @Inject constructor(
 
     init {
         startDashboardGps()
+        viewModelScope.launch {
+            locationRepository.lastLocation.collect { location ->
+                location?.let {
+                    navigationService.updateOrigin(it.latitude, it.longitude)
+                }
+            }
+        }
     }
 
-    /** Keep a GPS fix warm while the tracker screen is visible (idle or after stop). */
     private fun startDashboardGps() {
         if (dashboardLocationJob?.isActive == true) return
         dashboardLocationJob = viewModelScope.launch {
@@ -79,43 +110,58 @@ class RideTrackerViewModel @Inject constructor(
     }
 
     fun startRide() {
-        if (uiState.value.isTracking) {
-            AppLogger.d(AppLogger.Category.UI, "startRide ignored — already tracking")
-            return
-        }
-        AppLogger.i(AppLogger.Category.UI, "startRide requested")
+        if (uiState.value.isTracking) return
         startRideUseCase()
     }
 
     fun stopRide() {
-        if (!uiState.value.isTracking) {
-            AppLogger.d(AppLogger.Category.UI, "stopRide ignored — not tracking")
-            return
-        }
-
-        AppLogger.i(AppLogger.Category.UI, "stopRide requested")
+        if (!uiState.value.isTracking) return
         val result = stopRideUseCase()
-        if (result.isTooShort) {
-            AppLogger.w(
-                AppLogger.Category.UI,
-                "Ride too short (${result.distanceMeters}m < ${StopRideUseCase.MIN_DISTANCE_METERS}m)"
-            )
+        if (!result.saved) {
+            discardBanner.value = "Ride too short — not saved"
+            viewModelScope.launch {
+                delay(2_500)
+                discardBanner.value = null
+            }
         }
     }
 
     fun togglePause() {
         val state = uiState.value
-        if (!state.isTracking) {
-            AppLogger.d(AppLogger.Category.UI, "togglePause ignored — not tracking")
-            return
-        }
-
-        if (state.isPaused) {
-            AppLogger.i(AppLogger.Category.UI, "resumeRide requested")
-            resumeRideUseCase()
-        } else {
-            AppLogger.i(AppLogger.Category.UI, "pauseRide requested")
-            pauseRideUseCase()
-        }
+        if (!state.isTracking) return
+        if (state.isPaused) resumeRideUseCase() else pauseRideUseCase()
     }
+
+    fun showDestinationSearch() {
+        showDestinationSearch.value = true
+    }
+
+    fun dismissDestinationSearch() {
+        showDestinationSearch.value = false
+    }
+
+    fun onNavigationQueryChange(query: String) {
+        navigationService.updateSearchQuery(query)
+    }
+
+    fun selectNavigationResult(result: NavigationSearchResult) {
+        navigationService.selectSearchResult(result)
+        showDestinationSearch.value = false
+    }
+
+    fun clearNavigation() {
+        navigationService.clear()
+    }
+
+    fun openNavigationInMaps() {
+        navigationService.openInGoogleMaps()
+    }
+
+    private data class DashboardInputs(
+        val session: com.odys.mototriptracker.domain.RideSessionState,
+        val routeCoordinates: List<com.odys.mototriptracker.domain.RouteCoordinate>,
+        val navigation: com.odys.mototriptracker.data.navigation.NavigationState,
+        val dashAccuracy: Float?,
+        val lastLocation: android.location.Location?
+    )
 }

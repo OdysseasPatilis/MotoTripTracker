@@ -37,8 +37,7 @@ fun RideTrackerRoute(
     RequestTrackingPermissions()
 
     RideTrackerScreen(
-        stats = uiState.stats,
-        isTracking = uiState.isTracking,
+        uiState = uiState,
         isLocationEnabled = isLocationEnabled,
         onStartRide = {
             val hasLocation = ContextCompat.checkSelfPermission(
@@ -55,7 +54,12 @@ fun RideTrackerRoute(
         onViewHistory = onViewHistory,
         onViewLeaderboard = onViewLeaderboard,
         onPauseRide = viewModel::togglePause,
-        isPaused = uiState.isPaused
+        onShowDestinationSearch = viewModel::showDestinationSearch,
+        onDismissDestinationSearch = viewModel::dismissDestinationSearch,
+        onNavigationQueryChange = viewModel::onNavigationQueryChange,
+        onSelectNavigationResult = viewModel::selectNavigationResult,
+        onClearNavigation = viewModel::clearNavigation,
+        onOpenNavigationInMaps = viewModel::openNavigationInMaps
     )
 }
 

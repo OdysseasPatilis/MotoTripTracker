@@ -25,6 +25,9 @@ class TripManager @Inject constructor(
     private val _sessionState = MutableStateFlow(RideSessionState())
     val sessionState: StateFlow<RideSessionState> = _sessionState.asStateFlow()
 
+    private val _routeCoordinates = MutableStateFlow<List<RouteCoordinate>>(emptyList())
+    val routeCoordinates: StateFlow<List<RouteCoordinate>> = _routeCoordinates.asStateFlow()
+
     private var lastLocation: Location? = null
     private var isTracking = false
     private var isPaused = false
@@ -40,6 +43,7 @@ class TripManager @Inject constructor(
         isPaused = false
         lastLocation = null
         sessionMaxSpeedKmh = 0f
+        _routeCoordinates.value = emptyList()
         stopDetector.reset()
         speedSmoother.reset()
         cornerDetector.reset()
@@ -220,6 +224,9 @@ class TripManager @Inject constructor(
         }
 
         lastLocation = location
+        _routeCoordinates.update {
+            it + RouteCoordinate(location.latitude, location.longitude)
+        }
 
         tripRepository.addRoutePointAndUpdateStats(
             tripId = currentTripId,
@@ -241,10 +248,13 @@ class TripManager @Inject constructor(
         }
     }
 
-    fun stopTrip() {
+    /**
+     * Stops the ride. Returns `false` when the ride was discarded for being too short.
+     */
+    fun stopTrip(minDistanceMeters: Float = MIN_SAVE_DISTANCE_METERS): Boolean {
         if (!isTracking) {
             AppLogger.d(AppLogger.Category.TRIP, "Stop ignored — not tracking")
-            return
+            return false
         }
         isTracking = false
         isPaused = false
@@ -281,14 +291,30 @@ class TripManager @Inject constructor(
             )
         }
 
-        tripRepository.saveTrip(stoppedTripId, _tripStats.value)
+        val stats = _tripStats.value
+        val saved = if (stats.distanceMeters < minDistanceMeters) {
+            tripRepository.deleteTrip(stoppedTripId)
+            AppLogger.i(
+                AppLogger.Category.TRIP,
+                "Trip discarded id=$stoppedTripId dist=${stats.distanceMeters}m < ${minDistanceMeters}m"
+            )
+            false
+        } else {
+            tripRepository.saveTrip(stoppedTripId, stats)
+            AppLogger.i(
+                AppLogger.Category.TRIP,
+                "Trip stopped id=$stoppedTripId — ${AppLogger.tripSummary(stats)}"
+            )
+            true
+        }
+
+        _routeCoordinates.value = emptyList()
+        currentTripId = 0L
         stopDetector.reset()
-        AppLogger.i(
-            AppLogger.Category.TRIP,
-            "Trip stopped id=$stoppedTripId — ${AppLogger.tripSummary(_tripStats.value)}"
-        )
+        cornerDetector.reset()
         LogThrottle.resetAll()
         publishSession()
+        return saved
     }
 
     private fun publishSession() {
@@ -300,6 +326,7 @@ class TripManager @Inject constructor(
     }
 
     companion object {
+        const val MIN_SAVE_DISTANCE_METERS = 50f
         private const val MOVING_SPEED_MPS = 0.1f
         private const val MAX_PLAUSIBLE_SPEED_KMH = 300f
         private const val MAX_STEP_METERS = 80f
