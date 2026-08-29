@@ -7,6 +7,7 @@ import com.odys.mototriptracker.data.checkpoint.RoutePointEntity
 import com.odys.mototriptracker.data.checkpoint.RoutePointEntity_
 import com.odys.mototriptracker.data.waypoint.AdvancedWaypointAnalyzer
 import com.odys.mototriptracker.domain.TripStats
+import com.odys.mototriptracker.domain.TwistinessCalculator
 import com.odys.mototriptracker.util.AppLogger
 import dagger.hilt.android.qualifiers.ApplicationContext
 import io.objectbox.BoxStore
@@ -89,6 +90,11 @@ class TripRepository @Inject constructor(
         trip.distanceMeters = finalStats.distanceMeters
         trip.maxLateralGForce = finalStats.maxLateralGForce
         trip.cornerCount = finalStats.cornerCount
+        trip.twistinessScore = TwistinessCalculator.score(
+            cornerCount = finalStats.cornerCount,
+            distanceKm = finalStats.distanceMeters / 1000.0,
+            maxLateralGForce = finalStats.maxLateralGForce.toDouble()
+        ).toFloat()
 
         // 1. Fetch all the raw GPS points
         val savedPoints = trip.routePoints

@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -38,7 +39,8 @@ import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material.icons.filled.Navigation
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.TurnRight
+import androidx.compose.material.icons.filled.LocalGasStation
+import androidx.compose.material.icons.filled.WbSunny
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Surface
@@ -52,9 +54,17 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.ui.draw.alpha
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.input.pointer.pointerInput
+import com.odys.mototriptracker.data.navigation.NavigationState
 import com.odys.mototriptracker.ui.tracker.DestinationSearchSheet
 import com.odys.mototriptracker.ui.tracker.LiveRideMapView
 import com.odys.mototriptracker.ui.tracker.RideTrackerUiState
+import androidx.compose.material.icons.filled.TurnRight
+import androidx.compose.material.icons.filled.Place
+import com.odys.mototriptracker.data.fuel.FuelService
+import com.odys.mototriptracker.domain.TwistinessCalculator
+import com.odys.mototriptracker.ui.tracker.FuelSettingsSheet
+import com.odys.mototriptracker.ui.tracker.PetrolStationsSheet
+import com.odys.mototriptracker.ui.tracker.RouteWeatherSheet
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Scaffold
@@ -119,6 +129,7 @@ import androidx.compose.ui.platform.LocalView
 fun RideTrackerScreen(
     uiState: RideTrackerUiState,
     isLocationEnabled: Boolean,
+    fuelService: FuelService,
     onStartRide: () -> Unit,
     onStopRide: () -> Unit,
     onViewHistory: () -> Unit,
@@ -126,6 +137,16 @@ fun RideTrackerScreen(
     onPauseRide: () -> Unit,
     onShowDestinationSearch: () -> Unit,
     onDismissDestinationSearch: () -> Unit,
+    onShowFuelSettings: () -> Unit,
+    onDismissFuelSettings: () -> Unit,
+    onShowRouteWeather: () -> Unit,
+    onDismissRouteWeather: () -> Unit,
+    onShowPetrolStations: () -> Unit,
+    onDismissPetrolStations: () -> Unit,
+    onSelectPetrolStation: (com.odys.mototriptracker.data.petrol.PetrolStationRecommendation) -> Unit,
+    onLoadPetrolDetails: (com.odys.mototriptracker.data.petrol.PetrolStationRecommendation) -> Unit,
+    onClearPetrolDetails: () -> Unit,
+    petrolPreferences: com.odys.mototriptracker.data.petrol.PetrolPreferences,
     onNavigationQueryChange: (String) -> Unit,
     onSelectNavigationResult: (NavigationSearchResult) -> Unit,
     onClearNavigation: () -> Unit,
@@ -155,9 +176,42 @@ fun RideTrackerScreen(
         DestinationSearchSheet(
             query = navigation.searchQuery,
             results = navigation.searchResults,
+            isSearching = navigation.isSearching,
+            searchError = navigation.searchError,
             onQueryChange = onNavigationQueryChange,
             onSelectResult = onSelectNavigationResult,
             onDismiss = onDismissDestinationSearch
+        )
+    }
+    if (uiState.showFuelSettings) {
+        FuelSettingsSheet(
+            fuelService = fuelService,
+            petrolPreferences = petrolPreferences,
+            tankCapacity = uiState.tankCapacityLiters,
+            fuelRemaining = uiState.fuelRemainingLiters,
+            consumption = uiState.fuelConsumption,
+            onDismiss = onDismissFuelSettings
+        )
+    }
+    if (uiState.showRouteWeather) {
+        RouteWeatherSheet(
+            weather = uiState.weather,
+            onDismiss = onDismissRouteWeather
+        )
+    }
+    if (uiState.showPetrolStations) {
+        PetrolStationsSheet(
+            stations = uiState.petrolStations,
+            plan = uiState.petrolPlan,
+            isLoading = uiState.petrolLoading,
+            preferences = petrolPreferences,
+            preferredOctanes = uiState.preferredOctanes,
+            googleDetails = uiState.petrolDetails,
+            googleDetailsLoading = uiState.petrolDetailsLoading,
+            onGo = onSelectPetrolStation,
+            onRequestDetails = onLoadPetrolDetails,
+            onClearDetails = onClearPetrolDetails,
+            onDismiss = onDismissPetrolStations
         )
     }
 
@@ -259,6 +313,22 @@ fun RideTrackerScreen(
                                     leadingIcon = { Icon(Icons.Filled.EmojiEvents, contentDescription = null) }
                                 )
                                 DropdownMenuItem(
+                                    text = { Text("Fuel & Range") },
+                                    onClick = {
+                                        optionsExpanded = false
+                                        onShowFuelSettings()
+                                    },
+                                    leadingIcon = { Icon(Icons.Filled.LocalGasStation, contentDescription = null) }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Find Petrol") },
+                                    onClick = {
+                                        optionsExpanded = false
+                                        onShowPetrolStations()
+                                    },
+                                    leadingIcon = { Icon(Icons.Filled.Place, contentDescription = null) }
+                                )
+                                DropdownMenuItem(
                                     text = { Text("${themeMode.toggled().label} Mode") },
                                     onClick = {
                                         optionsExpanded = false
@@ -276,39 +346,91 @@ fun RideTrackerScreen(
                         }
                     }
 
-                    Box(
+                    Column(
                         modifier = Modifier
                             .align(Alignment.BottomCenter)
                             .fillMaxWidth()
-                            .padding(horizontal = 12.dp, vertical = 12.dp)
+                            .padding(horizontal = 12.dp, vertical = 12.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
+                        if (navigation.hasDestination &&
+                            (navigation.currentStep != null || navigation.isRecalculating || navigation.isOffRoute)
+                        ) {
+                            ManeuverBanner(navigation = navigation, palette = palette)
+                        }
                         if (navigation.hasDestination) {
                             ActiveRouteBanner(
                                 destinationName = navigation.destinationName ?: "Destination",
-                                summaryText = if (navigation.isRouting) {
-                                    "Calculating route…"
-                                } else {
-                                    navigation.summaryText
+                                summaryText = when {
+                                    navigation.isRouting -> "Calculating route…"
+                                    navigation.isRecalculating -> "Recalculating route…"
+                                    else -> navigation.summaryText
                                 },
                                 palette = palette,
                                 onOpenInMaps = onOpenNavigationInMaps,
-                                onClear = onClearNavigation
+                                onClear = onClearNavigation,
+                                onShowWeather = if (uiState.weather.hasData) onShowRouteWeather else null
                             )
                         } else {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Surface(
+                                    onClick = onShowDestinationSearch,
+                                    shape = RoundedCornerShape(999.dp),
+                                    color = palette.bgPanel.copy(alpha = 0.82f),
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                    ) {
+                                        Icon(
+                                            Icons.Filled.Search,
+                                            contentDescription = null,
+                                            tint = palette.textSecondary,
+                                            modifier = Modifier.size(22.dp)
+                                        )
+                                        Text(
+                                            "Set destination",
+                                            color = palette.textSecondary,
+                                            fontSize = 16.sp,
+                                            fontWeight = FontWeight.Medium
+                                        )
+                                    }
+                                }
+                                IconButton(
+                                    onClick = onShowPetrolStations,
+                                    modifier = Modifier
+                                        .size(44.dp)
+                                        .clip(CircleShape)
+                                        .background(palette.bgPanel.copy(alpha = 0.82f))
+                                ) {
+                                    Icon(
+                                        Icons.Filled.LocalGasStation,
+                                        contentDescription = "Nearest petrol",
+                                        tint = if (uiState.isLowFuel) palette.neonRed else palette.neonGreen
+                                    )
+                                }
+                            }
                             Surface(
-                                onClick = onShowDestinationSearch,
                                 shape = RoundedCornerShape(999.dp),
                                 color = palette.bgPanel.copy(alpha = 0.82f),
-                                modifier = Modifier.fillMaxWidth()
+                                modifier = Modifier.wrapContentWidth()
                             ) {
-                                Row(
-                                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                ) {
-                                    Icon(Icons.Filled.Search, contentDescription = null, tint = palette.textSecondary)
-                                    Text("Set destination", color = palette.textSecondary)
-                                }
+                                Text(
+                                    text = buildString {
+                                        append(uiState.fuelRangeSummary)
+                                        if (uiState.isLowFuel) append(" · Low")
+                                    },
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                                    color = if (uiState.isLowFuel) palette.neonRed else palette.textSecondary,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.SemiBold
+                                )
                             }
                         }
                     }
@@ -376,10 +498,16 @@ fun RideTrackerScreen(
                     }
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         StatCard(
-                            "LATERAL G",
-                            String.format("%.2f G", if (isTracking) stats.currentLateralGForce else stats.maxLateralGForce),
+                            "TWISTINESS",
+                            TwistinessCalculator.formattedScore(
+                                TwistinessCalculator.score(
+                                    stats.cornerCount,
+                                    stats.distanceKm.toDouble(),
+                                    stats.maxLateralGForce.toDouble()
+                                )
+                            ),
                             Modifier.weight(1f),
-                            valueColor = palette.neonGreen,
+                            valueColor = palette.neonBlue,
                             palette = palette
                         )
                         StatCard("CORNERS", "${stats.cornerCount}", Modifier.weight(1f), palette = palette)
@@ -395,7 +523,7 @@ fun RideTrackerScreen(
         )
 
         AnimatedVisibility(
-            visible = uiState.discardBanner != null,
+            visible = uiState.discardBanner != null || uiState.petrolMessage != null,
             enter = slideInVertically { -it } + fadeIn(),
             exit = slideOutVertically { -it } + fadeOut(),
             modifier = Modifier
@@ -410,6 +538,18 @@ fun RideTrackerScreen(
                 ) {
                     Text(
                         text = banner,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+                        color = palette.textPrimary,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+            } ?: uiState.petrolMessage?.let { message ->
+                Surface(
+                    shape = RoundedCornerShape(999.dp),
+                    color = palette.bgPanel.copy(alpha = 0.92f)
+                ) {
+                    Text(
+                        text = message,
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
                         color = palette.textPrimary,
                         fontWeight = FontWeight.SemiBold
@@ -490,7 +630,8 @@ private fun ActiveRouteBanner(
     summaryText: String,
     palette: AppPalette,
     onOpenInMaps: () -> Unit,
-    onClear: () -> Unit
+    onClear: () -> Unit,
+    onShowWeather: (() -> Unit)? = null
 ) {
     Row(
         modifier = Modifier
@@ -506,11 +647,69 @@ private fun ActiveRouteBanner(
             Text(destinationName, color = palette.textPrimary, fontWeight = FontWeight.SemiBold, maxLines = 1)
             Text(summaryText, color = palette.textSecondary, fontSize = 12.sp, maxLines = 1)
         }
+        if (onShowWeather != null) {
+            IconButton(onClick = onShowWeather) {
+                Icon(Icons.Filled.WbSunny, contentDescription = "Route weather", tint = palette.routeAmber)
+            }
+        }
         IconButton(onClick = onOpenInMaps) {
             Icon(Icons.Filled.Navigation, contentDescription = "Open in Google Maps", tint = palette.neonGreen)
         }
         IconButton(onClick = onClear) {
             Icon(Icons.Filled.Close, contentDescription = "Clear destination", tint = palette.textSecondary)
+        }
+    }
+}
+
+@Composable
+private fun ManeuverBanner(
+    navigation: NavigationState,
+    palette: AppPalette
+) {
+    val accent = if (navigation.isOffRoute || navigation.isRecalculating) palette.routeAmber else palette.neonBlue
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .background(palette.bgPanel.copy(alpha = 0.92f))
+            .padding(horizontal = 12.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .size(48.dp)
+                .clip(RoundedCornerShape(12.dp))
+                .background(accent),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(Icons.Filled.TurnRight, contentDescription = null, tint = palette.bgDeep)
+        }
+        Column(modifier = Modifier.weight(1f)) {
+            when {
+                navigation.isRecalculating -> {
+                    Text("Recalculating route…", color = palette.textPrimary, fontWeight = FontWeight.SemiBold)
+                    Text("Finding a better path", color = palette.textSecondary, fontSize = 12.sp)
+                }
+                navigation.isOffRoute -> {
+                    Text("Off route", color = palette.textPrimary, fontWeight = FontWeight.SemiBold)
+                    Text("Hold on — recalculating", color = palette.textSecondary, fontSize = 12.sp)
+                }
+                navigation.currentStep != null -> {
+                    Text(
+                        NavigationState.formatDistance(navigation.distanceToNextManeuverMeters),
+                        color = palette.textPrimary,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 18.sp
+                    )
+                    Text(
+                        navigation.currentStep.instruction,
+                        color = palette.textSecondary,
+                        fontSize = 12.sp,
+                        maxLines = 2
+                    )
+                }
+            }
         }
     }
 }

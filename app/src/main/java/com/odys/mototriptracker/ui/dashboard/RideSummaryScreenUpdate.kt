@@ -71,6 +71,7 @@ import com.google.maps.android.compose.Polyline
 import com.google.maps.android.compose.rememberCameraPositionState
 import com.odys.mototriptracker.data.export.displayTitle
 import com.odys.mototriptracker.data.trip.TripEntity
+import com.odys.mototriptracker.domain.TwistinessCalculator
 import com.odys.mototriptracker.domain.RideMoment
 import com.odys.mototriptracker.domain.RideMoments
 import com.odys.mototriptracker.ui.theme.AppPalette
@@ -579,6 +580,7 @@ private fun StatsGrid(
         StatItem("Elevation",  "+${summary.elevationGain.toInt()}",  "meters", palette.textPrimary),
         StatItem("Max G",      String.format("%.2f", summary.maxGForce), "G-force", palette.purpleAccent),
         StatItem("Lateral G",  String.format("%.2f", summary.maxLateralGForce), "G-force", palette.neonBlue),
+        StatItem("Twistiness", TwistinessCalculator.formattedScore(TwistinessCalculator.score(summary)), "score", palette.neonBlue),
         StatItem("Corners",    summary.cornerCount.toString(), "turns", palette.mint),
     )
 

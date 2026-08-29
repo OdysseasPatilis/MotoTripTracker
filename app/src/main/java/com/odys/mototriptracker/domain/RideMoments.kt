@@ -223,20 +223,21 @@ object RideMomentsCalculator {
     }
 
     private fun twistiesHighlight(trip: TripEntity): RideMoment? {
+        val score = TwistinessCalculator.score(trip)
         val distanceKm = trip.distanceMeters / 1000.0
-        if (trip.cornerCount < 3 || distanceKm < 1.0) return null
-        val per10 = trip.cornerCount / distanceKm * 10.0
-        if (per10 < 4.0) return null
-        val vibe = when {
-            per10 >= 12 -> "Proper twisties"
-            per10 >= 8 -> "Plenty of bends"
-            else -> "Nice flowing turns"
-        }
+        if (score < 25 || trip.cornerCount < 3 || distanceKm < 1.0) return null
+        val rating = TwistinessCalculator.rating(score)
+        val per10 = TwistinessCalculator.cornersPer10Km(trip.cornerCount, distanceKm)
         return RideMoment(
             id = "twisties",
-            title = "Twisties",
-            value = String.format("%.0f / 10 km", per10),
-            detail = "$vibe · ${trip.cornerCount} corners total",
+            title = "Twistiness",
+            value = "${TwistinessCalculator.formattedScore(score)} · ${rating.label}",
+            detail = String.format(
+                Locale.US,
+                "%.0f corners / 10 km · peak %.2f G lateral",
+                per10,
+                trip.maxLateralGForce
+            ),
             iconKey = "twisties"
         )
     }

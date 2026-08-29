@@ -1,6 +1,7 @@
 package com.odys.mototriptracker.domain.usecase
 
 import com.odys.mototriptracker.data.export.displayTitle
+import com.odys.mototriptracker.domain.TwistinessCalculator
 import com.odys.mototriptracker.data.trip.TripEntity
 import com.odys.mototriptracker.data.trip.TripRepository
 import javax.inject.Inject
@@ -8,7 +9,8 @@ import javax.inject.Inject
 enum class LeaderboardCategory {
     SPEED,
     DISTANCE,
-    TURNS
+    TURNS,
+    TWISTINESS
 }
 
 data class LeaderboardEntry(
@@ -67,6 +69,23 @@ class GetLeaderboardUseCase @Inject constructor(
                         rank = index + 1,
                         valueLabel = label,
                         rawValue = trip.cornerCount.toFloat()
+                    )
+                }
+
+            LeaderboardCategory.TWISTINESS -> trips
+                .map { trip ->
+                    trip to TwistinessCalculator.score(trip)
+                }
+                .filter { (_, score) -> score > 0 }
+                .sortedWith(
+                    compareByDescending<Pair<TripEntity, Double>> { it.second }
+                        .thenByDescending { it.first.startTime }
+                )
+                .mapIndexed { index, (trip, score) ->
+                    trip.toEntry(
+                        rank = index + 1,
+                        valueLabel = "${TwistinessCalculator.formattedScore(score)} · ${TwistinessCalculator.rating(score).label}",
+                        rawValue = score.toFloat()
                     )
                 }
         }

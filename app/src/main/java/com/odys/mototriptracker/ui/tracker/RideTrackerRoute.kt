@@ -39,16 +39,13 @@ fun RideTrackerRoute(
     RideTrackerScreen(
         uiState = uiState,
         isLocationEnabled = isLocationEnabled,
+        fuelService = viewModel.fuelService(),
         onStartRide = {
             val hasLocation = ContextCompat.checkSelfPermission(
                 context, Manifest.permission.ACCESS_FINE_LOCATION
             ) == PackageManager.PERMISSION_GRANTED
-
-            if (hasLocation) {
-                viewModel.startRide()
-            } else {
-                AppLogger.w(AppLogger.Category.UI, "Cannot start ride — location permission missing")
-            }
+            if (hasLocation) viewModel.startRide()
+            else AppLogger.w(AppLogger.Category.UI, "Cannot start ride — location permission missing")
         },
         onStopRide = viewModel::stopRide,
         onViewHistory = onViewHistory,
@@ -56,6 +53,16 @@ fun RideTrackerRoute(
         onPauseRide = viewModel::togglePause,
         onShowDestinationSearch = viewModel::showDestinationSearch,
         onDismissDestinationSearch = viewModel::dismissDestinationSearch,
+        onShowFuelSettings = viewModel::showFuelSettings,
+        onDismissFuelSettings = viewModel::dismissFuelSettings,
+        onShowRouteWeather = viewModel::showRouteWeather,
+        onDismissRouteWeather = viewModel::dismissRouteWeather,
+        onShowPetrolStations = viewModel::showPetrolStations,
+        onDismissPetrolStations = viewModel::dismissPetrolStations,
+        onSelectPetrolStation = viewModel::selectPetrolStation,
+        onLoadPetrolDetails = viewModel::loadPetrolDetails,
+        onClearPetrolDetails = viewModel::clearPetrolDetails,
+        petrolPreferences = viewModel.petrolPreferences(),
         onNavigationQueryChange = viewModel::onNavigationQueryChange,
         onSelectNavigationResult = viewModel::selectNavigationResult,
         onClearNavigation = viewModel::clearNavigation,
@@ -74,10 +81,7 @@ private fun RequestTrackingPermissions() {
     ) { permissions ->
         val fineLocationGranted = permissions[Manifest.permission.ACCESS_FINE_LOCATION] == true
         val coarseLocationGranted = permissions[Manifest.permission.ACCESS_COARSE_LOCATION] == true
-
-        if ((fineLocationGranted || coarseLocationGranted) &&
-            Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q
-        ) {
+        if ((fineLocationGranted || coarseLocationGranted) && Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             backgroundLocationLauncher.launch(Manifest.permission.ACCESS_BACKGROUND_LOCATION)
         }
     }
@@ -105,8 +109,7 @@ fun rememberLocationEnabledState(context: Context): State<Boolean> {
         val receiver = object : BroadcastReceiver() {
             override fun onReceive(context: Context?, intent: Intent?) {
                 if (intent?.action == LocationManager.PROVIDERS_CHANGED_ACTION) {
-                    isEnabled.value =
-                        locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)
+                    isEnabled.value = locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)
                 }
             }
         }

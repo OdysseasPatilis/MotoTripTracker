@@ -46,6 +46,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -62,10 +63,19 @@ import com.google.android.gms.maps.CameraUpdateFactory
 import com.google.android.gms.maps.model.*
 import com.google.android.gms.maps.model.LatLng
 import com.google.maps.android.compose.*
+import com.odys.mototriptracker.data.checkpoint.RoutePointEntity
 import com.odys.mototriptracker.data.trip.TripEntity
+import com.odys.mototriptracker.domain.RouteCoordinate
+import com.odys.mototriptracker.domain.RouteReplayEngine
+import com.odys.mototriptracker.domain.RouteReplayFrame
+import com.odys.mototriptracker.ui.route.RouteReplayPanel
 import com.odys.mototriptracker.ui.theme.LocalAppPalette
 import androidx.core.graphics.createBitmap
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import androidx.compose.runtime.snapshotFlow
 
 // ── Colours ───────────────────────────────────────────────────────────────────
 private val BgDark = Color(0xFF0E0E14)
@@ -165,11 +175,25 @@ private fun buildColoredSegments(
     return segments
 }
 
+private fun remainingReplayCoordinates(
+    points: List<RoutePointEntity>,
+    frame: RouteReplayFrame
+): List<RouteCoordinate> {
+    val remainingStart = minOf(frame.segmentIndex + 1, points.size - 1)
+    if (remainingStart >= points.size - 1) return emptyList()
+    val coords = points.subList(remainingStart, points.size).map {
+        RouteCoordinate(it.latitude, it.longitude)
+    }.toMutableList()
+    coords.add(0, RouteCoordinate(frame.latitude, frame.longitude))
+    return coords
+}
+
 // ── Screen ────────────────────────────────────────────────────────────────────
 @Composable
 fun FullRouteScreenGMaps(
     summary: TripEntity,
     ridePoints: List<RidePoint>,
+    routePointEntities: List<RoutePointEntity> = emptyList(),
     waypoints: List<Waypoint> ,
     onBack: () -> Unit = {},
     onShare: () -> Unit = {}
@@ -177,9 +201,50 @@ fun FullRouteScreenGMaps(
     val palette = LocalAppPalette.current
     var activeLayer by remember { mutableStateOf(MapLayer.Speed) }
     var isParentScrollEnabled by remember { mutableStateOf(true) }
-    val scrollState = rememberScrollState() // Hoist the screen scroll state
-    val cameraState = rememberCameraPositionState() // Hoist the map camera state
-    val coroutineScope = rememberCoroutineScope() // Needed for smooth animations
+    val scrollState = rememberScrollState()
+    val cameraState = rememberCameraPositionState()
+    val coroutineScope = rememberCoroutineScope()
+    var replayElapsed by remember { mutableDoubleStateOf(0.0) }
+    var isReplayPlaying by remember { mutableStateOf(false) }
+    val replayEngine = remember(routePointEntities) { RouteReplayEngine(routePointEntities) }
+    val replayFrame = remember(replayElapsed, routePointEntities) { replayEngine.frame(replayElapsed) }
+    val replayTrail = remember(replayFrame) {
+        replayFrame?.let { replayEngine.trailCoordinates(it) }.orEmpty()
+    }
+    val replayRemaining = remember(replayFrame, routePointEntities) {
+        replayFrame?.let { remainingReplayCoordinates(routePointEntities, it) }.orEmpty()
+    }
+    val isReplayActive = isReplayPlaying || replayElapsed > 0.0
+    val replayMarkerLatLng = replayFrame?.let { LatLng(it.latitude, it.longitude) }
+
+    // Zoom once when play starts, then follow with throttled instant moves (no animate → no lag).
+    LaunchedEffect(isReplayPlaying) {
+        if (!isReplayPlaying) return@LaunchedEffect
+        val start = snapshotFlow {
+            replayEngine.frame(replayElapsed)?.let { LatLng(it.latitude, it.longitude) }
+        }.filterNotNull().first()
+        cameraState.animate(CameraUpdateFactory.newLatLngZoom(start, 16f))
+        var lastMoveAt = 0L
+        snapshotFlow {
+            replayEngine.frame(replayElapsed)?.let { LatLng(it.latitude, it.longitude) }
+        }
+            .filterNotNull()
+            .collect { latLng ->
+                val now = System.currentTimeMillis()
+                if (now - lastMoveAt >= 100L) {
+                    lastMoveAt = now
+                    cameraState.move(CameraUpdateFactory.newLatLng(latLng))
+                }
+            }
+    }
+
+    LaunchedEffect(isReplayActive) {
+        if (!isReplayActive && ridePoints.isNotEmpty()) {
+            val builder = LatLngBounds.builder()
+            ridePoints.forEach { builder.include(it.latLng) }
+            cameraState.move(CameraUpdateFactory.newLatLngBounds(builder.build(), 80))
+        }
+    }
 
     Column(
         modifier = Modifier
@@ -197,7 +262,19 @@ fun FullRouteScreenGMaps(
             onLayerChange = { activeLayer = it },
             onMapTouch = { isTouched -> isParentScrollEnabled = !isTouched },
             cameraState = cameraState,
-            palette = palette
+            palette = palette,
+            isReplayActive = isReplayActive,
+            replayTrail = replayTrail.map { LatLng(it.latitude, it.longitude) },
+            replayRemaining = replayRemaining.map { LatLng(it.latitude, it.longitude) },
+            replayMarker = replayMarkerLatLng
+        )
+        Spacer(Modifier.height(8.dp))
+        RouteReplayPanel(
+            points = routePointEntities,
+            palette = palette,
+            onReplayPosition = { replayElapsed = it },
+            onReplayPlayingChanged = { isReplayPlaying = it },
+            modifier = Modifier.padding(horizontal = 20.dp)
         )
         Spacer(Modifier.height(12.dp))
         WaypointsPanel(summary, waypoints, palette, onWaypointClick = { latLng ->
@@ -270,7 +347,11 @@ private fun RouteMapCard(
     onLayerChange: (MapLayer) -> Unit,
     onMapTouch: (Boolean) -> Unit,
     cameraState: CameraPositionState,
-    palette: com.odys.mototriptracker.ui.theme.AppPalette
+    palette: com.odys.mototriptracker.ui.theme.AppPalette,
+    isReplayActive: Boolean = false,
+    replayTrail: List<LatLng> = emptyList(),
+    replayRemaining: List<LatLng> = emptyList(),
+    replayMarker: LatLng? = null
 ) {
     val bounds = remember(ridePoints) {
         // THE FIX: If the list is empty (still loading), return null safely
@@ -286,8 +367,8 @@ private fun RouteMapCard(
 
 
 // Make sure the LaunchedEffect also expects the null safely
-    LaunchedEffect(bounds) {
-        if (bounds != null) {
+    LaunchedEffect(bounds, isReplayActive) {
+        if (bounds != null && !isReplayActive) {
             cameraState.move(CameraUpdateFactory.newLatLngBounds(bounds, 80))
         }
     }
@@ -329,6 +410,11 @@ private fun RouteMapCard(
 
 // Standard pauses (Small size)
     val stopBitmap   = remember { createMarkerBitmap(Yellow.toArgb(), 18) }
+    val riderBitmap = remember { createRiderMarkerBitmap(Mint.toArgb()) }
+    val replayMarkerState = remember { MarkerState() }
+    LaunchedEffect(replayMarker) {
+        replayMarker?.let { replayMarkerState.position = it }
+    }
     Box(
         modifier = Modifier
             .padding(horizontal = 20.dp)
@@ -367,16 +453,49 @@ private fun RouteMapCard(
                 zoomGesturesEnabled = true
             )
         ) {
-            // Coloured route polylines
-            if (mapLatLngs.size >= 2) {
+            // Coloured route polylines — hidden during replay so the trail draws progressively
+            if (!isReplayActive && mapLatLngs.size >= 2) {
                 Polyline(
                     points = mapLatLngs,
-                    spans = colorSpans, // Pass the dynamically generated colors here!
+                    spans = colorSpans,
                     width = 14f,
                     jointType = JointType.ROUND,
                     startCap = RoundCap(),
                     endCap = RoundCap(),
                     zIndex = 1f
+                )
+            }
+
+            if (isReplayActive) {
+                if (replayRemaining.size >= 2) {
+                    Polyline(
+                        points = replayRemaining,
+                        color = palette.textSecondary.copy(alpha = 0.35f),
+                        width = 10f,
+                        startCap = RoundCap(),
+                        endCap = RoundCap(),
+                        zIndex = 2f
+                    )
+                }
+                if (replayTrail.size >= 2) {
+                    Polyline(
+                        points = replayTrail,
+                        color = Mint,
+                        width = 18f,
+                        startCap = RoundCap(),
+                        endCap = RoundCap(),
+                        zIndex = 4f
+                    )
+                }
+            }
+            if (replayMarker != null) {
+                Marker(
+                    state = replayMarkerState,
+                    icon = BitmapDescriptorFactory.fromBitmap(riderBitmap),
+                    anchor = Offset(0.5f, 0.5f),
+                    title = "Rider",
+                    zIndex = 5f,
+                    flat = true
                 )
             }
 
@@ -713,6 +832,40 @@ private fun createMarkerBitmap(colorArgb: Int, sizeDp: Int): Bitmap {
     val r = px / 2f
     canvas.drawCircle(r, r, r - border.strokeWidth, fill)
     canvas.drawCircle(r, r, r - border.strokeWidth, border)
+    return bmp
+}
+
+/** Soft glow ring + solid core — matches iOS replay rider annotation. */
+private fun createRiderMarkerBitmap(colorArgb: Int): Bitmap {
+    val px = 84
+    val bmp = createBitmap(px, px)
+    val canvas = AndroidCanvas(bmp)
+    val cx = px / 2f
+    val cy = px / 2f
+
+    val glow = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = android.graphics.Color.argb(
+            70,
+            android.graphics.Color.red(colorArgb),
+            android.graphics.Color.green(colorArgb),
+            android.graphics.Color.blue(colorArgb)
+        )
+        style = Paint.Style.FILL
+    }
+    canvas.drawCircle(cx, cy, px * 0.42f, glow)
+
+    val fill = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = colorArgb
+        style = Paint.Style.FILL
+    }
+    canvas.drawCircle(cx, cy, px * 0.22f, fill)
+
+    val border = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = android.graphics.Color.argb(255, 14, 14, 20)
+        style = Paint.Style.STROKE
+        strokeWidth = px * 0.06f
+    }
+    canvas.drawCircle(cx, cy, px * 0.22f, border)
     return bmp
 }
 

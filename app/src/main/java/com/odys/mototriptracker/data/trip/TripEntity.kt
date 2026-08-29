@@ -24,7 +24,8 @@ data class TripEntity(
     var title: String? = null,
     var isFavorite: Boolean = false,
     var maxLateralGForce: Float = 0f,
-    var cornerCount: Int = 0
+    var cornerCount: Int = 0,
+    var twistinessScore: Float = 0f
 ) {
     @Backlink(to = "trip")
     lateinit var routePoints: ToMany<RoutePointEntity>

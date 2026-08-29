@@ -40,6 +40,7 @@ class FullRouteViewModel @Inject constructor(
             _uiState.value = FullRouteUiState(
                 trip = details.trip,
                 ridePoints = details.routePoints.map { it.toRidePoint() },
+                routePointEntities = details.routePoints,
                 waypoints = details.waypoints.map { it.toWaypoint() },
                 isLoading = false
             )

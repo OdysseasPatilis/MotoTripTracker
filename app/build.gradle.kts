@@ -79,6 +79,7 @@ dependencies {
     implementation(libs.androidx.compose.foundation.layout)
     implementation(libs.androidx.compose.foundation)
     implementation(libs.play.services.maps)
+    implementation(libs.places)
     implementation(libs.maps.compose)
     implementation(libs.androidx.ui)
     implementation(libs.okhttp)

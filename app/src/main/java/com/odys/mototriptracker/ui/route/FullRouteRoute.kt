@@ -43,6 +43,7 @@ fun FullRouteRoute(
             FullRouteScreenGMaps(
                 summary = uiState.trip!!,
                 ridePoints = uiState.ridePoints,
+                routePointEntities = uiState.routePointEntities,
                 waypoints = uiState.waypoints,
                 onBack = onBack
             )

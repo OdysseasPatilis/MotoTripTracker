@@ -217,12 +217,14 @@ private fun categoryLabel(category: LeaderboardCategory): String = when (categor
     LeaderboardCategory.SPEED -> "Speed"
     LeaderboardCategory.DISTANCE -> "Distance"
     LeaderboardCategory.TURNS -> "Turns"
+    LeaderboardCategory.TWISTINESS -> "Twist"
 }
 
 private fun emptyMessage(category: LeaderboardCategory): String = when (category) {
     LeaderboardCategory.SPEED -> "No speed records yet"
     LeaderboardCategory.DISTANCE -> "No distance records yet"
     LeaderboardCategory.TURNS -> "No turn records yet"
+    LeaderboardCategory.TWISTINESS -> "No twistiness records yet"
 }
 
 private fun formatEntryDate(timeMs: Long): String {

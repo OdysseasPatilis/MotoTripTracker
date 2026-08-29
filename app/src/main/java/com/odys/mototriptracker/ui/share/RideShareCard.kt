@@ -19,10 +19,12 @@ import com.odys.mototriptracker.data.export.displayTitle
 import com.odys.mototriptracker.data.trip.TripEntity
 import com.odys.mototriptracker.domain.RideMoment
 import com.odys.mototriptracker.domain.RideMoments
+import com.odys.mototriptracker.domain.TwistinessCalculator
 import com.odys.mototriptracker.ui.dashboard.formatTimestampToDate
 import com.odys.mototriptracker.util.AppLogger
 import java.io.File
 import java.io.FileOutputStream
+import java.util.Locale
 
 /**
  * Share PNG card — map + moments layout matching iOS `RideShareCardRenderer`.
@@ -108,6 +110,9 @@ object RideShareCard {
         val mapRect = RectF(48f, 220f, WIDTH - 48f, 780f)
         drawRouteMap(canvas, mapRect, trip, points)
 
+        val statsRect = RectF(48f, mapRect.bottom + 24f, WIDTH - 48f, mapRect.bottom + 120f)
+        drawStatsStrip(canvas, statsRect, trip)
+
         // Distance pill
         val pill = String.format("%.1f km", trip.distanceMeters / 1000f)
         val pillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -126,7 +131,7 @@ object RideShareCard {
         canvas.drawRoundRect(pillRect, 22f, 22f, pillBg)
         canvas.drawText(pill, pillRect.left + 18f, pillRect.top + 30f, pillPaint)
 
-        var y = mapRect.bottom + 48f
+        var y = statsRect.bottom + 36f
         val sectionPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = 0x73FFFFFF
             textSize = 22f
@@ -318,6 +323,45 @@ object RideShareCard {
             val y = rect.bottom - inset - (((c.latitude - minLat) / latSpan) * h).toFloat()
             x to y
         }
+    }
+
+    private fun drawStatsStrip(canvas: Canvas, rect: RectF, trip: TripEntity) {
+        val bg = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0x0FFFFFFF }
+        canvas.drawRoundRect(rect, 20f, 20f, bg)
+
+        val twistScore = TwistinessCalculator.score(trip)
+        val items = listOf(
+            "Max" to "${trip.maxSpeed.toInt()} km/h",
+            "Twist" to if (twistScore > 0) TwistinessCalculator.formattedScore(twistScore) else "—",
+            "Corners" to "${trip.cornerCount}",
+            "Time" to formatMovingTime(trip.movingTime)
+        )
+        val columnWidth = rect.width() / items.size
+        val labelPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = 0x66FFFFFF
+            textSize = 16f
+            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+        }
+        val valuePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = 0xFFFFFFFF.toInt()
+            textSize = 24f
+            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+        }
+        val twistPaint = Paint(valuePaint).apply { color = MINT }
+
+        items.forEachIndexed { index, (label, value) ->
+            val x = rect.left + columnWidth * index + 12f
+            canvas.drawText(label.uppercase(Locale.US), x, rect.top + 28f, labelPaint)
+            canvas.drawText(value, x, rect.top + 58f, if (index == 1) twistPaint else valuePaint)
+        }
+    }
+
+    private fun formatMovingTime(seconds: Long): String {
+        val h = seconds / 3600
+        val m = (seconds % 3600) / 60
+        val s = seconds % 60
+        return if (h > 0) String.format(Locale.US, "%d:%02d:%02d", h, m, s)
+        else String.format(Locale.US, "%d:%02d", m, s)
     }
 
     private fun truncate(text: String, paint: Paint, maxWidth: Float): String {
