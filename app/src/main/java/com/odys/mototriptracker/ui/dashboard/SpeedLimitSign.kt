@@ -131,8 +131,6 @@ fun SpeedLimitSign(
                 contentDescription = buildString {
                     append("Speed limit $limitKmh kilometers per hour")
                     if (isLive) append(", live road data")
-                    if (onClick != null) append(". Tap to change manually.")
-                    if (onLongClick != null) append(" Long press to use road limit from map data.")
                 }
             },
         contentAlignment = Alignment.Center

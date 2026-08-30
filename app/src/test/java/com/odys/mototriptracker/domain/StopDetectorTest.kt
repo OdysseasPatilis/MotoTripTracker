@@ -49,12 +49,31 @@ class StopDetectorTest {
     }
 
     @Test
-    fun largeGap_isIgnored() {
+    fun moderateGap_under20Min_counts() {
         detector.updateTimes(0L, isMoving = true, ::accumulate)
-        detector.updateTimes(400_000L, isMoving = true, ::accumulate) // > 5 min
+        // ~6.6 min — previously ignored at 5 min; now counts (iOS parity).
+        val accepted = detector.updateTimes(400_000L, isMoving = true, ::accumulate)
 
+        assertEquals(true, accepted)
+        assertEquals(400_000L, movingAccum)
+        assertEquals(0L, stoppedAccum)
+    }
+
+    @Test
+    fun largeGap_over20Min_isIgnored() {
+        detector.updateTimes(0L, isMoving = true, ::accumulate)
+        val accepted = detector.updateTimes(1_300_000L, isMoving = true, ::accumulate)
+
+        assertEquals(false, accepted)
         assertEquals(0L, movingAccum)
         assertEquals(0L, stoppedAccum)
+    }
+
+    @Test
+    fun baseline_returnsFalseAndDoesNotAccumulate() {
+        val accepted = detector.updateTimes(1_000L, isMoving = true, ::accumulate)
+        assertEquals(false, accepted)
+        assertEquals(0L, movingAccum)
     }
 
     @Test

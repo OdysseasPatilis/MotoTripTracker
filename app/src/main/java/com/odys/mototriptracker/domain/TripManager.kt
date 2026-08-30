@@ -145,6 +145,7 @@ class TripManager @Inject constructor(
         val currentSpeedMps = speedFilter.getProcessedSpeed(location)
         val currentTime = location.time
         val isMoving = currentSpeedMps > MOVING_SPEED_MPS
+        val rawSpeedKmh = currentSpeedMps * 3.6f
 
         val displaySpeedKmh = if (isMoving) {
             speedSmoother.getSmoothedSpeedKmh(currentSpeedMps).toFloat()
@@ -153,8 +154,9 @@ class TripManager @Inject constructor(
             0f
         }
 
-        if (isMoving && displaySpeedKmh in 0f..MAX_PLAUSIBLE_SPEED_KMH) {
-            sessionMaxSpeedKmh = maxOf(sessionMaxSpeedKmh, displaySpeedKmh)
+        // Peak uses raw GPS speed so trip max aligns with TOP_SPEED waypoints.
+        if (isMoving && rawSpeedKmh in 0f..MAX_PLAUSIBLE_SPEED_KMH) {
+            sessionMaxSpeedKmh = maxOf(sessionMaxSpeedKmh, rawSpeedKmh)
         }
 
         if (isMoving) {
@@ -162,42 +164,51 @@ class TripManager @Inject constructor(
         }
 
         var elevationDelta = 0.0
-        var distanceDelta = 0f
-
-        lastLocation?.let { prev ->
-            if (location.hasAltitude()) {
-                elevationDelta = elevationSmoother.calculateGain(location.altitude)
-            }
-            if (isMoving) {
-                val step = prev.distanceTo(location)
-                if (step in 0f..MAX_STEP_METERS) {
-                    distanceDelta = step
-                } else if (step > MAX_STEP_METERS) {
-                    AppLogger.w(
-                        AppLogger.Category.TRIP,
-                        "Rejected GPS teleport step=${"%.1f".format(step)}m " +
-                            "(max ${MAX_STEP_METERS}m)"
-                    )
-                }
-            }
+        val prev = lastLocation
+        if (prev != null && location.hasAltitude()) {
+            elevationDelta = elevationSmoother.calculateGain(location.altitude)
         }
 
         _tripStats.update { currentStats ->
             var newMoving = currentStats.movingTime
             var newStopped = currentStats.stoppedTime
 
-            stopDetector.updateTimes(currentTime, isMoving) { movingDeltaMs, stoppedDeltaMs ->
+            val timeAccepted = stopDetector.updateTimes(currentTime, isMoving) { movingDeltaMs, stoppedDeltaMs ->
                 newMoving += movingDeltaMs / 1000L
                 newStopped += stoppedDeltaMs / 1000L
             }
 
-            val newDistance = currentStats.distanceMeters + distanceDelta
-            val movingHours = newMoving / 3600f
-            val newAvgSpeed = if (movingHours > 0f) {
-                (newDistance / 1000f) / movingHours
+            // Never grow distance when the time gap was discarded — that produces absurd avg speeds.
+            val distanceDelta = if (isMoving && timeAccepted && prev != null) {
+                val step = prev.distanceTo(location).toDouble()
+                val timeDeltaSec = (currentTime - prev.time).coerceAtLeast(0L) / 1000.0
+                RideDistanceFilter.distanceDelta(
+                    geographicMeters = step,
+                    speedMps = currentSpeedMps.toDouble(),
+                    timeDeltaSeconds = timeDeltaSec
+                ).toFloat()
             } else {
                 0f
             }
+
+            if (prev != null && isMoving && timeAccepted) {
+                val step = prev.distanceTo(location)
+                if (step > 0f && distanceDelta == 0f) {
+                    AppLogger.w(
+                        AppLogger.Category.TRIP,
+                        "Rejected GPS step=${"%.1f".format(step)}m " +
+                            "spd=${"%.1f".format(currentSpeedMps)}m/s"
+                    )
+                }
+            }
+
+            val newDistance = currentStats.distanceMeters + distanceDelta
+            val peakForAvg = maxOf(sessionMaxSpeedKmh, rawSpeedKmh).toDouble()
+            val newAvgSpeed = RideDistanceFilter.averageSpeedKmh(
+                distanceMeters = newDistance.toDouble(),
+                movingTimeSeconds = newMoving,
+                maxSpeedKmh = peakForAvg
+            )
 
             val maxLateral = maxOf(
                 currentStats.maxLateralGForce,
@@ -272,9 +283,11 @@ class TripManager @Inject constructor(
                 finalStopped += stoppedDeltaMs / 1000L
             }
 
-            val movingHours = finalMoving / 3600f
-            val totalKm = currentStats.distanceMeters / 1000f
-            val finalAvgSpeed = if (movingHours > 0f) totalKm / movingHours else 0f
+            val finalAvgSpeed = RideDistanceFilter.averageSpeedKmh(
+                distanceMeters = currentStats.distanceMeters.toDouble(),
+                movingTimeSeconds = finalMoving,
+                maxSpeedKmh = maxOf(currentStats.maxSpeed, sessionMaxSpeedKmh).toDouble()
+            )
 
             currentStats.copy(
                 speed = 0f,
@@ -329,6 +342,5 @@ class TripManager @Inject constructor(
         const val MIN_SAVE_DISTANCE_METERS = 50f
         private const val MOVING_SPEED_MPS = 0.1f
         private const val MAX_PLAUSIBLE_SPEED_KMH = 300f
-        private const val MAX_STEP_METERS = 80f
     }
 }

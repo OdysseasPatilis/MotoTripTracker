@@ -121,8 +121,6 @@ import android.graphics.BlurMaskFilter
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.draw.alpha
-import android.view.HapticFeedbackConstants
-import androidx.compose.ui.platform.LocalView
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -160,7 +158,6 @@ fun RideTrackerScreen(
     val palette = LocalAppPalette.current
     val themeStore = LocalThemeStore.current
     val themeMode by themeStore.mode.collectAsStateWithLifecycle()
-    val view = LocalView.current
 
     val effectiveSpeedLimitKmh = themeStore.effectiveLimitKmh(stats.roadSpeedLimitKmh).toFloat()
     val isAutoLimit = themeStore.hasAutoLimit(stats.roadSpeedLimitKmh)
@@ -462,15 +459,7 @@ fun RideTrackerScreen(
                                 speedLimitKmh = effectiveSpeedLimitKmh,
                                 isAutoLimit = isAutoLimit,
                                 flashPhase = flashPhase,
-                                palette = palette,
-                                onCycleSpeedLimit = {
-                                    themeStore.cycleSpeedLimit(stats.roadSpeedLimitKmh)
-                                    view.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK)
-                                },
-                                onClearManualOverride = {
-                                    themeStore.clearManualOverride()
-                                    view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
-                                }
+                                palette = palette
                             )
                             GForceBar(
                                 value = stats.currentGForce,
@@ -847,9 +836,7 @@ fun SpeedometerArc(
     speedLimitKmh: Float = 50f,
     isAutoLimit: Boolean = false,
     flashPhase: SpeedLimitFlashPhase = rememberSpeedLimitFlashPhase(speedKmh > speedLimitKmh),
-    palette: AppPalette = LocalAppPalette.current,
-    onCycleSpeedLimit: (() -> Unit)? = null,
-    onClearManualOverride: (() -> Unit)? = null
+    palette: AppPalette = LocalAppPalette.current
 ) {
     val isOverLimit = speedKmh > speedLimitKmh
     val limitPercent = (speedLimitKmh / maxSpeedKmh).coerceIn(0f, 1f)
@@ -963,9 +950,7 @@ fun SpeedometerArc(
                 isOverLimit = isOverLimit,
                 isLive = isAutoLimit,
                 flashPhase = flashPhase,
-                palette = palette,
-                onClick = onCycleSpeedLimit,
-                onLongClick = onClearManualOverride
+                palette = palette
             )
 
             val animatedSpeed by animateIntAsState(

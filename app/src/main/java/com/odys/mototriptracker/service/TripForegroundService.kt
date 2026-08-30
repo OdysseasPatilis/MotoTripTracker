@@ -95,6 +95,7 @@ class TripForegroundService : LifecycleService() {
                     speedLimitResolver.onLocationUpdate(
                         latitude = location.latitude,
                         longitude = location.longitude,
+                        speedMps = if (location.hasSpeed()) location.speed else -1f,
                         scope = lifecycleScope
                     )
                 }
@@ -161,8 +162,23 @@ class TripForegroundService : LifecycleService() {
     }
 
     override fun onTaskRemoved(rootIntent: Intent?) {
-        AppLogger.w(AppLogger.Category.SERVICE, "Task removed — stopping service")
         super.onTaskRemoved(rootIntent)
+        // Keep recording while a ride is active — swiping the task away must not kill GPS.
+        if (tripManager.sessionState.value.isActive) {
+            AppLogger.w(
+                AppLogger.Category.SERVICE,
+                "Task removed — keeping location FGS alive (ride active)"
+            )
+            ensureForeground(
+                contentText = if (tripManager.sessionState.value.isPaused) {
+                    "Ride paused"
+                } else {
+                    "Tracking your ride"
+                }
+            )
+            return
+        }
+        AppLogger.w(AppLogger.Category.SERVICE, "Task removed — stopping service")
         stopLocationCollection()
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()

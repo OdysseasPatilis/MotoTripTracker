@@ -55,10 +55,10 @@ The app is the Android counterpart of the iOS **MotoTripTracker** project, with 
 ### Road speed limits
 - Live limits from OpenStreetMap via Overpass (mirrors, 30 m then 60 m radii, 35 m / 15 s throttle)
 - On-screen speed-limit sign; translucent flash when over the limit
-- Manual fallback limit (cycled) when no live value
 - Offline SharedPreferences grid cache + neighbour soft fallback
-- Bundled Greater Athens region pack (`athens_speed_limits.json`) — offline-only inside that bbox (no Overpass)
+- Bundled Greater Athens region pack (`athens_speed_limits.json`) — used first offline; pack miss or implausible hits (e.g. 50 while riding highway speed) fall through to Overpass
 - OSM tag parsing includes country implicits (`GR:urban`, etc.)
+- No manual tap-to-override (legacy preference is cleared on launch)
 
 ### Sensors & dynamics
 - Linear acceleration → current / max G and lateral G (`GForceTracker`)
@@ -308,7 +308,8 @@ MotoTripTracker/
 
 Unit tests under `app/src/test/…`:
 
-- `StopDetectorTest` — moving / stopped accumulation and gaps
+- `StopDetectorTest` — moving / stopped accumulation, gaps up to 20 min
+- `RideDistanceFilterTest` — distance ceiling + avg-speed cap
 - `SpeedLimitParserTest` — OSM `maxspeed` parsing
 - `RideMomentsCalculatorTest` — moment titles / selection
 - `GpsQualityTest` — GPS bar thresholds

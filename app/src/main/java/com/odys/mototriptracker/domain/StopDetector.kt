@@ -16,8 +16,8 @@ class StopDetector @Inject constructor() {
     private var lastUpdateTime = 0L
     private var hasBaseline = false
 
-    /** Gaps longer than this are ignored (tunnel / sleep / background kill). */
-    private val maxValidDeltaMs = 300_000L
+    /** Gaps longer than this are ignored (app kill / multi-hour pause without GPS). */
+    private val maxValidDeltaMs = MAX_VALID_DELTA_MS
 
     fun reset() {
         lastUpdateTime = 0L
@@ -27,24 +27,25 @@ class StopDetector @Inject constructor() {
     /**
      * @param currentTimeMs location timestamp in epoch millis
      * @param isMoving true when filtered speed indicates real motion
-     * @param onTimeUpdated (movingMillis, stoppedMillis)
+     * @param onTimeUpdated (movingMillis, stoppedMillis) — only invoked when the delta is accepted
+     * @return true when the delta was accepted and applied (or was the first baseline sample)
      */
     fun updateTimes(
         currentTimeMs: Long,
         isMoving: Boolean,
         onTimeUpdated: (movingMillis: Long, stoppedMillis: Long) -> Unit
-    ) {
+    ): Boolean {
         if (!hasBaseline) {
             lastUpdateTime = currentTimeMs
             hasBaseline = true
-            return
+            return false
         }
 
         val timeDelta = currentTimeMs - lastUpdateTime
         lastUpdateTime = currentTimeMs
 
         if (timeDelta <= 0L || timeDelta > maxValidDeltaMs) {
-            return
+            return false
         }
 
         if (isMoving) {
@@ -52,5 +53,11 @@ class StopDetector @Inject constructor() {
         } else {
             onTimeUpdated(0L, timeDelta)
         }
+        return true
+    }
+
+    companion object {
+        /** 20 minutes — matches iOS `maxValidDeltaSeconds`. */
+        const val MAX_VALID_DELTA_MS = 1_200_000L
     }
 }

@@ -52,11 +52,47 @@ class SpeedLimitResolver @Inject constructor(
         AppLogger.d(AppLogger.Category.SPEED_LIMIT, "Resolver reset (kept ${cache.size} offline cells)")
     }
 
-    fun onLocationUpdate(latitude: Double, longitude: Double, scope: CoroutineScope) {
-        // Bundled city packs (e.g. Greater Athens) — offline only, no Overpass.
+    /**
+     * @param speedMps GPS speed used to detect implausible pack/cache hits
+     * (e.g. residential 50 while riding at highway speed) and fall through to Overpass.
+     */
+    fun onLocationUpdate(
+        latitude: Double,
+        longitude: Double,
+        speedMps: Float,
+        scope: CoroutineScope
+    ) {
+        // Bundled city packs first (offline). Empty cells and implausible hits fall through.
         if (regionPackStore.isInsideBundledRegion(latitude, longitude)) {
-            applyBundledRegionLimit(latitude, longitude)
-            return
+            val hit = regionPackStore.limit(latitude, longitude)
+            if (hit != null) {
+                val (pack, kmh) = hit
+                tripManager.updateRoadSpeedLimit(kmh)
+                if (LogThrottle.shouldLog("speedLimit.pack.${pack.id}", 20_000L)) {
+                    AppLogger.d(
+                        AppLogger.Category.SPEED_LIMIT,
+                        "Region pack ${pack.id} → $kmh km/h"
+                    )
+                }
+                if (limitLooksPlausible(kmh, speedMps)) {
+                    lastQueryLat = latitude
+                    lastQueryLng = longitude
+                    lastQueryTimeMs = System.currentTimeMillis()
+                    return
+                }
+                if (LogThrottle.shouldLog("speedLimit.packMismatch", 20_000L)) {
+                    AppLogger.i(
+                        AppLogger.Category.SPEED_LIMIT,
+                        "Pack $kmh km/h looks low vs GPS — querying Overpass"
+                    )
+                }
+            } else if (LogThrottle.shouldLog("speedLimit.pack.miss", 30_000L)) {
+                AppLogger.d(
+                    AppLogger.Category.SPEED_LIMIT,
+                    "Inside region pack with no cell @ ${AppLogger.coordinate(latitude, longitude)}"
+                )
+            }
+            // Miss or implausible → Overpass below.
         }
 
         if (!shouldQuery(latitude, longitude)) return
@@ -64,25 +100,29 @@ class SpeedLimitResolver @Inject constructor(
         val cacheKey = gridKey(latitude, longitude)
         if (cacheKey in cache) {
             val cached = cache[cacheKey]
-            cached?.let { tripManager.updateRoadSpeedLimit(it) }
-            lastQueryLat = latitude
-            lastQueryLng = longitude
-            lastQueryTimeMs = System.currentTimeMillis()
-            AppLogger.d(
-                AppLogger.Category.SPEED_LIMIT,
-                "Cache hit key=$cacheKey limit=${cached ?: "none"} @ ${AppLogger.coordinate(latitude, longitude)}"
-            )
-            return
+            if (cached != null && limitLooksPlausible(cached, speedMps)) {
+                tripManager.updateRoadSpeedLimit(cached)
+                lastQueryLat = latitude
+                lastQueryLng = longitude
+                lastQueryTimeMs = System.currentTimeMillis()
+                AppLogger.d(
+                    AppLogger.Category.SPEED_LIMIT,
+                    "Cache hit key=$cacheKey limit=$cached @ ${AppLogger.coordinate(latitude, longitude)}"
+                )
+                return
+            }
         }
 
         // Soft offline fallback: nearest neighbouring cell with a known limit.
-        nearestCachedLimit(latitude, longitude)?.let { nearby ->
-            tripManager.updateRoadSpeedLimit(nearby)
-            AppLogger.d(
-                AppLogger.Category.SPEED_LIMIT,
-                "Offline neighbour limit=$nearby @ ${AppLogger.coordinate(latitude, longitude)}"
-            )
-        }
+        nearestCachedLimit(latitude, longitude)
+            ?.takeIf { limitLooksPlausible(it, speedMps) }
+            ?.let { nearby ->
+                tripManager.updateRoadSpeedLimit(nearby)
+                AppLogger.d(
+                    AppLogger.Category.SPEED_LIMIT,
+                    "Offline neighbour limit=$nearby @ ${AppLogger.coordinate(latitude, longitude)}"
+                )
+            }
 
         lookupJob?.cancel()
         lookupJob = scope.launch {
@@ -117,33 +157,10 @@ class SpeedLimitResolver @Inject constructor(
         }
     }
 
-    private fun applyBundledRegionLimit(latitude: Double, longitude: Double) {
-        val hit = regionPackStore.limit(latitude, longitude)
-        if (hit != null) {
-            val (pack, kmh) = hit
-            tripManager.updateRoadSpeedLimit(kmh)
-            lastQueryLat = latitude
-            lastQueryLng = longitude
-            lastQueryTimeMs = System.currentTimeMillis()
-            if (LogThrottle.shouldLog("speedLimit.pack.${pack.id}", 20_000L)) {
-                AppLogger.d(
-                    AppLogger.Category.SPEED_LIMIT,
-                    "Region pack ${pack.id} → $kmh km/h"
-                )
-            }
-            return
-        }
-
-        // Inside pack bbox but no tagged cell nearby — keep last auto limit; never Overpass.
-        if (LogThrottle.shouldLog("speedLimit.pack.miss", 30_000L)) {
-            AppLogger.d(
-                AppLogger.Category.SPEED_LIMIT,
-                "Inside region pack with no cell @ ${AppLogger.coordinate(latitude, longitude)}"
-            )
-        }
-        lastQueryLat = latitude
-        lastQueryLng = longitude
-        lastQueryTimeMs = System.currentTimeMillis()
+    /** True when GPS speed is not clearly above the posted limit (pack/cache may be a side street). */
+    private fun limitLooksPlausible(kmh: Int, speedMps: Float): Boolean {
+        if (speedMps < 0f) return true
+        return speedMps * 3.6f <= kmh + 25f
     }
 
     private fun nearestCachedLimit(latitude: Double, longitude: Double): Int? {
@@ -179,7 +196,7 @@ class SpeedLimitResolver @Inject constructor(
     private fun gridKey(latitude: Double, longitude: Double): String {
         val latCell = truncate(latitude * GRID_SCALE).toLong()
         val lngCell = truncate(longitude * GRID_SCALE).toLong()
-        return "${latCell}_$lngCell"
+        return "${latCell}_${lngCell}"
     }
 
     private fun haversineMeters(
