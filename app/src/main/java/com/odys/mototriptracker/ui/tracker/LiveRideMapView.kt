@@ -1,11 +1,12 @@
 package com.odys.mototriptracker.ui.tracker
 
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.google.android.gms.maps.CameraUpdateFactory
 import com.google.android.gms.maps.model.CameraPosition
 import com.google.android.gms.maps.model.LatLng
@@ -22,6 +23,8 @@ import com.odys.mototriptracker.domain.RouteCoordinate
 import com.odys.mototriptracker.ui.dashboard.DARK_MAP_STYLE_JSON
 import com.odys.mototriptracker.ui.theme.AppPalette
 import com.odys.mototriptracker.ui.theme.LocalAppPalette
+import com.odys.mototriptracker.ui.theme.LocalThemeStore
+import com.odys.mototriptracker.ui.theme.ThemeMode
 
 @Composable
 fun LiveRideMapView(
@@ -37,6 +40,12 @@ fun LiveRideMapView(
     modifier: Modifier = Modifier,
     palette: AppPalette = LocalAppPalette.current
 ) {
+    val themeStore = LocalThemeStore.current
+    val themeMode by themeStore.mode.collectAsStateWithLifecycle()
+    val mapStyle = remember(themeMode) {
+        if (themeMode == ThemeMode.DARK) MapStyleOptions(DARK_MAP_STYLE_JSON) else null
+    }
+
     val cameraPositionState = rememberCameraPositionState()
     val destination = remember(destinationLatitude, destinationLongitude) {
         if (destinationLatitude != null && destinationLongitude != null) {
@@ -74,12 +83,12 @@ fun LiveRideMapView(
         cameraPositionState = cameraPositionState,
         properties = MapProperties(
             isMyLocationEnabled = true,
-            mapStyleOptions = MapStyleOptions(DARK_MAP_STYLE_JSON)
+            mapStyleOptions = mapStyle
         ),
         uiSettings = MapUiSettings(
             zoomControlsEnabled = false,
             myLocationButtonEnabled = false,
-            compassEnabled = isRiding,
+            compassEnabled = false,
             mapToolbarEnabled = false
         )
     ) {

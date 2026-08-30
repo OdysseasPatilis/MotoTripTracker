@@ -3,6 +3,10 @@ package com.odys.mototriptracker.data.navigation
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.os.Build
+import android.os.VibrationEffect
+import android.os.Vibrator
+import android.os.VibratorManager
 import com.google.android.gms.maps.model.LatLng
 import com.google.android.libraries.places.api.Places
 import com.google.android.libraries.places.api.model.AutocompleteSessionToken
@@ -49,7 +53,8 @@ import kotlin.math.sqrt
 @Singleton
 class NavigationService @Inject constructor(
     @param:ApplicationContext private val context: Context,
-    mapsApiKeyProvider: MapsApiKeyProvider
+    mapsApiKeyProvider: MapsApiKeyProvider,
+    private val voice: NavigationVoicePrompt
 ) {
     private val apiKey = mapsApiKeyProvider.getApiKey()
     private val httpClient = OkHttpClient.Builder()
@@ -60,7 +65,7 @@ class NavigationService @Inject constructor(
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
-    private val _state = MutableStateFlow(NavigationState())
+    private val _state = MutableStateFlow(NavigationState(isVoiceEnabled = voice.isEnabled))
     val state: StateFlow<NavigationState> = _state.asStateFlow()
 
     var onRouteApplied: ((List<RouteCoordinate>, Double) -> Unit)? = null
@@ -75,6 +80,8 @@ class NavigationService @Inject constructor(
     private var searchJob: Job? = null
     private var routeJob: Job? = null
     private var autocompleteToken = AutocompleteSessionToken.newInstance()
+    private var approachedStepId: String? = null
+    private var announcedStepId: String? = null
 
     private val placesClient: PlacesClient? by lazy {
         val key = apiKey?.takeIf { it.isNotBlank() } ?: return@lazy null
@@ -182,9 +189,21 @@ class NavigationService @Inject constructor(
         totalRouteDistanceMeters = 0.0
         totalTravelTimeSeconds = 0.0
         nearestRouteDistanceMeters = 0.0
-        _state.value = NavigationState()
+        approachedStepId = null
+        announcedStepId = null
+        voice.stop()
+        val voiceEnabled = _state.value.isVoiceEnabled
+        _state.value = NavigationState(isVoiceEnabled = voiceEnabled)
         onRouteCleared?.invoke()
         AppLogger.i(AppLogger.Category.UI, "Navigation cleared")
+    }
+
+    fun toggleVoice() {
+        val enabled = !_state.value.isVoiceEnabled
+        voice.isEnabled = enabled
+        _state.update { it.copy(isVoiceEnabled = enabled) }
+        if (!enabled) voice.stop()
+        AppLogger.i(AppLogger.Category.UI, "Navigation voice ${if (enabled) "on" else "off"}")
     }
 
     fun navigateToNearestPetrol(
@@ -264,6 +283,9 @@ class NavigationService @Inject constructor(
         totalRouteDistanceMeters = route.distanceMeters
         totalTravelTimeSeconds = route.travelTimeSeconds
         nearestRouteDistanceMeters = 0.0
+        approachedStepId = null
+        announcedStepId = null
+        voice.stop()
         if (isRecalculation) lastRecalculateAtMs = System.currentTimeMillis()
 
         _state.update {
@@ -845,6 +867,16 @@ class NavigationService @Inject constructor(
             return
         }
 
+        val current = steps.getOrNull(_state.value.currentStepIndex)
+        if (current != null) {
+            val toEnd = haversineMeters(
+                latitude, longitude,
+                current.endLatitude, current.endLongitude
+            )
+            _state.update { it.copy(distanceToNextManeuverMeters = toEnd) }
+            maybeAnnounceApproach(current, toEnd)
+        }
+
         var index = _state.value.currentStepIndex
         while (index < steps.size) {
             val candidate = steps[index]
@@ -859,16 +891,54 @@ class NavigationService @Inject constructor(
             break
         }
 
-        val step = steps.getOrNull(index)
-        val distanceToManeuver = step?.let {
-            haversineMeters(latitude, longitude, it.endLatitude, it.endLongitude)
-        } ?: _state.value.distanceRemainingMeters
-
         if (index != _state.value.currentStepIndex) {
-            AppLogger.i(AppLogger.Category.UI, "Advanced to step ${index + 1}/${steps.size}")
+            approachedStepId = null
+            val next = steps.getOrNull(index)
+            val distanceToManeuver = next?.let {
+                haversineMeters(latitude, longitude, it.endLatitude, it.endLongitude)
+            } ?: _state.value.distanceRemainingMeters
+            _state.update {
+                it.copy(currentStepIndex = index, distanceToNextManeuverMeters = distanceToManeuver)
+            }
+            if (next != null) {
+                AppLogger.i(
+                    AppLogger.Category.UI,
+                    "Advanced to step ${index + 1}/${steps.size}: ${next.instruction}"
+                )
+                announceStep(next)
+            }
+            lightHaptic()
         }
-        _state.update {
-            it.copy(currentStepIndex = index, distanceToNextManeuverMeters = distanceToManeuver)
+    }
+
+    private fun maybeAnnounceApproach(step: NavStep, distanceMeters: Double) {
+        if (distanceMeters > APPROACH_ANNOUNCE_METERS) return
+        if (approachedStepId == step.id) return
+        approachedStepId = step.id
+        val distance = NavigationState.formatDistance(distanceMeters)
+        voice.speak("In $distance, ${step.instruction}")
+    }
+
+    private fun announceStep(step: NavStep) {
+        if (announcedStepId == step.id) return
+        announcedStepId = step.id
+        voice.speak(step.instruction)
+    }
+
+    private fun lightHaptic() {
+        runCatching {
+            val vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                context.getSystemService(VibratorManager::class.java)?.defaultVibrator
+            } else {
+                @Suppress("DEPRECATION")
+                context.getSystemService(Vibrator::class.java)
+            } ?: return
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                vibrator.vibrate(VibrationEffect.createOneShot(25, VibrationEffect.DEFAULT_AMPLITUDE))
+            } else {
+                @Suppress("DEPRECATION")
+                vibrator.vibrate(25)
+            }
         }
     }
 
@@ -882,7 +952,7 @@ class NavigationService @Inject constructor(
             if (now - lastRecalculateAtMs >= RECALCULATE_COOLDOWN_MS) {
                 computeRoute(isRecalculation = true)
             }
-        } else if (state.isOffRoute) {
+        } else if (state.isOffRoute && nearestRouteDistanceMeters <= OFF_ROUTE_THRESHOLD_METERS / 2.0) {
             _state.update { it.copy(isOffRoute = false) }
         }
     }
@@ -931,6 +1001,7 @@ class NavigationService @Inject constructor(
     companion object {
         private const val OFF_ROUTE_THRESHOLD_METERS = 80.0
         private const val STEP_ADVANCE_METERS = 35.0
+        private const val APPROACH_ANNOUNCE_METERS = 250.0
         private const val RECALCULATE_COOLDOWN_MS = 12_000L
         private const val SEARCH_DEBOUNCE_MS = 350L
         private const val USER_AGENT = "MotoTripTracker/1.0 (Android; motorcycle trip tracker)"

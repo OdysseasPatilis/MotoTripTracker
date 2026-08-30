@@ -30,6 +30,9 @@ The app is the Android counterpart of the iOS **MotoTripTracker** project, with 
 ### Navigation (destination & route)
 - **Set destination** via search sheet (Google Places autocomplete + text search; Nominatim/Photon fallbacks)
 - **Driving route** from Directions API with **OSRM** fallback; drawn on the live map
+- **Slim turn HUD**: top next-maneuver card (icon + distance + instruction); bottom chip with remaining distance, ETA, weather, voice mute, open in Maps, clear
+- **Spoken turns** (TextToSpeech, prefers Greek): approach prompt within 250 m (`In {dist}, {instruction}`), instruction again on step advance; mute persists; light haptic on advance
+- Step advance at 35 m; off-route at 80 m with 12 s recalculate cooldown
 - Distance remaining and ETA update as you move
 - **Open in Google Maps** for voice guidance handoff; clear route from the dashboard
 - Origin is kept when clearing a destination so the next search still has a GPS fix

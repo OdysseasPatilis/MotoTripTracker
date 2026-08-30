@@ -292,6 +292,7 @@ class RideTrackerViewModel @Inject constructor(
     }
     fun clearNavigation() = navigationService.clear()
     fun openNavigationInMaps() = navigationService.openInGoogleMaps()
+    fun toggleNavigationVoice() = navigationService.toggleVoice()
     fun fuelService(): FuelService = fuelService
     fun petrolPreferences(): PetrolPreferences = petrolPreferences
 

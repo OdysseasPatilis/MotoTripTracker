@@ -11,6 +11,7 @@ data class NavigationSearchResult(
 )
 
 data class NavStep(
+    val id: String = java.util.UUID.randomUUID().toString(),
     val instruction: String,
     val distanceMeters: Double,
     val endLatitude: Double,
@@ -31,6 +32,7 @@ data class NavigationState(
     val isRouting: Boolean = false,
     val isRecalculating: Boolean = false,
     val isOffRoute: Boolean = false,
+    val isVoiceEnabled: Boolean = true,
     val steps: List<NavStep> = emptyList(),
     val currentStepIndex: Int = 0,
     val distanceToNextManeuverMeters: Double = 0.0
@@ -60,7 +62,7 @@ data class NavigationState(
         fun formatDistance(meters: Double): String = if (meters >= 1000) {
             String.format("%.1f km", meters / 1000.0)
         } else {
-            "${meters.toInt()} m"
+            "${maxOf(0, meters.toInt())} m"
         }
     }
 }

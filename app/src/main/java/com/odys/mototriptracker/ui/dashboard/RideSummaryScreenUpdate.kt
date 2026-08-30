@@ -43,6 +43,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -59,6 +60,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.google.android.gms.maps.CameraUpdateFactory
 import com.google.android.gms.maps.model.LatLngBounds
 import com.google.android.gms.maps.model.MapStyleOptions
@@ -76,6 +78,8 @@ import com.odys.mototriptracker.domain.RideMoment
 import com.odys.mototriptracker.domain.RideMoments
 import com.odys.mototriptracker.ui.theme.AppPalette
 import com.odys.mototriptracker.ui.theme.LocalAppPalette
+import com.odys.mototriptracker.ui.theme.LocalThemeStore
+import com.odys.mototriptracker.ui.theme.ThemeMode
 
 // ── Colours ──────────────────────────────────────────────────────────────────
 private val Mint = Color(0xFF5EFFC8)
@@ -393,6 +397,11 @@ fun MapPreviewCard(
     }
 
     val cameraPositionState = rememberCameraPositionState()
+    val themeStore = LocalThemeStore.current
+    val themeMode by themeStore.mode.collectAsStateWithLifecycle()
+    val mapStyle = remember(themeMode) {
+        if (themeMode == ThemeMode.DARK) MapStyleOptions(DARK_MAP_STYLE_JSON) else null
+    }
 
     // 2. Auto-Zoom to fit the route
     LaunchedEffect(decodedPath) {
@@ -422,7 +431,7 @@ fun MapPreviewCard(
             modifier = Modifier.fillMaxSize(),
             cameraPositionState = cameraPositionState,
             properties = MapProperties(
-                mapStyleOptions = MapStyleOptions(DARK_MAP_STYLE_JSON)
+                mapStyleOptions = mapStyle
             ),
             // Lock down all gestures so it feels like a static card
             uiSettings = MapUiSettings(

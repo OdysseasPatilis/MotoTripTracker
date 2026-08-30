@@ -70,7 +70,10 @@ import com.odys.mototriptracker.domain.RouteReplayEngine
 import com.odys.mototriptracker.domain.RouteReplayFrame
 import com.odys.mototriptracker.ui.route.RouteReplayPanel
 import com.odys.mototriptracker.ui.theme.LocalAppPalette
+import com.odys.mototriptracker.ui.theme.LocalThemeStore
+import com.odys.mototriptracker.ui.theme.ThemeMode
 import androidx.core.graphics.createBitmap
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
@@ -412,6 +415,15 @@ private fun RouteMapCard(
     val stopBitmap   = remember { createMarkerBitmap(Yellow.toArgb(), 18) }
     val riderBitmap = remember { createRiderMarkerBitmap(Mint.toArgb()) }
     val replayMarkerState = remember { MarkerState() }
+    val themeStore = LocalThemeStore.current
+    val themeMode by themeStore.mode.collectAsStateWithLifecycle()
+    val mapStyle = remember(themeMode) {
+        if (themeMode == ThemeMode.DARK) {
+            MapStyleOptions(DARK_MAP_STYLE_JSON)
+        } else {
+            null
+        }
+    }
     LaunchedEffect(replayMarker) {
         replayMarker?.let { replayMarkerState.position = it }
     }
@@ -442,7 +454,7 @@ private fun RouteMapCard(
             modifier = Modifier.fillMaxSize(),
             cameraPositionState = cameraState,
             properties = MapProperties(
-                mapStyleOptions = MapStyleOptions(DARK_MAP_STYLE_JSON)
+                mapStyleOptions = mapStyle
             ),
             uiSettings = MapUiSettings(
                 zoomControlsEnabled = false,

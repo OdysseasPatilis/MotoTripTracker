@@ -66,7 +66,8 @@ fun RideTrackerRoute(
         onNavigationQueryChange = viewModel::onNavigationQueryChange,
         onSelectNavigationResult = viewModel::selectNavigationResult,
         onClearNavigation = viewModel::clearNavigation,
-        onOpenNavigationInMaps = viewModel::openNavigationInMaps
+        onOpenNavigationInMaps = viewModel::openNavigationInMaps,
+        onToggleNavigationVoice = viewModel::toggleNavigationVoice
     )
 }
 

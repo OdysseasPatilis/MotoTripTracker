@@ -59,7 +59,18 @@ import com.odys.mototriptracker.ui.tracker.DestinationSearchSheet
 import com.odys.mototriptracker.ui.tracker.LiveRideMapView
 import com.odys.mototriptracker.ui.tracker.RideTrackerUiState
 import androidx.compose.material.icons.filled.TurnRight
+import androidx.compose.material.icons.filled.TurnLeft
+import androidx.compose.material.icons.filled.UTurnLeft
+import androidx.compose.material.icons.filled.Straight
+import androidx.compose.material.icons.filled.Flag
+import androidx.compose.material.icons.filled.Sync
+import androidx.compose.material.icons.filled.NorthWest
+import androidx.compose.material.icons.filled.NorthEast
+import androidx.compose.material.icons.automirrored.filled.VolumeUp
+import androidx.compose.material.icons.automirrored.filled.VolumeOff
 import androidx.compose.material.icons.filled.Place
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.style.TextOverflow
 import com.odys.mototriptracker.data.fuel.FuelService
 import com.odys.mototriptracker.domain.TwistinessCalculator
 import com.odys.mototriptracker.ui.tracker.FuelSettingsSheet
@@ -148,7 +159,8 @@ fun RideTrackerScreen(
     onNavigationQueryChange: (String) -> Unit,
     onSelectNavigationResult: (NavigationSearchResult) -> Unit,
     onClearNavigation: () -> Unit,
-    onOpenNavigationInMaps: () -> Unit
+    onOpenNavigationInMaps: () -> Unit,
+    onToggleNavigationVoice: () -> Unit
 ) {
     val stats = uiState.stats
     val isTracking = uiState.isTracking
@@ -250,96 +262,126 @@ fun RideTrackerScreen(
                         modifier = Modifier.fillMaxSize()
                     )
 
-                    Row(
+                    Column(
                         modifier = Modifier
                             .align(Alignment.TopStart)
-                            .statusBarsPadding()
-                            .padding(start = 12.dp, top = 12.dp)
-                            .clip(RoundedCornerShape(999.dp))
-                            .background(palette.bgPanel.copy(alpha = 0.82f))
-                            .padding(horizontal = 12.dp, vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            .fillMaxWidth()
+                            .statusBarsPadding(),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        GpsSignalIndicator(
-                            quality = stats.gpsQuality,
-                            accuracyMeters = stats.gpsAccuracyMeters,
-                            palette = palette
-                        )
-                        BatteryIndicator(rememberBatteryLevel(), palette)
-                    }
-
-                    if (!isRiding) {
-                        Box(
-                            modifier = Modifier
-                                .align(Alignment.TopEnd)
-                                .statusBarsPadding()
-                                .padding(end = 12.dp, top = 12.dp)
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
                         ) {
-                            IconButton(
-                                onClick = { optionsExpanded = true },
+                            // Flush to the left edge of the map.
+                            Row(
                                 modifier = Modifier
-                                    .size(42.dp)
-                                    .clip(CircleShape)
-                                    .background(palette.bgPanel.copy(alpha = 0.82f))
+                                    .clip(
+                                        RoundedCornerShape(
+                                            topStart = 0.dp,
+                                            bottomStart = 0.dp,
+                                            topEnd = 14.dp,
+                                            bottomEnd = 14.dp
+                                        )
+                                    )
+                                    .background(palette.bgPanel.copy(alpha = 0.88f))
+                                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
                             ) {
-                                Icon(
-                                    imageVector = Icons.Filled.MoreHoriz,
-                                    contentDescription = "Options",
-                                    tint = palette.textPrimary
+                                GpsSignalIndicator(
+                                    quality = stats.gpsQuality,
+                                    accuracyMeters = stats.gpsAccuracyMeters,
+                                    palette = palette
                                 )
+                                BatteryIndicator(rememberBatteryLevel(), palette)
                             }
-                            DropdownMenu(
-                                expanded = optionsExpanded,
-                                onDismissRequest = { optionsExpanded = false }
-                            ) {
-                                DropdownMenuItem(
-                                    text = { Text("Ride History") },
-                                    onClick = {
-                                        optionsExpanded = false
-                                        onViewHistory()
-                                    },
-                                    leadingIcon = { Icon(Icons.Filled.List, contentDescription = null) }
-                                )
-                                DropdownMenuItem(
-                                    text = { Text("Leaderboard") },
-                                    onClick = {
-                                        optionsExpanded = false
-                                        onViewLeaderboard()
-                                    },
-                                    leadingIcon = { Icon(Icons.Filled.EmojiEvents, contentDescription = null) }
-                                )
-                                DropdownMenuItem(
-                                    text = { Text("Fuel & Range") },
-                                    onClick = {
-                                        optionsExpanded = false
-                                        onShowFuelSettings()
-                                    },
-                                    leadingIcon = { Icon(Icons.Filled.LocalGasStation, contentDescription = null) }
-                                )
-                                DropdownMenuItem(
-                                    text = { Text("Find Petrol") },
-                                    onClick = {
-                                        optionsExpanded = false
-                                        onShowPetrolStations()
-                                    },
-                                    leadingIcon = { Icon(Icons.Filled.Place, contentDescription = null) }
-                                )
-                                DropdownMenuItem(
-                                    text = { Text("${themeMode.toggled().label} Mode") },
-                                    onClick = {
-                                        optionsExpanded = false
-                                        themeStore.toggleTheme()
-                                    },
-                                    leadingIcon = {
+
+                            if (!isRiding) {
+                                // Flush to the right edge of the map.
+                                Box {
+                                    IconButton(
+                                        onClick = { optionsExpanded = true },
+                                        modifier = Modifier
+                                            .size(42.dp)
+                                            .clip(
+                                                RoundedCornerShape(
+                                                    topStart = 14.dp,
+                                                    bottomStart = 14.dp,
+                                                    topEnd = 0.dp,
+                                                    bottomEnd = 0.dp
+                                                )
+                                            )
+                                            .background(palette.bgPanel.copy(alpha = 0.88f))
+                                    ) {
                                         Icon(
-                                            if (themeMode == ThemeMode.DARK) Icons.Filled.LightMode
-                                            else Icons.Filled.DarkMode,
-                                            contentDescription = null
+                                            imageVector = Icons.Filled.MoreHoriz,
+                                            contentDescription = "Options",
+                                            tint = palette.textPrimary
                                         )
                                     }
-                                )
+                                    DropdownMenu(
+                                        expanded = optionsExpanded,
+                                        onDismissRequest = { optionsExpanded = false }
+                                    ) {
+                                        DropdownMenuItem(
+                                            text = { Text("Ride History") },
+                                            onClick = {
+                                                optionsExpanded = false
+                                                onViewHistory()
+                                            },
+                                            leadingIcon = { Icon(Icons.Filled.List, contentDescription = null) }
+                                        )
+                                        DropdownMenuItem(
+                                            text = { Text("Leaderboard") },
+                                            onClick = {
+                                                optionsExpanded = false
+                                                onViewLeaderboard()
+                                            },
+                                            leadingIcon = { Icon(Icons.Filled.EmojiEvents, contentDescription = null) }
+                                        )
+                                        DropdownMenuItem(
+                                            text = { Text("Fuel & Range") },
+                                            onClick = {
+                                                optionsExpanded = false
+                                                onShowFuelSettings()
+                                            },
+                                            leadingIcon = { Icon(Icons.Filled.LocalGasStation, contentDescription = null) }
+                                        )
+                                        DropdownMenuItem(
+                                            text = { Text("Find Petrol") },
+                                            onClick = {
+                                                optionsExpanded = false
+                                                onShowPetrolStations()
+                                            },
+                                            leadingIcon = { Icon(Icons.Filled.Place, contentDescription = null) }
+                                        )
+                                        DropdownMenuItem(
+                                            text = { Text("${themeMode.toggled().label} Mode") },
+                                            onClick = {
+                                                optionsExpanded = false
+                                                themeStore.toggleTheme()
+                                            },
+                                            leadingIcon = {
+                                                Icon(
+                                                    if (themeMode == ThemeMode.DARK) Icons.Filled.LightMode
+                                                    else Icons.Filled.DarkMode,
+                                                    contentDescription = null
+                                                )
+                                            }
+                                        )
+                                    }
+                                }
                             }
+                        }
+
+                        if (navigation.hasDestination) {
+                            ManeuverBanner(
+                                navigation = navigation,
+                                palette = palette,
+                                modifier = Modifier.padding(horizontal = 10.dp)
+                            )
                         }
                     }
 
@@ -350,23 +392,18 @@ fun RideTrackerScreen(
                             .padding(horizontal = 12.dp, vertical = 12.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        if (navigation.hasDestination &&
-                            (navigation.currentStep != null || navigation.isRecalculating || navigation.isOffRoute)
-                        ) {
-                            ManeuverBanner(navigation = navigation, palette = palette)
-                        }
                         if (navigation.hasDestination) {
-                            ActiveRouteBanner(
-                                destinationName = navigation.destinationName ?: "Destination",
-                                summaryText = when {
-                                    navigation.isRouting -> "Calculating route…"
-                                    navigation.isRecalculating -> "Recalculating route…"
-                                    else -> navigation.summaryText
-                                },
+                            ActiveRouteChip(
+                                navigation = navigation,
                                 palette = palette,
                                 onOpenInMaps = onOpenNavigationInMaps,
                                 onClear = onClearNavigation,
-                                onShowWeather = if (uiState.weather.hasData) onShowRouteWeather else null
+                                onToggleVoice = onToggleNavigationVoice,
+                                onShowWeather = if (uiState.weather.hasData || navigation.hasRoute) {
+                                    onShowRouteWeather
+                                } else {
+                                    null
+                                }
                             )
                         } else {
                             Row(
@@ -614,38 +651,78 @@ private fun TrackerBottomBar(
 }
 
 @Composable
-private fun ActiveRouteBanner(
-    destinationName: String,
-    summaryText: String,
+private fun ActiveRouteChip(
+    navigation: NavigationState,
     palette: AppPalette,
     onOpenInMaps: () -> Unit,
     onClear: () -> Unit,
+    onToggleVoice: () -> Unit,
     onShowWeather: (() -> Unit)? = null
 ) {
+    val summary = when {
+        navigation.isRouting -> "Routing…"
+        navigation.isRecalculating -> "Recalculating…"
+        else -> navigation.summaryText
+    }
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
+            .clip(RoundedCornerShape(999.dp))
             .background(palette.bgPanel.copy(alpha = 0.88f))
-            .padding(horizontal = 14.dp, vertical = 10.dp),
+            .padding(horizontal = 12.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
+        horizontalArrangement = Arrangement.spacedBy(4.dp)
     ) {
-        Icon(Icons.Filled.TurnRight, contentDescription = null, tint = palette.neonBlue)
-        Column(modifier = Modifier.weight(1f)) {
-            Text(destinationName, color = palette.textPrimary, fontWeight = FontWeight.SemiBold, maxLines = 1)
-            Text(summaryText, color = palette.textSecondary, fontSize = 12.sp, maxLines = 1)
-        }
-        if (onShowWeather != null) {
-            IconButton(onClick = onShowWeather) {
-                Icon(Icons.Filled.WbSunny, contentDescription = "Route weather", tint = palette.routeAmber)
+        Text(
+            summary,
+            color = palette.textPrimary,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f)
+        )
+        if (onShowWeather != null && navigation.hasRoute && !navigation.isRouting) {
+            IconButton(onClick = onShowWeather, modifier = Modifier.size(32.dp)) {
+                Icon(
+                    Icons.Filled.WbSunny,
+                    contentDescription = "Route weather",
+                    tint = palette.neonBlue,
+                    modifier = Modifier.size(18.dp)
+                )
             }
         }
-        IconButton(onClick = onOpenInMaps) {
-            Icon(Icons.Filled.Navigation, contentDescription = "Open in Google Maps", tint = palette.neonGreen)
+        IconButton(onClick = onToggleVoice, modifier = Modifier.size(32.dp)) {
+            Icon(
+                imageVector = if (navigation.isVoiceEnabled) {
+                    Icons.AutoMirrored.Filled.VolumeUp
+                } else {
+                    Icons.AutoMirrored.Filled.VolumeOff
+                },
+                contentDescription = if (navigation.isVoiceEnabled) {
+                    "Mute voice guidance"
+                } else {
+                    "Enable voice guidance"
+                },
+                tint = if (navigation.isVoiceEnabled) palette.neonGreen else palette.textSecondary,
+                modifier = Modifier.size(18.dp)
+            )
         }
-        IconButton(onClick = onClear) {
-            Icon(Icons.Filled.Close, contentDescription = "Clear destination", tint = palette.textSecondary)
+        IconButton(onClick = onOpenInMaps, modifier = Modifier.size(32.dp)) {
+            Icon(
+                Icons.Filled.Navigation,
+                contentDescription = "Open in Google Maps",
+                tint = palette.neonGreen,
+                modifier = Modifier.size(18.dp)
+            )
+        }
+        IconButton(onClick = onClear, modifier = Modifier.size(32.dp)) {
+            Icon(
+                Icons.Filled.Close,
+                contentDescription = "Clear destination",
+                tint = palette.textSecondary,
+                modifier = Modifier.size(18.dp)
+            )
         }
     }
 }
@@ -653,36 +730,50 @@ private fun ActiveRouteBanner(
 @Composable
 private fun ManeuverBanner(
     navigation: NavigationState,
-    palette: AppPalette
+    palette: AppPalette,
+    modifier: Modifier = Modifier
 ) {
     val accent = if (navigation.isOffRoute || navigation.isRecalculating) palette.routeAmber else palette.neonBlue
     Row(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(14.dp))
             .background(palette.bgPanel.copy(alpha = 0.92f))
-            .padding(horizontal = 12.dp, vertical = 10.dp),
+            .padding(horizontal = 12.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         Box(
             modifier = Modifier
-                .size(48.dp)
+                .size(44.dp)
                 .clip(RoundedCornerShape(12.dp))
                 .background(accent),
             contentAlignment = Alignment.Center
         ) {
-            Icon(Icons.Filled.TurnRight, contentDescription = null, tint = palette.bgDeep)
+            Icon(
+                imageVector = maneuverIcon(navigation),
+                contentDescription = null,
+                tint = palette.bgDeep,
+                modifier = Modifier.size(24.dp)
+            )
         }
         Column(modifier = Modifier.weight(1f)) {
             when {
                 navigation.isRecalculating -> {
-                    Text("Recalculating route…", color = palette.textPrimary, fontWeight = FontWeight.SemiBold)
-                    Text("Finding a better path", color = palette.textSecondary, fontSize = 12.sp)
+                    Text(
+                        "Recalculating…",
+                        color = palette.textPrimary,
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 14.sp
+                    )
                 }
                 navigation.isOffRoute -> {
-                    Text("Off route", color = palette.textPrimary, fontWeight = FontWeight.SemiBold)
-                    Text("Hold on — recalculating", color = palette.textSecondary, fontSize = 12.sp)
+                    Text(
+                        "Off route",
+                        color = palette.textPrimary,
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 14.sp
+                    )
                 }
                 navigation.currentStep != null -> {
                     Text(
@@ -695,11 +786,46 @@ private fun ManeuverBanner(
                         navigation.currentStep.instruction,
                         color = palette.textSecondary,
                         fontSize = 12.sp,
-                        maxLines = 2
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+                navigation.isRouting -> {
+                    Text(
+                        "Calculating route…",
+                        color = palette.textPrimary,
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 14.sp
+                    )
+                }
+                else -> {
+                    Text(
+                        navigation.destinationName ?: "Destination",
+                        color = palette.textPrimary,
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 14.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
             }
         }
+    }
+}
+
+private fun maneuverIcon(navigation: NavigationState): ImageVector {
+    if (navigation.isRecalculating || navigation.isOffRoute) return Icons.Filled.Sync
+    val text = navigation.currentStep?.instruction?.lowercase().orEmpty()
+    return when {
+        "u-turn" in text || "u turn" in text -> Icons.Filled.UTurnLeft
+        "roundabout" in text || "rotary" in text -> Icons.Filled.Sync
+        "keep left" in text || "bear left" in text -> Icons.Filled.NorthWest
+        "keep right" in text || "bear right" in text -> Icons.Filled.NorthEast
+        "left" in text -> Icons.Filled.TurnLeft
+        "right" in text -> Icons.Filled.TurnRight
+        "destination" in text || "arrive" in text -> Icons.Filled.Flag
+        "straight" in text || "continue" in text -> Icons.Filled.Straight
+        else -> Icons.Filled.Navigation
     }
 }
 
