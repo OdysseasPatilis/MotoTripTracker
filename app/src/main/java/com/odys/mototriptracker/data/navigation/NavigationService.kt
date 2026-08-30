@@ -2,11 +2,11 @@ package com.odys.mototriptracker.data.navigation
 
 import android.content.Context
 import android.content.Intent
-import android.net.Uri
 import android.os.Build
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
+import androidx.core.net.toUri
 import com.google.android.gms.maps.model.LatLng
 import com.google.android.libraries.places.api.Places
 import com.google.android.libraries.places.api.model.AutocompleteSessionToken
@@ -52,10 +52,11 @@ import kotlin.math.sqrt
 
 @Singleton
 class NavigationService @Inject constructor(
-    @param:ApplicationContext private val context: Context,
+    @ApplicationContext context: Context,
     mapsApiKeyProvider: MapsApiKeyProvider,
     private val voice: NavigationVoicePrompt
 ) {
+    private val context = context
     private val apiKey = mapsApiKeyProvider.getApiKey()
     private val httpClient = OkHttpClient.Builder()
         .dns(Ipv4PreferringDns)
@@ -230,7 +231,7 @@ class NavigationService @Inject constructor(
     fun openInGoogleMaps() {
         val lat = _state.value.destinationLatitude ?: return
         val lng = _state.value.destinationLongitude ?: return
-        val uri = Uri.parse("google.navigation:q=$lat,$lng&mode=d")
+        val uri = "google.navigation:q=$lat,$lng&mode=d".toUri()
         val intent = Intent(Intent.ACTION_VIEW, uri).apply {
             setPackage("com.google.android.apps.maps")
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
@@ -241,7 +242,7 @@ class NavigationService @Inject constructor(
             context.startActivity(
                 Intent(
                     Intent.ACTION_VIEW,
-                    Uri.parse("https://www.google.com/maps/dir/?api=1&destination=$lat,$lng&travelmode=driving")
+                    "https://www.google.com/maps/dir/?api=1&destination=$lat,$lng&travelmode=driving".toUri()
                 ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             )
         }

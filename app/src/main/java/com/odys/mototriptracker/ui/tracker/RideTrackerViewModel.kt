@@ -317,7 +317,7 @@ class RideTrackerViewModel @Inject constructor(
                 return@launch
             }
             val speedKmh = uiState.value.stats.speed.toDouble().takeIf { it > 0 }
-                ?: (location.speed * 3.6).toDouble()
+                ?: (location.speed * 3.6)
             val course = location.bearing.takeIf { location.hasBearing() && it >= 0f }
             val result = petrolStationFinder.search(
                 latitude = location.latitude,

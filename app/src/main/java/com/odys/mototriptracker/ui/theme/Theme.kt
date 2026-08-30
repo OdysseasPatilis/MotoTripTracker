@@ -9,7 +9,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -42,8 +41,6 @@ fun MotoTripTrackerTheme(
     SideEffect {
         val window = activity?.window ?: return@SideEffect
         WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = !darkTheme
-        window.statusBarColor = palette.bgDeep.toArgb()
-        window.navigationBarColor = palette.bgDeep.toArgb()
     }
 
     CompositionLocalProvider(

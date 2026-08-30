@@ -29,7 +29,7 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.outlined.StarOutline
 import androidx.compose.material.icons.rounded.ChevronRight
-import androidx.compose.material.icons.rounded.DirectionsBike
+import androidx.compose.material.icons.automirrored.rounded.DirectionsBike
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.DatePicker
@@ -671,7 +671,7 @@ fun RideHistoryCard(
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
-                    Icons.Rounded.DirectionsBike,
+                    Icons.AutoMirrored.Rounded.DirectionsBike,
                     contentDescription = null,
                     tint = palette.neonGreen,
                     modifier = Modifier.size(18.dp)
@@ -694,7 +694,7 @@ fun RideHistoryCard(
                     fontWeight = FontWeight.Medium
                 )
                 Text(
-                    "${String.format("%.1f km", ride.distanceMeters / 1000f)}  ·  ${ride.avgSpeed.toInt()} km/h avg" +
+                    "${String.format(Locale.US, "%.1f km", ride.distanceMeters / 1000f)}  ·  ${ride.avgSpeed.toInt()} km/h avg" +
                         if (ride.cornerCount > 0) "  ·  ${ride.cornerCount} corners" else "",
                     color = palette.textMuted,
                     fontSize = 12.sp,

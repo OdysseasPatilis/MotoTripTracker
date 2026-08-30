@@ -1,5 +1,7 @@
 package com.odys.mototriptracker.data.petrol
 
+import java.util.Locale
+
 /** Where the rider is searching from — drives adaptive radius and highway bias. */
 enum class PetrolSearchContext {
     URBAN, TOWN, RURAL, HIGHWAY;
@@ -22,7 +24,11 @@ data class PetrolSearchPlan(
     val summary: String
         get() {
             val km = activeRadiusMeters / 1000.0
-            val radiusText = if (km >= 10) String.format("%.0f km", km) else String.format("%.1f km", km)
+            val radiusText = if (km >= 10) {
+                String.format(Locale.US, "%.0f km", km)
+            } else {
+                String.format(Locale.US, "%.1f km", km)
+            }
             return "${context.displayLabel} · within $radiusText"
         }
 }

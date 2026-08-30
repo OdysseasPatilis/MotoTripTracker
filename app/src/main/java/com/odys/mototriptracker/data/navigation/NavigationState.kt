@@ -1,6 +1,7 @@
 package com.odys.mototriptracker.data.navigation
 
 import com.odys.mototriptracker.domain.RouteCoordinate
+import java.util.Locale
 
 data class NavigationSearchResult(
     val placeId: String,
@@ -60,7 +61,7 @@ data class NavigationState(
 
     companion object {
         fun formatDistance(meters: Double): String = if (meters >= 1000) {
-            String.format("%.1f km", meters / 1000.0)
+            String.format(Locale.US, "%.1f km", meters / 1000.0)
         } else {
             "${maxOf(0, meters.toInt())} m"
         }

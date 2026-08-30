@@ -4,6 +4,7 @@ import com.odys.mototriptracker.data.export.displayTitle
 import com.odys.mototriptracker.domain.TwistinessCalculator
 import com.odys.mototriptracker.data.trip.TripEntity
 import com.odys.mototriptracker.data.trip.TripRepository
+import java.util.Locale
 import javax.inject.Inject
 
 enum class LeaderboardCategory {
@@ -52,7 +53,7 @@ class GetLeaderboardUseCase @Inject constructor(
                     val km = trip.distanceMeters / 1000f
                     trip.toEntry(
                         rank = index + 1,
-                        valueLabel = String.format("%.1f km", km),
+                        valueLabel = String.format(Locale.US, "%.1f km", km),
                         rawValue = km
                     )
                 }

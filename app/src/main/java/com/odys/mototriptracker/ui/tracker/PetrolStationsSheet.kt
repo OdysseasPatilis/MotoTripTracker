@@ -3,6 +3,7 @@ package com.odys.mototriptracker.ui.tracker
 import android.content.Intent
 import android.graphics.Bitmap
 import android.net.Uri
+import androidx.core.net.toUri
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -69,6 +70,7 @@ import com.odys.mototriptracker.data.petrol.PetrolStationRecommendation
 import com.odys.mototriptracker.data.petrol.RankedPetrolStation
 import com.odys.mototriptracker.ui.theme.AppPalette
 import com.odys.mototriptracker.ui.theme.LocalAppPalette
+import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
@@ -330,8 +332,8 @@ fun PetrolStationsSheet(
                             val count = googleDetails?.ratingCount ?: station.ratingCount
                             DetailLine(
                                 "Rating",
-                                if (count != null) String.format("%.1f · %d reviews", rating, count)
-                                else String.format("%.1f", rating),
+                                if (count != null) String.format(Locale.US, "%.1f · %d reviews", rating, count)
+                                else String.format(Locale.US, "%.1f", rating),
                                 palette
                             )
                         }
@@ -372,13 +374,11 @@ fun PetrolStationsSheet(
                             onClick = {
                                 val mapsUri = googleDetails?.googleMapsUri
                                 val intent = if (!mapsUri.isNullOrBlank()) {
-                                    Intent(Intent.ACTION_VIEW, Uri.parse(mapsUri))
+                                    Intent(Intent.ACTION_VIEW, mapsUri.toUri())
                                 } else {
                                     Intent(
                                         Intent.ACTION_VIEW,
-                                        Uri.parse(
-                                            "geo:${station.latitude},${station.longitude}?q=${station.latitude},${station.longitude}(${Uri.encode(station.name)})"
-                                        )
+                                        "geo:${station.latitude},${station.longitude}?q=${station.latitude},${station.longitude}(${Uri.encode(station.name)})".toUri()
                                     )
                                 }
                                 context.startActivity(intent)
@@ -614,7 +614,7 @@ private fun StationCard(
                         )
                         Spacer(Modifier.width(2.dp))
                         Text(
-                            String.format("%.1f", rating),
+                            String.format(Locale.US, "%.1f", rating),
                             color = palette.textSecondary,
                             fontSize = 12.sp
                         )
@@ -711,5 +711,5 @@ private fun openLabel(status: OpeningHoursEvaluator.Status): String = when (stat
 }
 
 private fun formatDistance(meters: Double): String =
-    if (meters >= 1000) String.format("%.1f km", meters / 1000.0)
+    if (meters >= 1000) String.format(Locale.US, "%.1f km", meters / 1000.0)
     else "${meters.toInt()} m"

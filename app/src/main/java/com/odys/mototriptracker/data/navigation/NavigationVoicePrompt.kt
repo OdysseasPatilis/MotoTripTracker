@@ -3,6 +3,7 @@ package com.odys.mototriptracker.data.navigation
 import android.content.Context
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
+import androidx.core.content.edit
 import com.odys.mototriptracker.util.AppLogger
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.util.Locale
@@ -17,8 +18,9 @@ import javax.inject.Singleton
  */
 @Singleton
 class NavigationVoicePrompt @Inject constructor(
-    @param:ApplicationContext private val context: Context
+    @ApplicationContext context: Context
 ) {
+    private val context = context
     private val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
     private val ready = AtomicBoolean(false)
     private var tts: TextToSpeech? = null
@@ -27,7 +29,7 @@ class NavigationVoicePrompt @Inject constructor(
         get() = if (!prefs.contains(KEY_VOICE_ENABLED)) true
         else prefs.getBoolean(KEY_VOICE_ENABLED, true)
         set(value) {
-            prefs.edit().putBoolean(KEY_VOICE_ENABLED, value).apply()
+            prefs.edit { putBoolean(KEY_VOICE_ENABLED, value) }
             if (!value) stop()
         }
 
@@ -39,13 +41,12 @@ class NavigationVoicePrompt @Inject constructor(
                 return@TextToSpeech
             }
             val engine = tts ?: return@TextToSpeech
-            val locale = preferredLocale(engine)
-            val result = engine.setLanguage(locale)
+            var locale = preferredLocale(engine)
+            var result = engine.setLanguage(locale)
             if (result == TextToSpeech.LANG_MISSING_DATA || result == TextToSpeech.LANG_NOT_SUPPORTED) {
                 AppLogger.w(AppLogger.Category.UI, "Navigation TTS locale unsupported: $locale")
-                engine.language = Locale.US
-            } else {
-                engine.language = locale
+                locale = Locale.US
+                result = engine.setLanguage(locale)
             }
             engine.setSpeechRate(0.95f)
             engine.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
@@ -55,7 +56,7 @@ class NavigationVoicePrompt @Inject constructor(
                 override fun onError(utteranceId: String?) = Unit
             })
             ready.set(true)
-            AppLogger.i(AppLogger.Category.UI, "Navigation TTS ready locale=${engine.language}")
+            AppLogger.i(AppLogger.Category.UI, "Navigation TTS ready locale=$locale setLanguage=$result")
         }
     }
 

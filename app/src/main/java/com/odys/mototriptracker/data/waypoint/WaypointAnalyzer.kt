@@ -1,6 +1,7 @@
 package com.odys.mototriptracker.data.waypoint
 
 import com.odys.mototriptracker.data.checkpoint.RoutePointEntity
+import java.util.Locale
 
 class WaypointAnalyzer {
     companion object {
@@ -55,8 +56,8 @@ class WaypointAnalyzer {
 
                             val minutes = (stopDurationMs / 1000) / 60
                             val seconds = (stopDurationMs / 1000) % 60
-                            val timeString = String.format("%02d:%02d", minutes, seconds)
-                            val kmString = String.format("%.1f", distanceAtStopStart / 1000f)
+                            val timeString = String.format(Locale.US, "%02d:%02d", minutes, seconds)
+                            val kmString = String.format(Locale.US, "%.1f", distanceAtStopStart / 1000f)
 
                             // Title logic based on duration
                             if (minutes >= 5) {
@@ -79,7 +80,7 @@ class WaypointAnalyzer {
             // --- 3. ARRIVAL WAYPOINT ---
             if (points.size > 1) {
                 val endPoint = points.last()
-                val totalKmString = String.format("%.1f", totalDistanceMeters / 1000f)
+                val totalKmString = String.format(Locale.US, "%.1f", totalDistanceMeters / 1000f)
 
                 endPoint.isWaypoint = true
                 endPoint.waypointTitle = "Arrival"

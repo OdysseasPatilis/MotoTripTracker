@@ -17,7 +17,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.ArrowBack
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -28,6 +28,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import java.util.Locale
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -55,7 +56,7 @@ fun RideSummaryScreen(summary: TripEntity, onBack: () -> Unit, onDelete: () -> U
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 IconButton(onClick = onBack) {
-                    Icon(Icons.Rounded.ArrowBack, contentDescription = "Back", tint = palette.textPrimary)
+                    Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back", tint = palette.textPrimary)
                 }
                 Text("Ride Summary", color = palette.textPrimary, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
             }
@@ -112,7 +113,7 @@ fun RideSummaryScreen(summary: TripEntity, onBack: () -> Unit, onDelete: () -> U
             }
 
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                SummaryStatCard("DISTANCE", "${String.format("%.1f ", summary.distanceMeters / 1000f)}", "km", Modifier.weight(1f), palette = palette)
+                SummaryStatCard("DISTANCE", "${String.format(Locale.US, "%.1f ", summary.distanceMeters / 1000f)}", "km", Modifier.weight(1f), palette = palette)
                 SummaryStatCard("TOTAL TIME", formatSecondsToTime(totalTime), "mm:ss", Modifier.weight(1f), palette = palette)
             }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -125,7 +126,7 @@ fun RideSummaryScreen(summary: TripEntity, onBack: () -> Unit, onDelete: () -> U
             }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 SummaryStatCard("ELEVATION", "+${summary.elevationGain.toInt()}", "meters", Modifier.weight(1f), palette = palette)
-                SummaryStatCard("MAX G", String.format("%.2f", summary.maxGForce), "G-force", Modifier.weight(1f), valueColor = palette.neonGreen, palette = palette)
+                SummaryStatCard("MAX G", String.format(Locale.US, "%.2f", summary.maxGForce), "G-force", Modifier.weight(1f), valueColor = palette.neonGreen, palette = palette)
             }
             Spacer(Modifier.height(16.dp))
         }

@@ -38,14 +38,15 @@ import com.odys.mototriptracker.data.checkpoint.RoutePointEntity
 import com.odys.mototriptracker.domain.RouteReplayEngine
 import com.odys.mototriptracker.ui.theme.AppPalette
 import kotlinx.coroutines.delay
+import java.util.Locale
 
 @Composable
 fun RouteReplayPanel(
     points: List<RoutePointEntity>,
     palette: AppPalette,
     onReplayPosition: (Double) -> Unit,
-    onReplayPlayingChanged: (Boolean) -> Unit = {},
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onReplayPlayingChanged: (Boolean) -> Unit = {}
 ) {
     val engine = remember(points) { RouteReplayEngine(points) }
     if (!engine.isValid) return
@@ -198,5 +199,5 @@ private fun formatReplayTime(seconds: Double): String {
     val total = seconds.toInt().coerceAtLeast(0)
     val m = total / 60
     val s = total % 60
-    return String.format("%d:%02d", m, s)
+    return String.format(Locale.US, "%d:%02d", m, s)
 }

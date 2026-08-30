@@ -68,9 +68,10 @@ data class GooglePetrolDetails(
 /** Google Places enrichment for petrol stations (hours, address, phone, rating). */
 @Singleton
 class PetrolPlacesEnricher @Inject constructor(
-    @param:ApplicationContext private val context: Context,
+    @ApplicationContext context: Context,
     mapsApiKeyProvider: MapsApiKeyProvider
 ) {
+    private val context = context
     private val apiKey = mapsApiKeyProvider.getApiKey()
 
     private val httpClient = OkHttpClient.Builder()
@@ -131,7 +132,7 @@ class PetrolPlacesEnricher @Inject constructor(
                     address = place.formattedAddress,
                     isOpenNow = null, // nearby isOpen is unreliable without UTC_OFFSET — resolved later
                     weekdayHours = hours,
-                    rating = place.rating?.toDouble(),
+                    rating = place.rating,
                     ratingCount = place.userRatingCount
                 )
             }
@@ -183,7 +184,6 @@ class PetrolPlacesEnricher @Inject constructor(
                 ?: emptyList()
 
             val resolvedOpen = isOpenNow
-                ?: place.isOpen
                 ?: when (GoogleWeekdayHoursParser.statusNow(hours)) {
                     OpeningHoursEvaluator.Status.OPEN -> true
                     OpeningHoursEvaluator.Status.CLOSED -> false
@@ -244,10 +244,9 @@ class PetrolPlacesEnricher @Inject constructor(
             val hours = place.currentOpeningHours?.weekdayText
                 ?: place.openingHours?.weekdayText
                 ?: emptyList()
-            val resolvedOpen = place.isOpen
-                ?: runCatching {
-                    client.isOpen(IsOpenRequest.newInstance(placeId)).awaitTask().isOpen
-                }.getOrNull()
+            val resolvedOpen = runCatching {
+                client.isOpen(IsOpenRequest.newInstance(placeId)).awaitTask().isOpen
+            }.getOrNull()
                 ?: when (GoogleWeekdayHoursParser.statusNow(hours)) {
                     OpeningHoursEvaluator.Status.OPEN -> true
                     OpeningHoursEvaluator.Status.CLOSED -> false
@@ -272,7 +271,7 @@ class PetrolPlacesEnricher @Inject constructor(
                 address = place.formattedAddress,
                 phone = place.nationalPhoneNumber
                     ?: place.internationalPhoneNumber,
-                rating = place.rating?.toDouble(),
+                rating = place.rating,
                 ratingCount = place.userRatingCount,
                 websiteUri = place.websiteUri?.toString(),
                 googleMapsUri = place.googleMapsUri?.toString(),

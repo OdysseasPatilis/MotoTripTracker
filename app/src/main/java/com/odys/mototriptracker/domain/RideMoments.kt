@@ -77,7 +77,7 @@ object RideMomentsCalculator {
             id = "peak-speed",
             title = "Peak rush",
             value = "$kmh km/h",
-            detail = "Hit ${elapsedLabel(elapsedSec)} in · ${"%.1f".format(distanceM / 1000.0)} km mark",
+            detail = "Hit ${elapsedLabel(elapsedSec)} in · ${String.format(Locale.US, "%.1f", distanceM / 1000.0)} km mark",
             iconKey = "speed"
         )
     }
@@ -107,7 +107,7 @@ object RideMomentsCalculator {
         return RideMoment(
             id = "hard-pull",
             title = "Hardest pull",
-            value = String.format("%.2f G", bestG),
+            value = String.format(Locale.US, "%.2f G", bestG),
             detail = "Strongest acceleration · ${elapsedLabel(elapsedSec)} in",
             iconKey = "bolt"
         )
@@ -297,7 +297,7 @@ object RideMomentsCalculator {
             items += RideMoment(
                 id = "long-haul",
                 title = "Distance run",
-                value = String.format("%.0f km", distanceKm),
+                value = String.format(Locale.US, "%.0f km", distanceKm),
                 detail = "A proper mileage day with highway pace",
                 iconKey = "distance"
             )
@@ -405,9 +405,9 @@ object RideMomentsCalculator {
         val minutes = (totalSeconds % 3600) / 60
         val seconds = totalSeconds % 60
         return if (hours > 0) {
-            String.format("%d:%02d:%02d", hours, minutes, seconds)
+            String.format(Locale.US, "%d:%02d:%02d", hours, minutes, seconds)
         } else {
-            String.format("%02d:%02d", minutes, seconds)
+            String.format(Locale.US, "%02d:%02d", minutes, seconds)
         }
     }
 

@@ -12,6 +12,7 @@ import android.graphics.Shader
 import android.graphics.Typeface
 import androidx.core.content.FileProvider
 import androidx.core.graphics.createBitmap
+import androidx.core.graphics.withSave
 import com.google.android.gms.maps.model.LatLng
 import com.google.maps.android.PolyUtil
 import com.odys.mototriptracker.data.checkpoint.RoutePointEntity
@@ -72,7 +73,7 @@ object RideShareCard {
 
     private fun buildShareText(trip: TripEntity): String {
         val km = trip.distanceMeters / 1000f
-        return "MotoTripTracker ride — ${String.format("%.1f", km)} km · ${formatTimestampToDate(trip.startTime)}"
+        return "MotoTripTracker ride — ${String.format(Locale.US, "%.1f", km)} km · ${formatTimestampToDate(trip.startTime)}"
     }
 
     fun render(
@@ -114,7 +115,7 @@ object RideShareCard {
         drawStatsStrip(canvas, statsRect, trip)
 
         // Distance pill
-        val pill = String.format("%.1f km", trip.distanceMeters / 1000f)
+        val pill = String.format(Locale.US, "%.1f km", trip.distanceMeters / 1000f)
         val pillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = 0xFFFFFFFF.toInt()
             textSize = 24f
@@ -180,60 +181,60 @@ object RideShareCard {
             }
             canvas.drawText("No route map", rect.centerX(), rect.centerY() + 10f, empty)
         } else {
-            canvas.save()
-            val clip = Path().apply { addRoundRect(rect, 36f, 36f, Path.Direction.CW) }
-            canvas.clipPath(clip)
+            canvas.withSave {
+                val clip = Path().apply { addRoundRect(rect, 36f, 36f, Path.Direction.CW) }
+                clipPath(clip)
 
-            // Subtle grid
-            val grid = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                color = 0x14FFFFFF
-                strokeWidth = 2f
-            }
-            var gx = rect.left + 40f
-            while (gx < rect.right) {
-                canvas.drawLine(gx, rect.top, gx, rect.bottom, grid)
-                gx += 48f
-            }
-            var gy = rect.top + 40f
-            while (gy < rect.bottom) {
-                canvas.drawLine(rect.left, gy, rect.right, gy, grid)
-                gy += 48f
-            }
-
-            val projected = project(coords, rect)
-            val routePath = Path().apply {
-                moveTo(projected[0].first, projected[0].second)
-                for (i in 1 until projected.size) {
-                    lineTo(projected[i].first, projected[i].second)
+                // Subtle grid
+                val grid = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                    color = 0x14FFFFFF
+                    strokeWidth = 2f
                 }
-            }
+                var gx = rect.left + 40f
+                while (gx < rect.right) {
+                    drawLine(gx, rect.top, gx, rect.bottom, grid)
+                    gx += 48f
+                }
+                var gy = rect.top + 40f
+                while (gy < rect.bottom) {
+                    drawLine(rect.left, gy, rect.right, gy, grid)
+                    gy += 48f
+                }
 
-            val under = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                style = Paint.Style.STROKE
-                strokeWidth = 10f
-                strokeCap = Paint.Cap.ROUND
-                strokeJoin = Paint.Join.ROUND
-                color = 0x59000000
-            }
-            canvas.drawPath(routePath, under)
+                val projected = project(coords, rect)
+                val routePath = Path().apply {
+                    moveTo(projected[0].first, projected[0].second)
+                    for (i in 1 until projected.size) {
+                        lineTo(projected[i].first, projected[i].second)
+                    }
+                }
 
-            val routePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                style = Paint.Style.STROKE
-                strokeWidth = 6f
-                strokeCap = Paint.Cap.ROUND
-                strokeJoin = Paint.Join.ROUND
-                shader = LinearGradient(
-                    rect.left, rect.centerY(), rect.right, rect.centerY(),
-                    intArrayOf(MINT, BLUE),
-                    null,
-                    Shader.TileMode.CLAMP
-                )
-            }
-            canvas.drawPath(routePath, routePaint)
+                val under = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                    style = Paint.Style.STROKE
+                    strokeWidth = 10f
+                    strokeCap = Paint.Cap.ROUND
+                    strokeJoin = Paint.Join.ROUND
+                    color = 0x59000000
+                }
+                drawPath(routePath, under)
 
-            drawEndpoint(canvas, projected.first(), MINT)
-            drawEndpoint(canvas, projected.last(), 0xFFE24B4A.toInt())
-            canvas.restore()
+                val routePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                    style = Paint.Style.STROKE
+                    strokeWidth = 6f
+                    strokeCap = Paint.Cap.ROUND
+                    strokeJoin = Paint.Join.ROUND
+                    shader = LinearGradient(
+                        rect.left, rect.centerY(), rect.right, rect.centerY(),
+                        intArrayOf(MINT, BLUE),
+                        null,
+                        Shader.TileMode.CLAMP
+                    )
+                }
+                drawPath(routePath, routePaint)
+
+                drawEndpoint(this, projected.first(), MINT)
+                drawEndpoint(this, projected.last(), 0xFFE24B4A.toInt())
+            }
         }
 
         val border = Paint(Paint.ANTI_ALIAS_FLAG).apply {

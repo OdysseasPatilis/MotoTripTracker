@@ -1,6 +1,7 @@
 package com.odys.mototriptracker.ui.theme
 
 import android.content.Context
+import androidx.core.content.edit
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -10,7 +11,7 @@ import javax.inject.Singleton
 
 @Singleton
 class ThemeStore @Inject constructor(
-    @param:ApplicationContext context: Context
+    @ApplicationContext context: Context
 ) {
     private val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
@@ -20,7 +21,7 @@ class ThemeStore @Inject constructor(
     init {
         // Drop legacy manual override so auto road limits are never masked.
         if (prefs.contains(KEY_MANUAL_OVERRIDE)) {
-            prefs.edit().remove(KEY_MANUAL_OVERRIDE).apply()
+            prefs.edit { remove(KEY_MANUAL_OVERRIDE) }
         }
     }
 
@@ -31,7 +32,7 @@ class ThemeStore @Inject constructor(
     fun toggleTheme() {
         val next = _mode.value.toggled()
         _mode.value = next
-        prefs.edit().putString(KEY_THEME_MODE, next.name).apply()
+        prefs.edit { putString(KEY_THEME_MODE, next.name) }
     }
 
     fun effectiveLimitKmh(autoLimitKmh: Int?): Int =

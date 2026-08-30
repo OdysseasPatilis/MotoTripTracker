@@ -36,6 +36,7 @@ android {
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
     kotlin {
         compilerOptions {
@@ -73,15 +74,12 @@ dependencies {
     implementation(libs.androidx.lifecycle.service)
     implementation(libs.androidx.compose.runtime)
     implementation(libs.androidx.constraintlayout)
-    implementation(libs.androidx.material3)
     implementation(libs.androidx.compose.material.icons.extended)
-    implementation(libs.androidx.runtime)
     implementation(libs.androidx.compose.foundation.layout)
     implementation(libs.androidx.compose.foundation)
     implementation(libs.play.services.maps)
     implementation(libs.places)
     implementation(libs.maps.compose)
-    implementation(libs.androidx.ui)
     implementation(libs.okhttp)
     implementation(libs.androidx.core.splashscreen)
     testImplementation(libs.junit)

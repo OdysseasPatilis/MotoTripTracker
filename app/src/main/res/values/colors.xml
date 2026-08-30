@@ -2,8 +2,4 @@
 <resources>
     <color name="splash_bg">#FF0A0A14</color>
     <color name="ic_launcher_background">#FF0A0A14</color>
-    <color name="brand_neon_green">#FF00E5A0</color>
-    <color name="brand_neon_blue">#FF3D7EFF</color>
-    <color name="black">#FF000000</color>
-    <color name="white">#FFFFFFFF</color>
 </resources>

@@ -130,5 +130,5 @@ private fun zoomFromDistance(distanceMeters: Double): Float {
         distanceMeters <= 1000 -> 16.2f
         distanceMeters <= 1400 -> 15.6f
         else -> 15f
-    }.toFloat()
+    }
 }

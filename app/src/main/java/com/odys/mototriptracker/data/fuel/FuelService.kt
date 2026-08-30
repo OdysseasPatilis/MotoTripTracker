@@ -1,11 +1,13 @@
 package com.odys.mototriptracker.data.fuel
 
 import android.content.Context
+import androidx.core.content.edit
 import com.odys.mototriptracker.util.AppLogger
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import java.util.Locale
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.math.max
@@ -13,7 +15,7 @@ import kotlin.math.min
 
 @Singleton
 class FuelService @Inject constructor(
-    @param:ApplicationContext context: Context
+    @ApplicationContext context: Context
 ) {
     private val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
@@ -47,15 +49,15 @@ class FuelService @Inject constructor(
 
     val rangeSummary: String
         get() = if (rangeRemainingKm >= 10) {
-            String.format("~%.0f km range", rangeRemainingKm)
+            String.format(Locale.US, "~%.0f km range", rangeRemainingKm)
         } else {
-            String.format("~%.0f km left", max(0.0, rangeRemainingKm))
+            String.format(Locale.US, "~%.0f km left", max(0.0, rangeRemainingKm))
         }
 
     fun setTankCapacityLiters(value: Double) {
         val clamped = clamp(value, 5.0, 40.0)
         _tankCapacityLiters.value = clamped
-        prefs.edit().putFloat(KEY_CAPACITY, clamped.toFloat()).apply()
+        prefs.edit { putFloat(KEY_CAPACITY, clamped.toFloat()) }
         if (_fuelRemainingLiters.value > clamped) {
             setFuelRemainingLiters(clamped)
         }
@@ -64,18 +66,18 @@ class FuelService @Inject constructor(
     fun setFuelRemainingLiters(value: Double) {
         val clamped = clamp(value, 0.0, _tankCapacityLiters.value)
         _fuelRemainingLiters.value = clamped
-        prefs.edit().putFloat(KEY_REMAINING, clamped.toFloat()).apply()
+        prefs.edit { putFloat(KEY_REMAINING, clamped.toFloat()) }
     }
 
     fun setConsumptionLPer100Km(value: Double) {
         val clamped = clamp(value, 2.5, 12.0)
         _consumptionLPer100Km.value = clamped
-        prefs.edit().putFloat(KEY_CONSUMPTION, clamped.toFloat()).apply()
+        prefs.edit { putFloat(KEY_CONSUMPTION, clamped.toFloat()) }
     }
 
     fun fillUp() {
         setFuelRemainingLiters(_tankCapacityLiters.value)
-        prefs.edit().putLong(KEY_LAST_FILL, System.currentTimeMillis()).apply()
+        prefs.edit { putLong(KEY_LAST_FILL, System.currentTimeMillis()) }
         AppLogger.i(AppLogger.Category.UI, "Fuel filled to ${_tankCapacityLiters.value} L")
     }
 

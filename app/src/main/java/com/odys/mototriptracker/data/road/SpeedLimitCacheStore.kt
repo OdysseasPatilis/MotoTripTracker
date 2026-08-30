@@ -1,6 +1,7 @@
 package com.odys.mototriptracker.data.road
 
 import android.content.Context
+import androidx.core.content.edit
 import dagger.hilt.android.qualifiers.ApplicationContext
 import org.json.JSONObject
 import javax.inject.Inject
@@ -11,7 +12,7 @@ import javax.inject.Singleton
  */
 @Singleton
 class SpeedLimitCacheStore @Inject constructor(
-    @param:ApplicationContext context: Context
+    @ApplicationContext context: Context
 ) {
     private val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
@@ -36,7 +37,7 @@ class SpeedLimitCacheStore @Inject constructor(
             .sortedByDescending { it.second }
             .take(MAX_ENTRIES)
             .forEach { (key, value) -> json.put(key, value) }
-        prefs.edit().putString(KEY_CACHE, json.toString()).apply()
+        prefs.edit { putString(KEY_CACHE, json.toString()) }
     }
 
     companion object {

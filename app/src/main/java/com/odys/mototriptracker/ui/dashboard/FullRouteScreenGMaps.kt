@@ -31,7 +31,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.LocalCafe
 import androidx.compose.material.icons.filled.Place
@@ -79,6 +79,7 @@ import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import androidx.compose.runtime.snapshotFlow
+import java.util.Locale
 
 // ── Colours ───────────────────────────────────────────────────────────────────
 private val BgDark = Color(0xFF0E0E14)
@@ -314,7 +315,7 @@ private fun RouteTopBar(
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
         IconCircleButton(onClick = onBack, palette = palette) {
-            Icon(Icons.Default.ArrowBack, "Back", tint = palette.textPrimary, modifier = Modifier.size(18.dp))
+            Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = palette.textPrimary, modifier = Modifier.size(18.dp))
         }
         Text("Full route", color = palette.textPrimary, fontSize = 17.sp, fontWeight = FontWeight.Medium)
         IconCircleButton(shape = RoundedCornerShape(8.dp), onClick = onShare, palette = palette) {
@@ -780,7 +781,7 @@ private fun ProfileChart(
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             Text("0 km", color = palette.textSecondary, fontSize = 9.sp)
             Text(peakLabel, color = peakColor, fontSize = 9.sp)
-            Text("${String.format("%.1f ", summary.distanceMeters / 1000f)} km", color = palette.textSecondary, fontSize = 9.sp)
+            Text("${String.format(Locale.US, "%.1f ", summary.distanceMeters / 1000f)} km", color = palette.textSecondary, fontSize = 9.sp)
         }
     }
 }

@@ -1,6 +1,7 @@
 package com.odys.mototriptracker.data.petrol
 
 import android.content.Context
+import androidx.core.content.edit
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -14,7 +15,7 @@ import javax.inject.Singleton
 /** Saved brand order + preferred octane grades for petrol recommendations. */
 @Singleton
 class PetrolPreferences @Inject constructor(
-    @param:ApplicationContext context: Context
+    @ApplicationContext context: Context
 ) {
     private val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
@@ -84,13 +85,13 @@ class PetrolPreferences @Inject constructor(
     }
 
     private fun persistBrands() {
-        prefs.edit().putString(KEY_BRANDS, _preferredBrands.value.joinToString("|")).apply()
+        prefs.edit { putString(KEY_BRANDS, _preferredBrands.value.joinToString("|")) }
     }
 
     private fun persistOctanes() {
-        prefs.edit()
-            .putString(KEY_OCTANES, _preferredOctanes.value.sorted().joinToString("|"))
-            .apply()
+        prefs.edit {
+            putString(KEY_OCTANES, _preferredOctanes.value.sorted().joinToString("|"))
+        }
     }
 
     companion object {

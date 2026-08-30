@@ -19,7 +19,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Share
@@ -36,13 +36,14 @@ import androidx.compose.material.icons.rounded.Speed
 import androidx.compose.material.icons.rounded.Straighten
 import androidx.compose.material.icons.rounded.Terrain
 import androidx.compose.material.icons.rounded.Traffic
-import androidx.compose.material.icons.rounded.TrendingDown
+import androidx.compose.material.icons.automirrored.rounded.TrendingDown
 import androidx.compose.material.icons.rounded.TurnSlightRight
 import androidx.compose.material.icons.rounded.WbTwilight
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import java.util.Locale
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -121,7 +122,7 @@ fun RideSummaryScreenUpdate(
         DateCard(summary)
         Spacer(Modifier.height(10.dp))
         MapPreviewCard(
-            "${String.format("%.1f ", summary.distanceMeters / 1000f)} km",
+            "${String.format(Locale.US, "%.1f ", summary.distanceMeters / 1000f)} km",
             summary.encodedRoutePolyline,
             onClick = onViewRoute
         )
@@ -222,7 +223,7 @@ private fun momentIcon(iconKey: String): ImageVector = when (iconKey) {
     "speed" -> Icons.Rounded.Speed
     "bolt" -> Icons.Rounded.Bolt
     "terrain" -> Icons.Rounded.Terrain
-    "descent" -> Icons.Rounded.TrendingDown
+    "descent" -> Icons.AutoMirrored.Rounded.TrendingDown
     "flag" -> Icons.Rounded.Flag
     "pause" -> Icons.Rounded.PauseCircle
     "wind" -> Icons.Rounded.Air
@@ -263,7 +264,7 @@ private fun TopBar(
             contentAlignment = Alignment.Center
         ) {
             Icon(
-                imageVector = Icons.Default.ArrowBack,
+                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                 contentDescription = "Back",
                 tint = palette.textPrimary,
                 modifier = Modifier.size(18.dp)
@@ -580,15 +581,15 @@ private fun StatsGrid(
 ) {
     val totalTime = summary.movingTime + summary.stoppedTime
     val stats = listOf(
-        StatItem("Distance",   "${String.format("%.1f ", summary.distanceMeters / 1000f)}",  "km",    palette.textPrimary),
+        StatItem("Distance",   "${String.format(Locale.US, "%.1f ", summary.distanceMeters / 1000f)}",  "km",    palette.textPrimary),
         StatItem("Total time", formatSecondsToTime(totalTime),"mm:ss", palette.textPrimary),
         StatItem("Moving",     formatSecondsToTime(summary.movingTime),"mm:ss", palette.mint),
         StatItem("Stopped",    formatSecondsToTime(summary.stoppedTime),"mm:ss", palette.neonRed),
         StatItem("Avg speed",  summary.avgSpeed.toInt().toString(),   "km/h",  palette.textPrimary),
         StatItem("Max speed",  summary.maxSpeed.toInt().toString(),  "km/h",  palette.neonBlue),
         StatItem("Elevation",  "+${summary.elevationGain.toInt()}",  "meters", palette.textPrimary),
-        StatItem("Max G",      String.format("%.2f", summary.maxGForce), "G-force", palette.purpleAccent),
-        StatItem("Lateral G",  String.format("%.2f", summary.maxLateralGForce), "G-force", palette.neonBlue),
+        StatItem("Max G",      String.format(Locale.US, "%.2f", summary.maxGForce), "G-force", palette.purpleAccent),
+        StatItem("Lateral G",  String.format(Locale.US, "%.2f", summary.maxLateralGForce), "G-force", palette.neonBlue),
         StatItem("Twistiness", TwistinessCalculator.formattedScore(TwistinessCalculator.score(summary)), "score", palette.neonBlue),
         StatItem("Corners",    summary.cornerCount.toString(), "turns", palette.mint),
     )

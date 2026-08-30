@@ -44,8 +44,9 @@ data class SpeedLimitRegionPack(
 
 @Singleton
 class SpeedLimitRegionPackStore @Inject constructor(
-    @ApplicationContext private val context: Context
+    @ApplicationContext context: Context
 ) {
+    private val context = context
     val packs: List<SpeedLimitRegionPack> by lazy {
         listOfNotNull(loadBundled("athens_speed_limits"))
     }

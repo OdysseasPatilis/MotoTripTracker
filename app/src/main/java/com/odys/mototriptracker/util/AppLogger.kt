@@ -2,6 +2,7 @@ package com.odys.mototriptracker.util
 
 import android.util.Log
 import com.odys.mototriptracker.domain.TripStats
+import java.util.Locale
 
 /**
  * Unified logging for MotoTripTracker.
@@ -38,9 +39,10 @@ object AppLogger {
     }
 
     fun coordinate(lat: Double, lon: Double): String =
-        String.format("%.5f,%.5f", lat, lon)
+        String.format(Locale.US, "%.5f,%.5f", lat, lon)
 
     fun tripSummary(stats: TripStats): String = String.format(
+        Locale.US,
         "dist=%.2fkm speed=%.0f avg=%.0f max=%.0f moving=%ds stopped=%ds elev=%.0fm maxG=%.2f latG=%.2f corners=%d gps=%s limit=%s",
         stats.distanceKm,
         stats.speed,

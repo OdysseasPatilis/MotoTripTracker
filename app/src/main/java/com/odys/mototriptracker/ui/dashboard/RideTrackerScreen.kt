@@ -28,14 +28,13 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material.icons.Icons
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material.icons.filled.LightMode
-import androidx.compose.material.icons.filled.List
+import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material.icons.filled.Navigation
 import androidx.compose.material.icons.filled.Search
@@ -124,6 +123,7 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.border
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -244,7 +244,7 @@ fun RideTrackerScreen(
                     .fillMaxSize()
                     .padding(innerPadding)
             ) {
-                BoxWithConstraints(
+                Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .weight(0.46f)
@@ -331,7 +331,7 @@ fun RideTrackerScreen(
                                                 optionsExpanded = false
                                                 onViewHistory()
                                             },
-                                            leadingIcon = { Icon(Icons.Filled.List, contentDescription = null) }
+                                            leadingIcon = { Icon(Icons.AutoMirrored.Filled.List, contentDescription = null) }
                                         )
                                         DropdownMenuItem(
                                             text = { Text("Leaderboard") },
@@ -507,7 +507,7 @@ fun RideTrackerScreen(
                     }
 
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        StatCard("DISTANCE", "${String.format("%.1f km", stats.distanceKm)}", Modifier.weight(1f), palette = palette)
+                        StatCard("DISTANCE", "${String.format(Locale.US, "%.1f km", stats.distanceKm)}", Modifier.weight(1f), palette = palette)
                         StatCard("TOTAL TIME", formatSecondsToTime(stats.tripTime), Modifier.weight(1f), palette = palette)
                     }
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -520,7 +520,7 @@ fun RideTrackerScreen(
                     }
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         StatCard("ELEVATION", "${stats.totalElevationGain.toInt()} m", Modifier.weight(1f), palette = palette)
-                        StatCard("MAX G", String.format("%.2f G", stats.maxGForce), Modifier.weight(1f), valueColor = palette.neonBlue, palette = palette)
+                        StatCard("MAX G", String.format(Locale.US, "%.2f G", stats.maxGForce), Modifier.weight(1f), valueColor = palette.neonBlue, palette = palette)
                     }
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         StatCard(
@@ -1112,7 +1112,7 @@ fun GForceBar(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier.fillMaxWidth()
     ) {
-        Text(String.format("%.2f G", value), color = palette.textPrimary,
+        Text(String.format(Locale.US, "%.2f G", value), color = palette.textPrimary,
             fontSize = 15.sp, fontWeight = FontWeight.Medium)
         Spacer(Modifier.height(8.dp))
         Box(
@@ -1140,7 +1140,7 @@ fun GForceBar(
             )
         }
         Spacer(Modifier.height(6.dp))
-        Text("MAX: ${String.format("%.2f", maxValue)} G",
+        Text("MAX: ${String.format(Locale.US, "%.2f", maxValue)} G",
             color = palette.textMuted, fontSize = 11.sp)
     }
 }
@@ -1165,7 +1165,7 @@ fun KeepScreenOn() {
 @Composable
 fun rememberBatteryLevel(): Int {
     val context = LocalContext.current
-    var level by remember { mutableStateOf(100) }
+    var level by remember { mutableIntStateOf(100) }
     DisposableEffect(Unit) {
         val receiver = object : BroadcastReceiver() {
             override fun onReceive(ctx: Context, intent: Intent) {
