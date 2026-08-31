@@ -1,0 +1,12 @@
+# Ensure source languages are counted by GitHub Linguist
+*.kt linguist-language=Kotlin
+*.kts linguist-language=Kotlin
+
+# Large/binary assets should not affect language detection
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.webp binary
+*.jar binary
+app/src/main/assets/*.json linguist-vendored
+app/src/main/res/** linguist-vendored
