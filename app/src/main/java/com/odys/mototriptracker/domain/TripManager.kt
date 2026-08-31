@@ -31,6 +31,7 @@ class TripManager @Inject constructor(
     private var lastLocation: Location? = null
     private var isTracking = false
     private var isPaused = false
+    private var pausedAtMs = 0L
 
     private val speedSmoother = SpeedSmoother()
     private var elevationSmoother = ElevationSmoother()
@@ -41,6 +42,7 @@ class TripManager @Inject constructor(
     fun startTrip() {
         isTracking = true
         isPaused = false
+        pausedAtMs = 0L
         lastLocation = null
         sessionMaxSpeedKmh = 0f
         _routeCoordinates.value = emptyList()
@@ -77,19 +79,31 @@ class TripManager @Inject constructor(
             return
         }
 
+        val now = System.currentTimeMillis()
+        // Flush time from the last GPS fix up to the pause button as stopped.
+        _tripStats.update { current ->
+            var moving = current.movingTime
+            var stopped = current.stoppedTime
+            stopDetector.updateTimes(now, isMoving = false) { movingDeltaMs, stoppedDeltaMs ->
+                moving += movingDeltaMs / 1000L
+                stopped += stoppedDeltaMs / 1000L
+            }
+            current.copy(
+                speed = 0f,
+                currentGForce = 0f,
+                currentLateralGForce = 0f,
+                movingTime = moving,
+                stoppedTime = stopped
+            )
+        }
+
         isPaused = true
+        pausedAtMs = now
         gForceTracker.stopTracking()
         stopDetector.reset()
         speedSmoother.reset()
         lastLocation = null
 
-        _tripStats.update {
-            it.copy(
-                speed = 0f,
-                currentGForce = 0f,
-                currentLateralGForce = 0f
-            )
-        }
         AppLogger.i(AppLogger.Category.TRIP, "Trip paused ${AppLogger.tripSummary(_tripStats.value)}")
         publishSession()
     }
@@ -103,12 +117,26 @@ class TripManager @Inject constructor(
             return
         }
 
+        val now = System.currentTimeMillis()
+        val pauseSeconds = if (pausedAtMs > 0L) {
+            ((now - pausedAtMs) / 1000L).coerceAtLeast(0L)
+        } else {
+            0L
+        }
+        pausedAtMs = 0L
         isPaused = false
         stopDetector.reset()
         speedSmoother.reset()
         lastLocation = null
         gForceTracker.startTracking(resetSession = false)
-        AppLogger.i(AppLogger.Category.TRIP, "Trip resumed ${AppLogger.tripSummary(_tripStats.value)}")
+
+        if (pauseSeconds > 0L) {
+            _tripStats.update { it.copy(stoppedTime = it.stoppedTime + pauseSeconds) }
+        }
+        AppLogger.i(
+            AppLogger.Category.TRIP,
+            "Trip resumed (+${pauseSeconds}s stopped) ${AppLogger.tripSummary(_tripStats.value)}"
+        )
         publishSession()
     }
 
@@ -267,20 +295,40 @@ class TripManager @Inject constructor(
             AppLogger.d(AppLogger.Category.TRIP, "Stop ignored — not tracking")
             return false
         }
+
+        val endTimeMs = System.currentTimeMillis()
+        val startTimeMs = _tripStats.value.tripStartTime
+        val openPauseSeconds = if (isPaused && pausedAtMs > 0L) {
+            ((endTimeMs - pausedAtMs) / 1000L).coerceAtLeast(0L)
+        } else {
+            0L
+        }
+
         isTracking = false
         isPaused = false
+        pausedAtMs = 0L
         speedSmoother.reset()
         gForceTracker.stopTracking()
-        val endTimeMs = System.currentTimeMillis()
         val stoppedTripId = currentTripId
 
         _tripStats.update { currentStats ->
             var finalMoving = currentStats.movingTime
-            var finalStopped = currentStats.stoppedTime
+            var finalStopped = currentStats.stoppedTime + openPauseSeconds
 
+            // If we weren't paused, flush from last GPS fix to Stop.
             stopDetector.updateTimes(endTimeMs, isMoving = false) { movingDeltaMs, stoppedDeltaMs ->
                 finalMoving += movingDeltaMs / 1000L
                 finalStopped += stoppedDeltaMs / 1000L
+            }
+
+            // Wall-clock session length is the source of truth (matches route replay).
+            // Any unaccounted seconds (GPS blackouts, etc.) count as moving.
+            if (startTimeMs > 0L) {
+                val wallSeconds = ((endTimeMs - startTimeMs) / 1000L).coerceAtLeast(0L)
+                val accounted = finalMoving + finalStopped
+                if (wallSeconds > accounted) {
+                    finalMoving += wallSeconds - accounted
+                }
             }
 
             val finalAvgSpeed = RideDistanceFilter.averageSpeedKmh(

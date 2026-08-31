@@ -45,18 +45,28 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithCache
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Canvas as ComposeCanvas
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.CanvasDrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.translate
+import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.pointerInteropFilter
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.google.android.gms.maps.CameraUpdateFactory
@@ -116,6 +126,21 @@ data class Waypoint(
     val type: WaypointType,
     val position: LatLng
 )
+
+/** Shared icon + colour used by the waypoint list and map markers. */
+private data class WaypointStyle(val icon: ImageVector?, val color: Color)
+
+private fun waypointStyle(type: WaypointType): WaypointStyle = when (type) {
+    WaypointType.Start -> WaypointStyle(Icons.Default.PlayArrow, Mint)
+    WaypointType.End -> WaypointStyle(Icons.Default.Place, Blue)
+    WaypointType.TopSpeed -> WaypointStyle(Icons.Default.Bolt, RouteCoral)
+    WaypointType.Summit -> WaypointStyle(Icons.Default.Terrain, Color(0xFFD988FF))
+    WaypointType.RestStop -> WaypointStyle(Icons.Default.LocalCafe, RouteTeal)
+    WaypointType.TrafficLight -> WaypointStyle(null, RouteAmber)
+    WaypointType.BriefStop -> WaypointStyle(null, Yellow)
+    WaypointType.StopSign -> WaypointStyle(null, RouteCoral)
+    WaypointType.Unknown -> WaypointStyle(null, Color.Gray)
+}
 
 /**
  * One GPS point in the ride with telemetry.
@@ -403,17 +428,32 @@ private fun RouteMapCard(
         spans
     }
 
-    // The big primary markers
-    val startBitmap = remember { createMarkerBitmap(Mint.toArgb(), 28) }
-    val endBitmap = remember { createMarkerBitmap(Blue.toArgb(), 28) }
+    val density = LocalDensity.current
+    val startPainter = rememberVectorPainter(Icons.Default.PlayArrow)
+    val endPainter = rememberVectorPainter(Icons.Default.Place)
+    val speedPainter = rememberVectorPainter(Icons.Default.Bolt)
+    val summitPainter = rememberVectorPainter(Icons.Default.Terrain)
+    val restPainter = rememberVectorPainter(Icons.Default.LocalCafe)
 
-// The premium telemetry highlights (Medium size)
-    val speedBitmap = remember { createMarkerBitmap(RouteCoral.toArgb(), 24) }
-    val summitBitmap = remember { createMarkerBitmap(Color(0xFFD988FF).toArgb(), 24) } // Purple
-    val restBitmap = remember { createMarkerBitmap(RouteTeal.toArgb(), 24) }
-
-// Standard pauses (Small size)
-    val stopBitmap   = remember { createMarkerBitmap(Yellow.toArgb(), 18) }
+    val startBitmap = remember(density) {
+        createIconBadgeBitmap(startPainter, Mint, density, sizeDp = 40f)
+    }
+    val endBitmap = remember(density) {
+        createIconBadgeBitmap(endPainter, Blue, density, sizeDp = 40f)
+    }
+    val speedBitmap = remember(density) {
+        createIconBadgeBitmap(speedPainter, RouteCoral, density, sizeDp = 36f)
+    }
+    val summitBitmap = remember(density) {
+        createIconBadgeBitmap(summitPainter, Color(0xFFD988FF), density, sizeDp = 36f)
+    }
+    val restBitmap = remember(density) {
+        createIconBadgeBitmap(restPainter, RouteTeal, density, sizeDp = 36f)
+    }
+    val trafficBitmap = remember { createHollowDotBitmap(RouteAmber.toArgb()) }
+    val briefStopBitmap = remember { createHollowDotBitmap(Yellow.toArgb()) }
+    val stopSignBitmap = remember { createHollowDotBitmap(RouteCoral.toArgb()) }
+    val unknownBitmap = remember { createHollowDotBitmap(android.graphics.Color.GRAY) }
     val riderBitmap = remember { createRiderMarkerBitmap(Mint.toArgb()) }
     val replayMarkerState = remember { MarkerState() }
     val themeStore = LocalThemeStore.current
@@ -513,29 +553,24 @@ private fun RouteMapCard(
             }
 
             waypoints.forEach { wp ->
-
-                // 1. Pick the right graphic and Z-Index (so important things draw on top)
                 val (bitmap, zIdx) = when (wp.type) {
                     WaypointType.Start -> Pair(startBitmap, 3f)
                     WaypointType.End -> Pair(endBitmap, 3f)
-
                     WaypointType.TopSpeed -> Pair(speedBitmap, 2.5f)
                     WaypointType.Summit -> Pair(summitBitmap, 2.5f)
                     WaypointType.RestStop -> Pair(restBitmap, 2f)
-
-                    WaypointType.TrafficLight,
-                    WaypointType.BriefStop,
-                    WaypointType.StopSign -> Pair(stopBitmap, 1.5f)
-
-                    else -> Pair(stopBitmap, 1f)
+                    WaypointType.TrafficLight -> Pair(trafficBitmap, 1.5f)
+                    WaypointType.BriefStop -> Pair(briefStopBitmap, 1.5f)
+                    WaypointType.StopSign -> Pair(stopSignBitmap, 1.5f)
+                    WaypointType.Unknown -> Pair(unknownBitmap, 1f)
                 }
 
-                // 2. Draw the marker on the map
                 Marker(
                     state = MarkerState(wp.position),
                     icon = BitmapDescriptorFactory.fromBitmap(bitmap),
+                    anchor = Offset(0.5f, 0.5f),
                     title = wp.label,
-                    snippet = wp.detail, // This will now show the actual street name or telemetry stat!
+                    snippet = wp.detail,
                     zIndex = zIdx
                 )
             }
@@ -638,18 +673,9 @@ private fun WaypointRow(
     palette: com.odys.mototriptracker.ui.theme.AppPalette,
     onClick: () -> Unit
 ) {
-    // 1. Determine the exact Icon and Color based on the smart type!
-    val (icon: ImageVector?, dotColor: Color) = when (wp.type) {
-        WaypointType.Start -> Pair(Icons.Default.PlayArrow, Mint)
-        WaypointType.End -> Pair(Icons.Default.Place, Blue)
-        WaypointType.TopSpeed -> Pair(Icons.Default.Bolt, RouteCoral) // ⚡
-        WaypointType.Summit -> Pair(Icons.Default.Terrain, Color(0xFFD988FF)) // ⛰️ Purple
-        WaypointType.RestStop -> Pair(Icons.Default.LocalCafe, RouteTeal) // ☕
-        WaypointType.TrafficLight -> Pair(null, RouteAmber) // Keep as a simple dot
-        WaypointType.BriefStop -> Pair(null, Yellow) // Keep as a simple dot
-        WaypointType.StopSign -> Pair(null, RouteCoral) // Keep as a simple dot
-        else ->  Pair(null, Color.Gray)
-    }
+    val style = waypointStyle(wp.type)
+    val icon = style.icon
+    val dotColor = style.color
 
     Row(modifier = Modifier
         .fillMaxWidth()
@@ -829,22 +855,72 @@ private fun LegendPills(
     }
 }
 
-// ── Marker bitmap ─────────────────────────────────────────────────────────────
-private fun createMarkerBitmap(colorArgb: Int, sizeDp: Int): Bitmap {
-    val px = sizeDp * 3
+// ── Marker bitmaps (match waypoint list chips / hollow dots) ──────────────────
+private fun createIconBadgeBitmap(
+    painter: Painter,
+    tint: Color,
+    density: Density,
+    sizeDp: Float = 40f
+): Bitmap {
+    val px = with(density) { sizeDp.dp.roundToPx().coerceAtLeast(1) }
     val bmp = createBitmap(px, px)
+    val androidCanvas = AndroidCanvas(bmp)
+    val composeCanvas = ComposeCanvas(androidCanvas)
+    val drawSize = Size(px.toFloat(), px.toFloat())
+
+    CanvasDrawScope().draw(
+        density = density,
+        layoutDirection = LayoutDirection.Ltr,
+        canvas = composeCanvas,
+        size = drawSize
+    ) {
+        val radius = size.minDimension / 2f
+        drawCircle(color = tint.copy(alpha = 0.22f), radius = radius)
+        drawCircle(
+            color = tint.copy(alpha = 0.5f),
+            radius = radius - 1.5f,
+            style = Stroke(width = 2.5f)
+        )
+        val iconSize = size.minDimension * 0.55f
+        val inset = (size.minDimension - iconSize) / 2f
+        translate(inset, inset) {
+            with(painter) {
+                draw(
+                    size = Size(iconSize, iconSize),
+                    colorFilter = ColorFilter.tint(tint)
+                )
+            }
+        }
+    }
+    return bmp
+}
+
+/** Hollow ring + core — matches the list timeline dots for stops. */
+private fun createHollowDotBitmap(colorArgb: Int, sizePx: Int = 54): Bitmap {
+    val bmp = createBitmap(sizePx, sizePx)
     val canvas = AndroidCanvas(bmp)
+    val cx = sizePx / 2f
+    val cy = sizePx / 2f
+    val r = sizePx * 0.32f
+
     val fill = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = colorArgb; style = Paint.Style.FILL
-    }
-    val border = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = android.graphics.Color.argb(255, 14, 14, 20)
-        style = Paint.Style.STROKE
-        strokeWidth = px * 0.12f
+        style = Paint.Style.FILL
     }
-    val r = px / 2f
-    canvas.drawCircle(r, r, r - border.strokeWidth, fill)
-    canvas.drawCircle(r, r, r - border.strokeWidth, border)
+    canvas.drawCircle(cx, cy, r, fill)
+
+    val ring = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = colorArgb
+        style = Paint.Style.STROKE
+        strokeWidth = sizePx * 0.09f
+    }
+    canvas.drawCircle(cx, cy, r - ring.strokeWidth / 2f, ring)
+
+    val core = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = colorArgb
+        style = Paint.Style.FILL
+    }
+    canvas.drawCircle(cx, cy, sizePx * 0.1f, core)
     return bmp
 }
 

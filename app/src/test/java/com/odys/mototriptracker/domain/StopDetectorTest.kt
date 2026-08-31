@@ -28,20 +28,31 @@ class StopDetectorTest {
     }
 
     @Test
-    fun zeroSpeed_accumulatesStoppedTime() {
+    fun zeroSpeed_shortDelta_accumulatesStoppedTime() {
         detector.updateTimes(1_000L, isMoving = false, ::accumulate)
         detector.updateTimes(2_000L, isMoving = false, ::accumulate)
-        detector.updateTimes(4_000L, isMoving = false, ::accumulate)
+        detector.updateTimes(3_500L, isMoving = false, ::accumulate)
 
         assertEquals(0L, movingAccum)
-        assertEquals(3_000L, stoppedAccum)
+        assertEquals(2_500L, stoppedAccum)
+    }
+
+    @Test
+    fun gpsGap_countsAsMovingEvenIfCurrentlyStopped() {
+        detector.updateTimes(0L, isMoving = true, ::accumulate)
+        // 10 s hole — lost GPS while riding; count as moving.
+        val accepted = detector.updateTimes(10_000L, isMoving = false, ::accumulate)
+
+        assertEquals(true, accepted)
+        assertEquals(10_000L, movingAccum)
+        assertEquals(0L, stoppedAccum)
     }
 
     @Test
     fun mixedMotion_splitsCorrectly() {
         detector.updateTimes(0L, isMoving = true, ::accumulate)
         detector.updateTimes(1_000L, isMoving = true, ::accumulate)   // +1000 moving
-        detector.updateTimes(3_000L, isMoving = false, ::accumulate)  // +2000 stopped
+        detector.updateTimes(3_000L, isMoving = false, ::accumulate)  // +2000 stopped (short)
         detector.updateTimes(4_000L, isMoving = true, ::accumulate)   // +1000 moving
 
         assertEquals(2_000L, movingAccum)
@@ -51,7 +62,6 @@ class StopDetectorTest {
     @Test
     fun moderateGap_under20Min_counts() {
         detector.updateTimes(0L, isMoving = true, ::accumulate)
-        // ~6.6 min — previously ignored at 5 min; now counts (iOS parity).
         val accepted = detector.updateTimes(400_000L, isMoving = true, ::accumulate)
 
         assertEquals(true, accepted)

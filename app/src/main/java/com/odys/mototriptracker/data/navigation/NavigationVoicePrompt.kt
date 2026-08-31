@@ -20,7 +20,6 @@ import javax.inject.Singleton
 class NavigationVoicePrompt @Inject constructor(
     @ApplicationContext context: Context
 ) {
-    private val context = context
     private val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
     private val ready = AtomicBoolean(false)
     private var tts: TextToSpeech? = null
@@ -79,13 +78,6 @@ class NavigationVoicePrompt @Inject constructor(
 
     fun stop() {
         tts?.stop()
-    }
-
-    fun shutdown() {
-        tts?.stop()
-        tts?.shutdown()
-        tts = null
-        ready.set(false)
     }
 
     private fun preferredLocale(engine: TextToSpeech): Locale {
