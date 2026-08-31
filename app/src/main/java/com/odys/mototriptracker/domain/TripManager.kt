@@ -288,12 +288,12 @@ class TripManager @Inject constructor(
     }
 
     /**
-     * Stops the ride. Returns `false` when the ride was discarded for being too short.
+     * Stops the ride. Returns whether the trip was saved and its local id when saved.
      */
-    fun stopTrip(minDistanceMeters: Float = MIN_SAVE_DISTANCE_METERS): Boolean {
+    fun stopTrip(minDistanceMeters: Float = MIN_SAVE_DISTANCE_METERS): StopTripResult {
         if (!isTracking) {
             AppLogger.d(AppLogger.Category.TRIP, "Stop ignored — not tracking")
-            return false
+            return StopTripResult(saved = false, tripId = null)
         }
 
         val endTimeMs = System.currentTimeMillis()
@@ -375,8 +375,13 @@ class TripManager @Inject constructor(
         cornerDetector.reset()
         LogThrottle.resetAll()
         publishSession()
-        return saved
+        return StopTripResult(saved = saved, tripId = if (saved) stoppedTripId else null)
     }
+
+    data class StopTripResult(
+        val saved: Boolean,
+        val tripId: Long?,
+    )
 
     private fun publishSession() {
         _sessionState.value = RideSessionState(

@@ -18,6 +18,8 @@ android {
         targetSdk = 36
         versionCode = 1
         versionName = "1.0"
+        val backendBaseUrl = project.findProperty("BACKEND_BASE_URL") as String? ?: ""
+        buildConfigField("String", "BACKEND_BASE_URL", "\"$backendBaseUrl\"")
     }
 
     buildTypes {
