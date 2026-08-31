@@ -4,7 +4,6 @@ import com.odys.mototriptracker.data.checkpoint.RoutePointEntity
 import com.odys.mototriptracker.data.trip.TripEntity
 import com.odys.mototriptracker.data.trip.TripRepository
 import com.odys.mototriptracker.util.AppLogger
-import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -26,9 +25,8 @@ import javax.inject.Singleton
 class TripCloudUploader @Inject constructor(
     private val tripRepository: TripRepository,
     private val userIdStore: BackendUserIdStore,
-    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
 ) {
-    private val scope = CoroutineScope(SupervisorJob() + ioDispatcher)
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val client = OkHttpClient.Builder()
         .connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(60, TimeUnit.SECONDS)
@@ -41,17 +39,29 @@ class TripCloudUploader @Inject constructor(
             return
         }
         scope.launch {
-            runCatching { upload(localTripId) }
-                .onSuccess {
-                    AppLogger.i(AppLogger.Category.APP, "Cloud upload ok trip id=$localTripId")
-                }
-                .onFailure { error ->
-                    AppLogger.e(AppLogger.Category.APP, "Cloud upload failed trip id=$localTripId", error)
-                }
+            runUpload(localTripId)
         }
     }
 
-    private suspend fun upload(localTripId: Long) = withContext(ioDispatcher) {
+    /** Blocking upload for manual retry from the summary screen. */
+    suspend fun uploadNow(localTripId: Long) {
+        if (!BackendConfig.isEnabled) {
+            error("Backend URL not configured")
+        }
+        upload(localTripId)
+    }
+
+    private suspend fun runUpload(localTripId: Long) {
+        runCatching { upload(localTripId) }
+            .onSuccess {
+                AppLogger.i(AppLogger.Category.APP, "Cloud upload ok trip id=$localTripId")
+            }
+            .onFailure { error ->
+                AppLogger.e(AppLogger.Category.APP, "Cloud upload failed trip id=$localTripId", error)
+            }
+    }
+
+    private suspend fun upload(localTripId: Long) = withContext(Dispatchers.IO) {
         val trip = tripRepository.getTrip(localTripId)
             ?: error("Trip $localTripId not found")
         val points = tripRepository.getRoutePointsForMap(localTripId)

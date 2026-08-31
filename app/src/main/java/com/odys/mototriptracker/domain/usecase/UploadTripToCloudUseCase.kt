@@ -9,4 +9,8 @@ class UploadTripToCloudUseCase @Inject constructor(
     operator fun invoke(localTripId: Long) {
         tripCloudUploader.enqueueUpload(localTripId)
     }
+
+    suspend fun uploadNow(localTripId: Long): Result<Unit> = runCatching {
+        tripCloudUploader.uploadNow(localTripId)
+    }
 }

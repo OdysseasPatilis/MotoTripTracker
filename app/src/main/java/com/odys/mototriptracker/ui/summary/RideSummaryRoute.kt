@@ -63,6 +63,8 @@ fun RideSummaryRoute(
             RideSummaryScreenUpdate(
                 summary = trip,
                 moments = uiState.moments,
+                backendEnabled = uiState.backendEnabled,
+                uploadStatus = uiState.uploadStatus,
                 onBack = onBack,
                 onDelete = { showDeleteConfirm = true },
                 onShare = { showShareOptions = true },
@@ -71,7 +73,8 @@ fun RideSummaryRoute(
                     showRename = true
                 },
                 onToggleFavorite = viewModel::toggleFavorite,
-                onViewRoute = { onViewRoute(trip.id) }
+                onViewRoute = { onViewRoute(trip.id) },
+                onUpload = viewModel::uploadToCloud,
             )
 
             if (showDeleteConfirm) {

@@ -21,6 +21,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.CloudUpload
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Star
@@ -77,6 +78,7 @@ import com.odys.mototriptracker.data.trip.TripEntity
 import com.odys.mototriptracker.domain.TwistinessCalculator
 import com.odys.mototriptracker.domain.RideMoment
 import com.odys.mototriptracker.domain.RideMoments
+import com.odys.mototriptracker.ui.summary.CloudUploadStatus
 import com.odys.mototriptracker.ui.theme.AppPalette
 import com.odys.mototriptracker.ui.theme.LocalAppPalette
 import com.odys.mototriptracker.ui.theme.LocalThemeStore
@@ -94,12 +96,15 @@ private val RouteCoral = Color(0xFFD85A30)
 fun RideSummaryScreenUpdate(
     summary: TripEntity,
     moments: RideMoments = RideMoments(emptyList()),
+    backendEnabled: Boolean = false,
+    uploadStatus: CloudUploadStatus = CloudUploadStatus.Idle,
     onBack: () -> Unit = {},
     onDelete: () -> Unit = {},
     onShare: () -> Unit = {},
     onRename: () -> Unit = {},
     onToggleFavorite: () -> Unit = {},
-    onViewRoute: () -> Unit = {}
+    onViewRoute: () -> Unit = {},
+    onUpload: () -> Unit = {},
 ) {
     val palette = LocalAppPalette.current
     Column(
@@ -132,6 +137,88 @@ fun RideSummaryScreenUpdate(
         }
         Spacer(Modifier.height(10.dp))
         StatsGrid(summary, palette)
+        if (backendEnabled) {
+            Spacer(Modifier.height(16.dp))
+            CloudUploadSection(
+                status = uploadStatus,
+                onUpload = onUpload,
+                palette = palette,
+            )
+        }
+    }
+}
+
+@Composable
+private fun CloudUploadSection(
+    status: CloudUploadStatus,
+    onUpload: () -> Unit,
+    palette: AppPalette,
+) {
+    val isUploading = status is CloudUploadStatus.Uploading
+    val statusText = when (status) {
+        CloudUploadStatus.Idle -> "Send this ride to your Mac server when you're back on the same network."
+        CloudUploadStatus.Uploading -> "Uploading…"
+        CloudUploadStatus.Success -> "Uploaded successfully."
+        is CloudUploadStatus.Error -> status.message
+    }
+    val statusColor = when (status) {
+        CloudUploadStatus.Success -> palette.neonGreen
+        is CloudUploadStatus.Error -> palette.stopRed
+        else -> palette.textMuted
+    }
+
+    Column(
+        modifier = Modifier.padding(horizontal = 20.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Text(
+            text = "CLOUD SYNC",
+            color = palette.textMuted,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Medium,
+            letterSpacing = 2.sp,
+        )
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(16.dp))
+                .background(palette.bgCard)
+                .clickable(enabled = !isUploading, onClick = onUpload)
+                .padding(horizontal = 16.dp, vertical = 14.dp),
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(40.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(palette.neonBlue.copy(alpha = 0.14f)),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.CloudUpload,
+                        contentDescription = null,
+                        tint = palette.neonBlue,
+                        modifier = Modifier.size(20.dp),
+                    )
+                }
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = if (isUploading) "Uploading…" else "Upload to server",
+                        color = palette.textPrimary,
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                    Text(
+                        text = statusText,
+                        color = statusColor,
+                        fontSize = 12.sp,
+                    )
+                }
+            }
+        }
     }
 }
 

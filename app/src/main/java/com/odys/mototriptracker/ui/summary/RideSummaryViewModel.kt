@@ -9,6 +9,8 @@ import com.odys.mototriptracker.domain.usecase.DeleteTripUseCase
 import com.odys.mototriptracker.domain.usecase.GetTripRouteUseCase
 import com.odys.mototriptracker.domain.usecase.ToggleFavoriteUseCase
 import com.odys.mototriptracker.domain.usecase.UpdateTripTitleUseCase
+import com.odys.mototriptracker.domain.usecase.UploadTripToCloudUseCase
+import com.odys.mototriptracker.data.backend.BackendConfig
 import com.odys.mototriptracker.ui.navigation.Routes
 import com.odys.mototriptracker.util.AppLogger
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -24,7 +26,8 @@ class RideSummaryViewModel @Inject constructor(
     private val getTripRouteUseCase: GetTripRouteUseCase,
     private val deleteTripUseCase: DeleteTripUseCase,
     private val updateTripTitleUseCase: UpdateTripTitleUseCase,
-    private val toggleFavoriteUseCase: ToggleFavoriteUseCase
+    private val toggleFavoriteUseCase: ToggleFavoriteUseCase,
+    private val uploadTripToCloudUseCase: UploadTripToCloudUseCase,
 ) : ViewModel() {
 
     private val tripId: Long = checkNotNull(savedStateHandle[Routes.TRIP_ID_ARG])
@@ -51,7 +54,8 @@ class RideSummaryViewModel @Inject constructor(
                     trip = details.trip,
                     routePoints = details.routePoints,
                     moments = moments,
-                    isLoading = false
+                    isLoading = false,
+                    backendEnabled = BackendConfig.isEnabled,
                 )
             }
         }
@@ -78,8 +82,28 @@ class RideSummaryViewModel @Inject constructor(
             trip = details.trip,
             routePoints = details.routePoints,
             moments = moments,
-            isLoading = false
+            isLoading = false,
+            backendEnabled = BackendConfig.isEnabled,
+            uploadStatus = _uiState.value.uploadStatus,
         )
+    }
+
+    fun uploadToCloud() {
+        if (_uiState.value.uploadStatus is CloudUploadStatus.Uploading) return
+        viewModelScope.launch(Dispatchers.IO) {
+            _uiState.value = _uiState.value.copy(uploadStatus = CloudUploadStatus.Uploading)
+            val result = uploadTripToCloudUseCase.uploadNow(tripId)
+            _uiState.value = _uiState.value.copy(
+                uploadStatus = result.fold(
+                    onSuccess = { CloudUploadStatus.Success },
+                    onFailure = { CloudUploadStatus.Error(it.message ?: "Upload failed") },
+                ),
+            )
+        }
+    }
+
+    fun clearUploadStatus() {
+        _uiState.value = _uiState.value.copy(uploadStatus = CloudUploadStatus.Idle)
     }
 
     fun deleteTrip() {
