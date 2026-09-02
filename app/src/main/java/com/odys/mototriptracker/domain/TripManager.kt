@@ -32,6 +32,8 @@ class TripManager @Inject constructor(
     private var isTracking = false
     private var isPaused = false
     private var pausedAtMs = 0L
+    /** Last accepted motion state — used to keep the clock alive when accuracy is rejected. */
+    private var lastWasMoving = false
 
     private val speedSmoother = SpeedSmoother()
     private var elevationSmoother = ElevationSmoother()
@@ -44,6 +46,7 @@ class TripManager @Inject constructor(
         isPaused = false
         pausedAtMs = 0L
         lastLocation = null
+        lastWasMoving = false
         sessionMaxSpeedKmh = 0f
         _routeCoordinates.value = emptyList()
         stopDetector.reset()
@@ -99,6 +102,7 @@ class TripManager @Inject constructor(
 
         isPaused = true
         pausedAtMs = now
+        lastWasMoving = false
         gForceTracker.stopTracking()
         stopDetector.reset()
         speedSmoother.reset()
@@ -156,8 +160,20 @@ class TripManager @Inject constructor(
         }
 
         if (!speedFilter.isValid(location)) {
-            _tripStats.update {
-                it.copy(gpsAccuracyMeters = accuracy, gpsQuality = gpsQuality)
+            // Keep moving/stopped clocks alive during poor-accuracy stretches (screen-off, tunnels).
+            _tripStats.update { current ->
+                var moving = current.movingTime
+                var stopped = current.stoppedTime
+                stopDetector.updateTimes(location.time, isMoving = lastWasMoving) { movingDeltaMs, stoppedDeltaMs ->
+                    moving += movingDeltaMs / 1000L
+                    stopped += stoppedDeltaMs / 1000L
+                }
+                current.copy(
+                    movingTime = moving,
+                    stoppedTime = stopped,
+                    gpsAccuracyMeters = accuracy,
+                    gpsQuality = gpsQuality
+                )
             }
             publishSession()
             if (LogThrottle.shouldLog("trip.invalidGPS", 15_000L)) {
@@ -173,6 +189,7 @@ class TripManager @Inject constructor(
         val currentSpeedMps = speedFilter.getProcessedSpeed(location)
         val currentTime = location.time
         val isMoving = currentSpeedMps > MOVING_SPEED_MPS
+        lastWasMoving = isMoving
         val rawSpeedKmh = currentSpeedMps * 3.6f
 
         val displaySpeedKmh = if (isMoving) {
@@ -307,6 +324,7 @@ class TripManager @Inject constructor(
         isTracking = false
         isPaused = false
         pausedAtMs = 0L
+        lastWasMoving = false
         speedSmoother.reset()
         gForceTracker.stopTracking()
         val stoppedTripId = currentTripId

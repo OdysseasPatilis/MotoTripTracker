@@ -3,7 +3,8 @@ package com.odys.mototriptracker.data.location
 import android.annotation.SuppressLint
 import android.content.Context
 import android.location.Location
-import android.os.Looper
+import android.os.Handler
+import android.os.HandlerThread
 import com.google.android.gms.location.LocationCallback
 import com.google.android.gms.location.LocationRequest
 import com.google.android.gms.location.LocationResult
@@ -39,12 +40,21 @@ class LocationRepository @Inject constructor(
     fun getLocationFlow(): Flow<Location> = callbackFlow {
 
         riderTimer.start()
-        AppLogger.i(AppLogger.Category.LOCATION, "requestLocationUpdates interval=1000ms")
+        AppLogger.i(AppLogger.Category.LOCATION, "requestLocationUpdates interval=1000ms (screen-off hardened)")
+
+        // Dedicated looper so location delivery isn't starved when the main thread sleeps.
+        val thread = HandlerThread("moto-gps").also { it.start() }
+        val looper = thread.looper
+        val handler = Handler(looper)
+
         val request = LocationRequest.Builder(
             Priority.PRIORITY_HIGH_ACCURACY,
-            1000L
+            UPDATE_INTERVAL_MS
         )
-            .setMinUpdateIntervalMillis(1000L)
+            .setMinUpdateIntervalMillis(MIN_UPDATE_INTERVAL_MS)
+            .setMaxUpdateDelayMillis(MAX_UPDATE_DELAY_MS)
+            .setMinUpdateDistanceMeters(0f)
+            .setWaitForAccurateLocation(false)
             .build()
 
         val locationCallback = object : LocationCallback() {
@@ -55,11 +65,11 @@ class LocationRepository @Inject constructor(
                         continue
                     }
                     // Emit weak fixes too so GpsQuality / signal bars can show POOR/FAIR.
-                    // TripManager.SpeedFilter still rejects accuracy > 15 m for stats.
+                    // TripManager.SpeedFilter still gates stats recording.
                     if (location.accuracy > 20f && LogThrottle.shouldLog("location.weak", 10_000L)) {
                         AppLogger.d(
                             AppLogger.Category.LOCATION,
-                            "Weak GPS accuracy=${location.accuracy}m (UI only until ≤15m)"
+                            "Weak GPS accuracy=${location.accuracy}m (UI only until accepted by filter)"
                         )
                     }
                     _lastLocation.value = location
@@ -71,12 +81,20 @@ class LocationRepository @Inject constructor(
         fusedLocation.requestLocationUpdates(
             request,
             locationCallback,
-            Looper.getMainLooper()
+            looper
         )
 
         awaitClose {
             AppLogger.i(AppLogger.Category.LOCATION, "Flow closed — removing location updates")
             fusedLocation.removeLocationUpdates(locationCallback)
+            handler.post { thread.quitSafely() }
         }
+    }
+
+    companion object {
+        private const val UPDATE_INTERVAL_MS = 1_000L
+        private const val MIN_UPDATE_INTERVAL_MS = 500L
+        /** Cap batching so Doze can't hold fixes for tens of seconds. */
+        private const val MAX_UPDATE_DELAY_MS = 2_000L
     }
 }

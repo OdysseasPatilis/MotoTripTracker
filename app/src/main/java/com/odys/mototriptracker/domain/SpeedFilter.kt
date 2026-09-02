@@ -6,18 +6,22 @@ import javax.inject.Singleton
 
 @Singleton
 class SpeedFilter @Inject constructor() {
-    // 15 meters is a good threshold for a motorcycle on a road
-    private val MIN_ACCURACY_METERS = 15f
+    // Pocket / screen-off fixes are often 20–35 m. 15 m was discarding entire rides.
+    private val maxAccuracyMeters = MAX_ACCURACY_METERS
 
     // Ignore speeds under 3 km/h (0.83 m/s) to prevent GPS drift when stopped
     private val MIN_SPEED_MPS = 0.83f
 
     fun isValid(location: Location): Boolean {
         // 1. Throw away locations with terrible accuracy
-        if (!location.hasAccuracy() || location.accuracy > MIN_ACCURACY_METERS) {
+        if (!location.hasAccuracy() || location.accuracy > maxAccuracyMeters) {
             return false
         }
         return true
+    }
+
+    companion object {
+        const val MAX_ACCURACY_METERS = 35f
     }
 
     fun getProcessedSpeed(location: Location): Float {

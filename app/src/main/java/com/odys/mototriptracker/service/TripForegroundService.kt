@@ -7,6 +7,7 @@ import android.app.NotificationManager
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Build
+import android.os.PowerManager
 import androidx.annotation.RequiresPermission
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
@@ -19,6 +20,8 @@ import com.odys.mototriptracker.domain.TripManager
 import com.odys.mototriptracker.util.AppLogger
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -35,7 +38,10 @@ class TripForegroundService : LifecycleService() {
     lateinit var speedLimitResolver: SpeedLimitResolver
 
     private var locationJob: Job? = null
+    private var watchdogJob: Job? = null
     private var isForegroundStarted = false
+    private var wakeLock: PowerManager.WakeLock? = null
+    private var lastFixAtMs: Long = 0L
 
     override fun onCreate() {
         super.onCreate()
@@ -62,8 +68,10 @@ class TripForegroundService : LifecycleService() {
     @RequiresPermission(allOf = [Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION])
     private fun startTracking() {
         speedLimitResolver.reset()
+        acquireWakeLock()
         ensureForeground(contentText = "Tracking your ride")
         startLocationCollection()
+        startGpsWatchdog()
         AppLogger.i(AppLogger.Category.SERVICE, "Tracking started")
     }
 
@@ -75,8 +83,10 @@ class TripForegroundService : LifecycleService() {
 
     @RequiresPermission(allOf = [Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION])
     private fun resumeTracking() {
+        acquireWakeLock()
         ensureForeground(contentText = "Tracking your ride")
         startLocationCollection()
+        startGpsWatchdog()
         AppLogger.i(AppLogger.Category.SERVICE, "Tracking resumed")
     }
 
@@ -91,6 +101,7 @@ class TripForegroundService : LifecycleService() {
             AppLogger.i(AppLogger.Category.SERVICE, "Location collection flow started")
             try {
                 locationRepository.getLocationFlow().collect { location ->
+                    lastFixAtMs = System.currentTimeMillis()
                     tripManager.onLocationUpdate(location)
                     speedLimitResolver.onLocationUpdate(
                         latitude = location.latitude,
@@ -105,12 +116,34 @@ class TripForegroundService : LifecycleService() {
         }
     }
 
+    private fun startGpsWatchdog() {
+        if (watchdogJob?.isActive == true) return
+        lastFixAtMs = System.currentTimeMillis()
+        watchdogJob = lifecycleScope.launch {
+            while (isActive) {
+                delay(GPS_WATCHDOG_INTERVAL_MS)
+                if (!tripManager.sessionState.value.isActive || tripManager.sessionState.value.isPaused) {
+                    continue
+                }
+                val silence = System.currentTimeMillis() - lastFixAtMs
+                if (silence >= GPS_SILENCE_WARN_MS) {
+                    AppLogger.w(
+                        AppLogger.Category.SERVICE,
+                        "No GPS fix for ${silence / 1000}s while tracking (screen may be off / OEM throttle)"
+                    )
+                }
+            }
+        }
+    }
+
     private fun stopLocationCollection() {
         if (locationJob != null) {
             AppLogger.d(AppLogger.Category.SERVICE, "Location collection stopped")
         }
         locationJob?.cancel()
         locationJob = null
+        watchdogJob?.cancel()
+        watchdogJob = null
     }
 
     private fun ensureForeground(contentText: String) {
@@ -134,12 +167,19 @@ class TripForegroundService : LifecycleService() {
     }
 
     private fun createNotification(contentText: String): Notification {
-        return NotificationCompat.Builder(this, CHANNEL_ID)
+        val builder = NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("Ride Tracking")
             .setContentText(contentText)
             .setSmallIcon(R.drawable.ic_notification)
             .setOngoing(true)
-            .build()
+            .setOnlyAlertOnce(true)
+            .setCategory(NotificationCompat.CATEGORY_SERVICE)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            builder.setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
+        }
+        return builder.build()
     }
 
     private fun createNotificationChannel() {
@@ -148,15 +188,42 @@ class TripForegroundService : LifecycleService() {
                 CHANNEL_ID,
                 "Ride Tracking",
                 NotificationManager.IMPORTANCE_LOW
-            )
+            ).apply {
+                description = "Keeps GPS active while recording a ride"
+                setShowBadge(false)
+            }
             val manager = getSystemService(NotificationManager::class.java)
             manager.createNotificationChannel(channel)
         }
     }
 
+    private fun acquireWakeLock() {
+        if (wakeLock?.isHeld == true) return
+        val pm = getSystemService(POWER_SERVICE) as PowerManager
+        wakeLock = pm.newWakeLock(
+            PowerManager.PARTIAL_WAKE_LOCK,
+            "MotoTripTracker:RideGps"
+        ).apply {
+            setReferenceCounted(false)
+            acquire(WAKE_LOCK_TIMEOUT_MS)
+        }
+        AppLogger.i(AppLogger.Category.SERVICE, "PARTIAL_WAKE_LOCK acquired")
+    }
+
+    private fun releaseWakeLock() {
+        runCatching {
+            if (wakeLock?.isHeld == true) {
+                wakeLock?.release()
+                AppLogger.i(AppLogger.Category.SERVICE, "PARTIAL_WAKE_LOCK released")
+            }
+        }
+        wakeLock = null
+    }
+
     override fun onDestroy() {
         AppLogger.i(AppLogger.Category.SERVICE, "Service onDestroy")
         stopLocationCollection()
+        releaseWakeLock()
         isForegroundStarted = false
         super.onDestroy()
     }
@@ -169,6 +236,7 @@ class TripForegroundService : LifecycleService() {
                 AppLogger.Category.SERVICE,
                 "Task removed — keeping location FGS alive (ride active)"
             )
+            acquireWakeLock()
             ensureForeground(
                 contentText = if (tripManager.sessionState.value.isPaused) {
                     "Ride paused"
@@ -180,6 +248,7 @@ class TripForegroundService : LifecycleService() {
         }
         AppLogger.w(AppLogger.Category.SERVICE, "Task removed — stopping service")
         stopLocationCollection()
+        releaseWakeLock()
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()
     }
@@ -191,5 +260,8 @@ class TripForegroundService : LifecycleService() {
 
         private const val CHANNEL_ID = "ride_channel"
         private const val NOTIFICATION_ID = 1
+        private const val WAKE_LOCK_TIMEOUT_MS = 12 * 60 * 60 * 1000L // 12h safety cap
+        private const val GPS_WATCHDOG_INTERVAL_MS = 15_000L
+        private const val GPS_SILENCE_WARN_MS = 20_000L
     }
 }
