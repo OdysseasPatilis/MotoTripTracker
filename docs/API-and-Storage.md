@@ -81,7 +81,7 @@ Not a REST call you write by hand — Google Maps Compose / Maps SDK loads tiles
 | **OSRM** | `router.project-osrm.org/route/v1/driving/...` | `NavigationService.fetchOsrmDirections` | Route fallback | Google Directions failed |
 | **MotoTripTracker backend** | `{BACKEND_BASE_URL}/v1/trips/upload` | `data/backend/TripCloudUploader.kt` | Upload finished trip JSON | Auto on stop (if URL set) + manual **Upload to server** on summary |
 
-Config: `BACKEND_BASE_URL` in `local.properties` → `BuildConfig.BACKEND_BASE_URL` / `BackendConfig`.
+Config: runtime URL in summary **Cloud Sync** (SharedPreferences via `BackendSettingsStore`), with optional `BACKEND_BASE_URL` in `local.properties` as fallback.
 
 ---
 

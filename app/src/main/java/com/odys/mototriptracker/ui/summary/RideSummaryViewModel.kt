@@ -3,14 +3,13 @@ package com.odys.mototriptracker.ui.summary
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.odys.mototriptracker.data.checkpoint.RoutePointEntity
+import com.odys.mototriptracker.data.backend.BackendSettingsStore
 import com.odys.mototriptracker.domain.RideMomentsCalculator
 import com.odys.mototriptracker.domain.usecase.DeleteTripUseCase
 import com.odys.mototriptracker.domain.usecase.GetTripRouteUseCase
 import com.odys.mototriptracker.domain.usecase.ToggleFavoriteUseCase
 import com.odys.mototriptracker.domain.usecase.UpdateTripTitleUseCase
 import com.odys.mototriptracker.domain.usecase.UploadTripToCloudUseCase
-import com.odys.mototriptracker.data.backend.BackendConfig
 import com.odys.mototriptracker.ui.navigation.Routes
 import com.odys.mototriptracker.util.AppLogger
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -28,6 +27,7 @@ class RideSummaryViewModel @Inject constructor(
     private val updateTripTitleUseCase: UpdateTripTitleUseCase,
     private val toggleFavoriteUseCase: ToggleFavoriteUseCase,
     private val uploadTripToCloudUseCase: UploadTripToCloudUseCase,
+    private val backendSettings: BackendSettingsStore,
 ) : ViewModel() {
 
     private val tripId: Long = checkNotNull(savedStateHandle[Routes.TRIP_ID_ARG])
@@ -55,7 +55,7 @@ class RideSummaryViewModel @Inject constructor(
                     routePoints = details.routePoints,
                     moments = moments,
                     isLoading = false,
-                    backendEnabled = BackendConfig.isEnabled,
+                    backendUrl = backendSettings.baseUrl,
                 )
             }
         }
@@ -83,27 +83,43 @@ class RideSummaryViewModel @Inject constructor(
             routePoints = details.routePoints,
             moments = moments,
             isLoading = false,
-            backendEnabled = BackendConfig.isEnabled,
+            backendUrl = backendSettings.baseUrl,
             uploadStatus = _uiState.value.uploadStatus,
+        )
+    }
+
+    fun saveBackendUrl(url: String) {
+        backendSettings.setBaseUrl(url)
+        _uiState.value = _uiState.value.copy(
+            backendUrl = backendSettings.baseUrl,
+            uploadStatus = CloudUploadStatus.Idle,
         )
     }
 
     fun uploadToCloud() {
         if (_uiState.value.uploadStatus is CloudUploadStatus.Uploading) return
+        if (!backendSettings.isEnabled) {
+            _uiState.value = _uiState.value.copy(
+                uploadStatus = CloudUploadStatus.Error("Set a server URL first"),
+            )
+            return
+        }
         viewModelScope.launch(Dispatchers.IO) {
             _uiState.value = _uiState.value.copy(uploadStatus = CloudUploadStatus.Uploading)
             val result = uploadTripToCloudUseCase.uploadNow(tripId)
             _uiState.value = _uiState.value.copy(
                 uploadStatus = result.fold(
-                    onSuccess = { CloudUploadStatus.Success },
-                    onFailure = { CloudUploadStatus.Error(it.message ?: "Upload failed") },
+                    onSuccess = {
+                        AppLogger.i(AppLogger.Category.APP, "Manual cloud upload ok trip id=$tripId")
+                        CloudUploadStatus.Success
+                    },
+                    onFailure = {
+                        AppLogger.e(AppLogger.Category.APP, "Manual cloud upload failed", it)
+                        CloudUploadStatus.Error(it.message ?: "Upload failed")
+                    },
                 ),
             )
         }
-    }
-
-    fun clearUploadStatus() {
-        _uiState.value = _uiState.value.copy(uploadStatus = CloudUploadStatus.Idle)
     }
 
     fun deleteTrip() {

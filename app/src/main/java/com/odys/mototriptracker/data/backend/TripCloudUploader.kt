@@ -25,6 +25,7 @@ import javax.inject.Singleton
 class TripCloudUploader @Inject constructor(
     private val tripRepository: TripRepository,
     private val userIdStore: BackendUserIdStore,
+    private val backendSettings: BackendSettingsStore,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val client = OkHttpClient.Builder()
@@ -34,8 +35,8 @@ class TripCloudUploader @Inject constructor(
         .build()
 
     fun enqueueUpload(localTripId: Long) {
-        if (!BackendConfig.isEnabled) {
-            AppLogger.d(AppLogger.Category.APP, "Cloud upload skipped — BACKEND_BASE_URL not set")
+        if (!backendSettings.isEnabled) {
+            AppLogger.d(AppLogger.Category.APP, "Cloud upload skipped — backend URL not set")
             return
         }
         scope.launch {
@@ -45,7 +46,7 @@ class TripCloudUploader @Inject constructor(
 
     /** Blocking upload for manual retry from the summary screen. */
     suspend fun uploadNow(localTripId: Long) {
-        if (!BackendConfig.isEnabled) {
+        if (!backendSettings.isEnabled) {
             error("Backend URL not configured")
         }
         upload(localTripId)
@@ -69,7 +70,7 @@ class TripCloudUploader @Inject constructor(
             .toRequestBody(JSON_MEDIA_TYPE)
 
         val request = Request.Builder()
-            .url("${BackendConfig.baseUrl}/v1/trips/upload")
+            .url("${backendSettings.baseUrl}/v1/trips/upload")
             .post(body)
             .build()
 

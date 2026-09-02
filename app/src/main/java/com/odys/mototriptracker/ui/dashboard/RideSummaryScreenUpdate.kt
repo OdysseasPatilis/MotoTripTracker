@@ -96,7 +96,7 @@ private val RouteCoral = Color(0xFFD85A30)
 fun RideSummaryScreenUpdate(
     summary: TripEntity,
     moments: RideMoments = RideMoments(emptyList()),
-    backendEnabled: Boolean = false,
+    backendUrl: String = "",
     uploadStatus: CloudUploadStatus = CloudUploadStatus.Idle,
     onBack: () -> Unit = {},
     onDelete: () -> Unit = {},
@@ -105,6 +105,7 @@ fun RideSummaryScreenUpdate(
     onToggleFavorite: () -> Unit = {},
     onViewRoute: () -> Unit = {},
     onUpload: () -> Unit = {},
+    onEditBackendUrl: () -> Unit = {},
 ) {
     val palette = LocalAppPalette.current
     Column(
@@ -137,29 +138,34 @@ fun RideSummaryScreenUpdate(
         }
         Spacer(Modifier.height(10.dp))
         StatsGrid(summary, palette)
-        if (backendEnabled) {
-            Spacer(Modifier.height(16.dp))
-            CloudUploadSection(
-                status = uploadStatus,
-                onUpload = onUpload,
-                palette = palette,
-            )
-        }
+        Spacer(Modifier.height(16.dp))
+        CloudUploadSection(
+            backendUrl = backendUrl,
+            status = uploadStatus,
+            onUpload = onUpload,
+            onEditUrl = onEditBackendUrl,
+            palette = palette,
+        )
     }
 }
 
 @Composable
 private fun CloudUploadSection(
+    backendUrl: String,
     status: CloudUploadStatus,
     onUpload: () -> Unit,
+    onEditUrl: () -> Unit,
     palette: AppPalette,
 ) {
+    val configured = backendUrl.isNotBlank()
     val isUploading = status is CloudUploadStatus.Uploading
-    val statusText = when (status) {
-        CloudUploadStatus.Idle -> "Send this ride to your Mac server when you're back on the same network."
-        CloudUploadStatus.Uploading -> "Uploading…"
-        CloudUploadStatus.Success -> "Uploaded successfully."
-        is CloudUploadStatus.Error -> status.message
+    val statusText = when {
+        !configured -> "Set your Mac server URL (e.g. http://192.168.1.7:8080), then upload."
+        status is CloudUploadStatus.Idle -> "Send this ride to your Mac when you're on the same network."
+        status is CloudUploadStatus.Uploading -> "Uploading…"
+        status is CloudUploadStatus.Success -> "Uploaded successfully."
+        status is CloudUploadStatus.Error -> status.message
+        else -> ""
     }
     val statusColor = when (status) {
         CloudUploadStatus.Success -> palette.neonGreen
@@ -183,7 +189,9 @@ private fun CloudUploadSection(
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(16.dp))
                 .background(palette.bgCard)
-                .clickable(enabled = !isUploading, onClick = onUpload)
+                .clickable(enabled = !isUploading) {
+                    if (configured) onUpload() else onEditUrl()
+                }
                 .padding(horizontal = 16.dp, vertical = 14.dp),
         ) {
             Row(
@@ -206,7 +214,11 @@ private fun CloudUploadSection(
                 }
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = if (isUploading) "Uploading…" else "Upload to server",
+                        text = when {
+                            isUploading -> "Uploading…"
+                            !configured -> "Set server URL"
+                            else -> "Upload to server"
+                        },
                         color = palette.textPrimary,
                         fontSize = 15.sp,
                         fontWeight = FontWeight.SemiBold,
@@ -216,8 +228,28 @@ private fun CloudUploadSection(
                         color = statusColor,
                         fontSize = 12.sp,
                     )
+                    if (configured) {
+                        Text(
+                            text = backendUrl,
+                            color = palette.textMuted,
+                            fontSize = 11.sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
                 }
             }
+        }
+        if (configured) {
+            Text(
+                text = "Change server URL",
+                color = palette.neonBlue,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Medium,
+                modifier = Modifier
+                    .clickable(onClick = onEditUrl)
+                    .padding(vertical = 4.dp),
+            )
         }
     }
 }

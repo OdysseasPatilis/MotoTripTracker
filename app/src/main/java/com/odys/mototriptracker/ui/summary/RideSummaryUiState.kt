@@ -18,6 +18,8 @@ data class RideSummaryUiState(
     val isLoading: Boolean = true,
     val isDeleted: Boolean = false,
     val notFound: Boolean = false,
-    val backendEnabled: Boolean = false,
+    val backendUrl: String = "",
     val uploadStatus: CloudUploadStatus = CloudUploadStatus.Idle,
-)
+) {
+    val backendEnabled: Boolean get() = backendUrl.isNotBlank()
+}

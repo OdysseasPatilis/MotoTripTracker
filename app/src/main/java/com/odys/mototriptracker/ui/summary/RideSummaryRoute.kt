@@ -38,7 +38,9 @@ fun RideSummaryRoute(
     var showDeleteConfirm by remember { mutableStateOf(false) }
     var showRename by remember { mutableStateOf(false) }
     var showShareOptions by remember { mutableStateOf(false) }
+    var showBackendUrl by remember { mutableStateOf(false) }
     var renameText by remember { mutableStateOf("") }
+    var backendUrlText by remember { mutableStateOf("") }
 
     LaunchedEffect(uiState.isDeleted, uiState.notFound) {
         if (uiState.isDeleted || uiState.notFound) {
@@ -63,7 +65,7 @@ fun RideSummaryRoute(
             RideSummaryScreenUpdate(
                 summary = trip,
                 moments = uiState.moments,
-                backendEnabled = uiState.backendEnabled,
+                backendUrl = uiState.backendUrl,
                 uploadStatus = uiState.uploadStatus,
                 onBack = onBack,
                 onDelete = { showDeleteConfirm = true },
@@ -75,6 +77,10 @@ fun RideSummaryRoute(
                 onToggleFavorite = viewModel::toggleFavorite,
                 onViewRoute = { onViewRoute(trip.id) },
                 onUpload = viewModel::uploadToCloud,
+                onEditBackendUrl = {
+                    backendUrlText = uiState.backendUrl
+                    showBackendUrl = true
+                },
             )
 
             if (showDeleteConfirm) {
@@ -124,6 +130,37 @@ fun RideSummaryRoute(
                     },
                     dismissButton = {
                         TextButton(onClick = { showRename = false }) {
+                            Text("Cancel")
+                        }
+                    }
+                )
+            }
+
+            if (showBackendUrl) {
+                AlertDialog(
+                    onDismissRequest = { showBackendUrl = false },
+                    title = { Text("Cloud Sync") },
+                    text = {
+                        OutlinedTextField(
+                            value = backendUrlText,
+                            onValueChange = { backendUrlText = it },
+                            singleLine = true,
+                            placeholder = { Text("http://192.168.1.7:8080") },
+                            label = { Text("Server URL") }
+                        )
+                    },
+                    confirmButton = {
+                        TextButton(
+                            onClick = {
+                                showBackendUrl = false
+                                viewModel.saveBackendUrl(backendUrlText)
+                            }
+                        ) {
+                            Text("Save")
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { showBackendUrl = false }) {
                             Text("Cancel")
                         }
                     }
