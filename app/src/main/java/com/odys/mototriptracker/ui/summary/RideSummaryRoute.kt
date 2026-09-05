@@ -1,9 +1,11 @@
 package com.odys.mototriptracker.ui.summary
 
-import android.content.Context
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.OutlinedTextField
@@ -18,6 +20,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.odys.mototriptracker.data.export.displayTitle
@@ -41,6 +44,7 @@ fun RideSummaryRoute(
     var showBackendUrl by remember { mutableStateOf(false) }
     var renameText by remember { mutableStateOf("") }
     var backendUrlText by remember { mutableStateOf("") }
+    var displayNameText by remember { mutableStateOf("") }
 
     LaunchedEffect(uiState.isDeleted, uiState.notFound) {
         if (uiState.isDeleted || uiState.notFound) {
@@ -79,6 +83,7 @@ fun RideSummaryRoute(
                 onUpload = viewModel::uploadToCloud,
                 onEditBackendUrl = {
                     backendUrlText = uiState.backendUrl
+                    displayNameText = uiState.displayName
                     showBackendUrl = true
                 },
             )
@@ -141,19 +146,29 @@ fun RideSummaryRoute(
                     onDismissRequest = { showBackendUrl = false },
                     title = { Text("Cloud Sync") },
                     text = {
-                        OutlinedTextField(
-                            value = backendUrlText,
-                            onValueChange = { backendUrlText = it },
-                            singleLine = true,
-                            placeholder = { Text("http://192.168.1.7:8080") },
-                            label = { Text("Server URL") }
-                        )
+                        Column {
+                            OutlinedTextField(
+                                value = backendUrlText,
+                                onValueChange = { backendUrlText = it },
+                                singleLine = true,
+                                placeholder = { Text("http://192.168.1.7:8080") },
+                                label = { Text("Server URL") }
+                            )
+                            Spacer(Modifier.height(12.dp))
+                            OutlinedTextField(
+                                value = displayNameText,
+                                onValueChange = { displayNameText = it },
+                                singleLine = true,
+                                placeholder = { Text("Rider") },
+                                label = { Text("Display name") }
+                            )
+                        }
                     },
                     confirmButton = {
                         TextButton(
                             onClick = {
                                 showBackendUrl = false
-                                viewModel.saveBackendUrl(backendUrlText)
+                                viewModel.saveBackendSettings(backendUrlText, displayNameText)
                             }
                         ) {
                             Text("Save")

@@ -4,6 +4,7 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.odys.mototriptracker.data.backend.BackendSettingsStore
+import com.odys.mototriptracker.data.backend.BackendUserIdStore
 import com.odys.mototriptracker.domain.RideMomentsCalculator
 import com.odys.mototriptracker.domain.usecase.DeleteTripUseCase
 import com.odys.mototriptracker.domain.usecase.GetTripRouteUseCase
@@ -28,6 +29,7 @@ class RideSummaryViewModel @Inject constructor(
     private val toggleFavoriteUseCase: ToggleFavoriteUseCase,
     private val uploadTripToCloudUseCase: UploadTripToCloudUseCase,
     private val backendSettings: BackendSettingsStore,
+    private val userIdStore: BackendUserIdStore,
 ) : ViewModel() {
 
     private val tripId: Long = checkNotNull(savedStateHandle[Routes.TRIP_ID_ARG])
@@ -56,6 +58,7 @@ class RideSummaryViewModel @Inject constructor(
                     moments = moments,
                     isLoading = false,
                     backendUrl = backendSettings.baseUrl,
+                    displayName = userIdStore.displayName,
                 )
             }
         }
@@ -84,16 +87,29 @@ class RideSummaryViewModel @Inject constructor(
             moments = moments,
             isLoading = false,
             backendUrl = backendSettings.baseUrl,
+            displayName = userIdStore.displayName,
             uploadStatus = _uiState.value.uploadStatus,
         )
     }
 
-    fun saveBackendUrl(url: String) {
-        backendSettings.setBaseUrl(url)
-        _uiState.value = _uiState.value.copy(
-            backendUrl = backendSettings.baseUrl,
-            uploadStatus = CloudUploadStatus.Idle,
-        )
+    fun saveBackendSettings(url: String, displayName: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            backendSettings.setBaseUrl(url)
+            userIdStore.setDisplayNameLocal(displayName)
+            val baseUrl = backendSettings.baseUrl
+            if (baseUrl.isNotBlank()) {
+                runCatching {
+                    userIdStore.updateDisplayName(baseUrl, userIdStore.displayName)
+                }.onFailure {
+                    AppLogger.e(AppLogger.Category.APP, "Profile sync on save failed", it)
+                }
+            }
+            _uiState.value = _uiState.value.copy(
+                backendUrl = baseUrl,
+                displayName = userIdStore.displayName,
+                uploadStatus = CloudUploadStatus.Idle,
+            )
+        }
     }
 
     fun uploadToCloud() {
@@ -118,6 +134,7 @@ class RideSummaryViewModel @Inject constructor(
                         CloudUploadStatus.Error(it.message ?: "Upload failed")
                     },
                 ),
+                displayName = userIdStore.displayName,
             )
         }
     }

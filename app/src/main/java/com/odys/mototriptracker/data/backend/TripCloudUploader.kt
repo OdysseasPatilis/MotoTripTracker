@@ -66,7 +66,8 @@ class TripCloudUploader @Inject constructor(
         val trip = tripRepository.getTrip(localTripId)
             ?: error("Trip $localTripId not found")
         val points = tripRepository.getRoutePointsForMap(localTripId)
-        val body = buildPayload(trip, points).toString()
+        val userId = userIdStore.ensureServerProfile(backendSettings.baseUrl)
+        val body = buildPayload(trip, points, userId).toString()
             .toRequestBody(JSON_MEDIA_TYPE)
 
         val request = Request.Builder()
@@ -81,7 +82,11 @@ class TripCloudUploader @Inject constructor(
         }
     }
 
-    private fun buildPayload(trip: TripEntity, points: List<RoutePointEntity>): JSONObject {
+    private fun buildPayload(
+        trip: TripEntity,
+        points: List<RoutePointEntity>,
+        userId: String,
+    ): JSONObject {
         val routePoints = JSONArray()
         points.forEach { point ->
             routePoints.put(
@@ -101,7 +106,7 @@ class TripCloudUploader @Inject constructor(
 
         return JSONObject()
             .put("clientTripId", trip.id.toCloudTripId())
-            .put("userId", userIdStore.getOrCreate())
+            .put("userId", userId)
             .put("startTimeMs", trip.startTime)
             .put("endTimeMs", trip.endTime)
             .put("distanceMeters", trip.distanceMeters.toDouble())
