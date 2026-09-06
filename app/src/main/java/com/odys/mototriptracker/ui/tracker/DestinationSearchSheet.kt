@@ -18,11 +18,13 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
@@ -31,7 +33,10 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -42,6 +47,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.odys.mototriptracker.data.navigation.DestinationHistoryEntry
 import com.odys.mototriptracker.data.navigation.NavigationSearchResult
 import com.odys.mototriptracker.ui.theme.AppPalette
 import com.odys.mototriptracker.ui.theme.LocalAppPalette
@@ -51,16 +57,20 @@ import com.odys.mototriptracker.ui.theme.LocalAppPalette
 fun DestinationSearchSheet(
     query: String,
     results: List<NavigationSearchResult>,
+    history: List<DestinationHistoryEntry>,
     isSearching: Boolean = false,
     searchError: String? = null,
     onQueryChange: (String) -> Unit,
     onSelectResult: (NavigationSearchResult) -> Unit,
+    onSelectHistory: (DestinationHistoryEntry) -> Unit,
+    onRemoveHistory: (String) -> Unit,
     onDismiss: () -> Unit,
     palette: AppPalette = LocalAppPalette.current
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val focusRequester = remember { FocusRequester() }
     val keyboard = LocalSoftwareKeyboardController.current
+    var historyItems by remember(history) { mutableStateOf(history) }
 
     LaunchedEffect(Unit) {
         focusRequester.requestFocus()
@@ -158,41 +168,15 @@ fun DestinationSearchSheet(
                         verticalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
                         items(results, key = { "${it.placeId}-${it.title}" }) { result ->
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .background(palette.bgCard, RoundedCornerShape(14.dp))
-                                    .clickable {
-                                        keyboard?.hide()
-                                        onSelectResult(result)
-                                    }
-                                    .padding(horizontal = 16.dp, vertical = 18.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(14.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Filled.Place,
-                                    contentDescription = null,
-                                    tint = palette.neonBlue,
-                                    modifier = Modifier.size(28.dp)
-                                )
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        text = result.title,
-                                        color = palette.textPrimary,
-                                        fontWeight = FontWeight.SemiBold,
-                                        fontSize = 17.sp
-                                    )
-                                    if (result.subtitle.isNotBlank()) {
-                                        Spacer(Modifier.height(4.dp))
-                                        Text(
-                                            text = result.subtitle,
-                                            color = palette.textSecondary,
-                                            fontSize = 14.sp
-                                        )
-                                    }
+                            DestinationRow(
+                                title = result.title,
+                                subtitle = result.subtitle,
+                                palette = palette,
+                                onClick = {
+                                    keyboard?.hide()
+                                    onSelectResult(result)
                                 }
-                            }
+                            )
                         }
                     }
                 }
@@ -208,6 +192,40 @@ fun DestinationSearchSheet(
                             CircularProgressIndicator(color = palette.neonGreen)
                             Spacer(Modifier.height(12.dp))
                             Text("Searching…", color = palette.textSecondary, fontSize = 16.sp)
+                        }
+                    }
+                }
+
+                query.isBlank() && historyItems.isNotEmpty() -> {
+                    LazyColumn(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        item {
+                            Text(
+                                "Recent",
+                                color = palette.textMuted,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                letterSpacing = 1.sp
+                            )
+                        }
+                        items(historyItems, key = { it.id }) { entry ->
+                            DestinationRow(
+                                title = entry.name,
+                                subtitle = entry.subtitle,
+                                palette = palette,
+                                onClick = {
+                                    keyboard?.hide()
+                                    onSelectHistory(entry)
+                                },
+                                onRemove = {
+                                    onRemoveHistory(entry.id)
+                                    historyItems = historyItems.filterNot { it.id == entry.id }
+                                }
+                            )
                         }
                     }
                 }
@@ -232,6 +250,57 @@ fun DestinationSearchSheet(
                         )
                     }
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun DestinationRow(
+    title: String,
+    subtitle: String,
+    palette: AppPalette,
+    onClick: () -> Unit,
+    onRemove: (() -> Unit)? = null,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(palette.bgCard, RoundedCornerShape(14.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(14.dp)
+    ) {
+        Icon(
+            imageVector = Icons.Filled.Place,
+            contentDescription = null,
+            tint = palette.neonBlue,
+            modifier = Modifier.size(28.dp)
+        )
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = title,
+                color = palette.textPrimary,
+                fontWeight = FontWeight.SemiBold,
+                fontSize = 17.sp
+            )
+            if (subtitle.isNotBlank()) {
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    text = subtitle,
+                    color = palette.textSecondary,
+                    fontSize = 14.sp
+                )
+            }
+        }
+        if (onRemove != null) {
+            IconButton(onClick = onRemove) {
+                Icon(
+                    Icons.Filled.Close,
+                    contentDescription = "Remove",
+                    tint = palette.textMuted
+                )
             }
         }
     }

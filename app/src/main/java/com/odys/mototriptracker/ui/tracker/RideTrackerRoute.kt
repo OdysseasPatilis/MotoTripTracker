@@ -65,7 +65,13 @@ fun RideTrackerRoute(
         petrolPreferences = viewModel.petrolPreferences(),
         onNavigationQueryChange = viewModel::onNavigationQueryChange,
         onSelectNavigationResult = viewModel::selectNavigationResult,
+        historyDestinations = viewModel.destinationHistoryEntries(),
+        onSelectHistoryDestination = viewModel::selectHistoryDestination,
+        onRemoveHistoryDestination = viewModel::removeHistoryDestination,
         onClearNavigation = viewModel::clearNavigation,
+        onConfirmStartNavigation = viewModel::confirmStartNavigation,
+        onCancelNavigationPreview = viewModel::cancelNavigationPreview,
+        onSelectPreviewRoute = viewModel::selectPreviewRoute,
         onOpenNavigationInMaps = viewModel::openNavigationInMaps,
         onToggleNavigationVoice = viewModel::toggleNavigationVoice
     )

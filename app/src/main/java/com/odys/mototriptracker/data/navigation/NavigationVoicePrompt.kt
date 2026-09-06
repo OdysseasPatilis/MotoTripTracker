@@ -3,6 +3,7 @@ package com.odys.mototriptracker.data.navigation
 import android.content.Context
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
+import android.speech.tts.Voice
 import androidx.core.content.edit
 import com.odys.mototriptracker.util.AppLogger
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -13,8 +14,9 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Speaks turn-by-turn prompts with the system voice (prefers Greek when available).
- * Mirrors iOS `NavigationVoicePrompt`.
+ * Speaks turn-by-turn prompts with the system voice.
+ * Uses English because Directions / OSRM step text is English — a Greek TTS voice
+ * reading English instructions sounds mismatched.
  */
 @Singleton
 class NavigationVoicePrompt @Inject constructor(
@@ -40,13 +42,13 @@ class NavigationVoicePrompt @Inject constructor(
                 return@TextToSpeech
             }
             val engine = tts ?: return@TextToSpeech
-            var locale = preferredLocale(engine)
-            var result = engine.setLanguage(locale)
+            val locale = preferredLocale(engine)
+            val result = engine.setLanguage(locale)
             if (result == TextToSpeech.LANG_MISSING_DATA || result == TextToSpeech.LANG_NOT_SUPPORTED) {
                 AppLogger.w(AppLogger.Category.UI, "Navigation TTS locale unsupported: $locale")
-                locale = Locale.US
-                result = engine.setLanguage(locale)
+                engine.setLanguage(Locale.US)
             }
+            selectEnglishVoice(engine)
             engine.setSpeechRate(0.95f)
             engine.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
                 override fun onStart(utteranceId: String?) = Unit
@@ -55,7 +57,10 @@ class NavigationVoicePrompt @Inject constructor(
                 override fun onError(utteranceId: String?) = Unit
             })
             ready.set(true)
-            AppLogger.i(AppLogger.Category.UI, "Navigation TTS ready locale=$locale setLanguage=$result")
+            AppLogger.i(
+                AppLogger.Category.UI,
+                "Navigation TTS ready locale=${engine.voice?.locale ?: locale} voice=${engine.voice?.name}"
+            )
         }
     }
 
@@ -81,13 +86,31 @@ class NavigationVoicePrompt @Inject constructor(
     }
 
     private fun preferredLocale(engine: TextToSpeech): Locale {
-        val greek = Locale.forLanguageTag("el-GR")
-        val greekResult = engine.isLanguageAvailable(greek)
-        if (greekResult >= TextToSpeech.LANG_AVAILABLE) return greek
+        val english = listOf(Locale.US, Locale.UK, Locale.ENGLISH)
+        for (locale in english) {
+            if (engine.isLanguageAvailable(locale) >= TextToSpeech.LANG_AVAILABLE) return locale
+        }
         val device = Locale.getDefault()
-        val deviceResult = engine.isLanguageAvailable(device)
-        if (deviceResult >= TextToSpeech.LANG_AVAILABLE) return device
+        if (engine.isLanguageAvailable(device) >= TextToSpeech.LANG_AVAILABLE) return device
         return Locale.US
+    }
+
+    /** Prefer an on-device English voice so Greek-accented default voices aren't used. */
+    private fun selectEnglishVoice(engine: TextToSpeech) {
+        val voices = engine.voices ?: return
+        val english = voices
+            .asSequence()
+            .filter { it.locale.language.equals("en", ignoreCase = true) }
+            .filter { !it.isNetworkConnectionRequired }
+            .filter { it.features?.contains("notInstalled") != true }
+            .sortedWith(
+                compareByDescending<Voice> { it.quality }
+                    .thenBy { if (it.locale.country.equals("US", ignoreCase = true)) 0 else 1 }
+            )
+            .firstOrNull()
+        if (english != null) {
+            engine.voice = english
+        }
     }
 
     companion object {

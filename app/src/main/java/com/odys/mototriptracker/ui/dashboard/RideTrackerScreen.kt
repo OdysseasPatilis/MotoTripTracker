@@ -7,10 +7,10 @@ import androidx.compose.animation.core.animateIntAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -24,12 +24,15 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material.icons.Icons
-import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.EmojiEvents
@@ -49,6 +52,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.ui.draw.alpha
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -96,8 +100,6 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.odys.mototriptracker.domain.GpsQuality
@@ -158,7 +160,13 @@ fun RideTrackerScreen(
     petrolPreferences: com.odys.mototriptracker.data.petrol.PetrolPreferences,
     onNavigationQueryChange: (String) -> Unit,
     onSelectNavigationResult: (NavigationSearchResult) -> Unit,
+    historyDestinations: List<com.odys.mototriptracker.data.navigation.DestinationHistoryEntry> = emptyList(),
+    onSelectHistoryDestination: (com.odys.mototriptracker.data.navigation.DestinationHistoryEntry) -> Unit = {},
+    onRemoveHistoryDestination: (String) -> Unit = {},
     onClearNavigation: () -> Unit,
+    onConfirmStartNavigation: () -> Unit = {},
+    onCancelNavigationPreview: () -> Unit = {},
+    onSelectPreviewRoute: (String) -> Unit = {},
     onOpenNavigationInMaps: () -> Unit,
     onToggleNavigationVoice: () -> Unit
 ) {
@@ -188,10 +196,13 @@ fun RideTrackerScreen(
         DestinationSearchSheet(
             query = navigation.searchQuery,
             results = navigation.searchResults,
+            history = historyDestinations,
             isSearching = navigation.isSearching,
             searchError = navigation.searchError,
             onQueryChange = onNavigationQueryChange,
             onSelectResult = onSelectNavigationResult,
+            onSelectHistory = onSelectHistoryDestination,
+            onRemoveHistory = onRemoveHistoryDestination,
             onDismiss = onDismissDestinationSearch
         )
     }
@@ -230,6 +241,7 @@ fun RideTrackerScreen(
     Box(modifier = Modifier.fillMaxSize()) {
         Scaffold(
             containerColor = palette.bgDeep,
+            contentWindowInsets = WindowInsets(0, 0, 0, 0),
             bottomBar = {
                 TrackerBottomBar(
                     isTracking = isTracking,
@@ -250,14 +262,17 @@ fun RideTrackerScreen(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .weight(0.46f)
+                        .weight(0.56f)
                 ) {
                     LiveRideMapView(
                         traveledRoute = uiState.routeCoordinates,
                         plannedRoute = navigation.routeCoordinates,
+                        previewRoutes = navigation.previewRoutes,
+                        selectedPreviewRouteId = navigation.selectedRouteId,
+                        isPreviewing = navigation.isPreviewing,
                         destinationLatitude = navigation.destinationLatitude,
                         destinationLongitude = navigation.destinationLongitude,
-                        isRiding = isRiding,
+                        isRiding = isRiding && navigation.isNavigating,
                         userLatitude = uiState.lastLatitude,
                         userLongitude = uiState.lastLongitude,
                         userBearing = uiState.lastBearing,
@@ -379,7 +394,7 @@ fun RideTrackerScreen(
                             }
                         }
 
-                        if (navigation.hasDestination) {
+                        if (navigation.isNavigating) {
                             ManeuverBanner(
                                 navigation = navigation,
                                 palette = palette,
@@ -395,20 +410,31 @@ fun RideTrackerScreen(
                             .padding(horizontal = 12.dp, vertical = 12.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        if (navigation.hasDestination) {
-                            ActiveRouteChip(
-                                navigation = navigation,
-                                palette = palette,
-                                onOpenInMaps = onOpenNavigationInMaps,
-                                onClear = onClearNavigation,
-                                onToggleVoice = onToggleNavigationVoice,
-                                onShowWeather = if (uiState.weather.hasData || navigation.hasRoute) {
-                                    onShowRouteWeather
-                                } else {
-                                    null
-                                }
-                            )
-                        } else {
+                        when {
+                            navigation.isPreviewing -> {
+                                RoutePreviewCard(
+                                    navigation = navigation,
+                                    palette = palette,
+                                    onSelectRoute = onSelectPreviewRoute,
+                                    onStart = onConfirmStartNavigation,
+                                    onCancel = onCancelNavigationPreview,
+                                )
+                            }
+                            navigation.isNavigating -> {
+                                ActiveRouteChip(
+                                    navigation = navigation,
+                                    palette = palette,
+                                    onOpenInMaps = onOpenNavigationInMaps,
+                                    onClear = onClearNavigation,
+                                    onToggleVoice = onToggleNavigationVoice,
+                                    onShowWeather = if (uiState.weather.hasData || navigation.hasRoute) {
+                                        onShowRouteWeather
+                                    } else {
+                                        null
+                                    }
+                                )
+                            }
+                            else -> {
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -469,29 +495,30 @@ fun RideTrackerScreen(
                                     fontWeight = FontWeight.SemiBold
                                 )
                             }
+                            }
                         }
                     }
                 }
 
                 Column(
                     modifier = Modifier
-                        .weight(0.54f)
+                        .weight(0.44f)
                         .verticalScroll(rememberScrollState())
-                        .background(palette.bgDeep)
-                        .padding(horizontal = 16.dp, vertical = 16.dp),
-                    verticalArrangement = Arrangement.spacedBy(20.dp)
+                        .background(palette.bgDeep),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
+                    // Speedometer sits flush above Start / Pause / Stop; stats scroll below.
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clip(RoundedCornerShape(20.dp))
+                            .clip(RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp))
                             .background(palette.bgCard)
-                            .padding(horizontal = 20.dp, vertical = 16.dp),
+                            .padding(start = 12.dp, end = 12.dp, top = 4.dp, bottom = 0.dp),
                         contentAlignment = Alignment.Center
                     ) {
                         Column(
                             horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(14.dp)
+                            verticalArrangement = Arrangement.spacedBy(2.dp)
                         ) {
                             SpeedometerArc(
                                 speedKmh = stats.speed,
@@ -499,7 +526,8 @@ fun RideTrackerScreen(
                                 speedLimitKmh = effectiveSpeedLimitKmh,
                                 isAutoLimit = isAutoLimit,
                                 flashPhase = flashPhase,
-                                palette = palette
+                                palette = palette,
+                                dialSize = 260.dp
                             )
                             GForceBar(
                                 value = stats.currentGForce,
@@ -509,37 +537,108 @@ fun RideTrackerScreen(
                         }
                     }
 
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        StatCard("DISTANCE", "${String.format(Locale.US, "%.1f km", stats.distanceKm)}", Modifier.weight(1f), palette = palette)
-                        StatCard("TOTAL TIME", formatSecondsToTime(stats.tripTime), Modifier.weight(1f), palette = palette)
-                    }
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        StatCard("MOVING", formatSecondsToTime(stats.movingTime), Modifier.weight(1f), valueColor = palette.neonGreen, palette = palette)
-                        StatCard("STOPPED", formatSecondsToTime(stats.stoppedTime), Modifier.weight(1f), valueColor = palette.neonRed, palette = palette)
-                    }
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        StatCard("AVG SPEED", "${stats.avgSpeed.toInt()} km/h", Modifier.weight(1f), palette = palette)
-                        StatCard("MAX SPEED", "${stats.maxSpeed.toInt()} km/h", Modifier.weight(1f), palette = palette)
-                    }
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        StatCard("ELEVATION", "${stats.totalElevationGain.toInt()} m", Modifier.weight(1f), palette = palette)
-                        StatCard("MAX G", String.format(Locale.US, "%.2f G", stats.maxGForce), Modifier.weight(1f), valueColor = palette.neonBlue, palette = palette)
-                    }
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        StatCard(
-                            "TWISTINESS",
-                            TwistinessCalculator.formattedScore(
-                                TwistinessCalculator.score(
-                                    stats.cornerCount,
-                                    stats.distanceKm.toDouble(),
-                                    stats.maxLateralGForce.toDouble()
-                                )
-                            ),
-                            Modifier.weight(1f),
-                            valueColor = palette.neonBlue,
-                            palette = palette
-                        )
-                        StatCard("CORNERS", "${stats.cornerCount}", Modifier.weight(1f), palette = palette)
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp)
+                            .padding(bottom = 8.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            StatCard(
+                                "DISTANCE",
+                                "${String.format(Locale.US, "%.1f km", stats.distanceKm)}",
+                                Modifier.weight(1f),
+                                palette = palette
+                            )
+                            StatCard(
+                                "TOTAL TIME",
+                                formatSecondsToTime(stats.tripTime),
+                                Modifier.weight(1f),
+                                palette = palette
+                            )
+                        }
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            StatCard(
+                                "MOVING",
+                                formatSecondsToTime(stats.movingTime),
+                                Modifier.weight(1f),
+                                valueColor = palette.neonGreen,
+                                palette = palette
+                            )
+                            StatCard(
+                                "STOPPED",
+                                formatSecondsToTime(stats.stoppedTime),
+                                Modifier.weight(1f),
+                                valueColor = palette.neonRed,
+                                palette = palette
+                            )
+                        }
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            StatCard(
+                                "AVG SPEED",
+                                "${stats.avgSpeed.toInt()} km/h",
+                                Modifier.weight(1f),
+                                palette = palette
+                            )
+                            StatCard(
+                                "MAX SPEED",
+                                "${stats.maxSpeed.toInt()} km/h",
+                                Modifier.weight(1f),
+                                palette = palette
+                            )
+                        }
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            StatCard(
+                                "ELEVATION",
+                                "${stats.totalElevationGain.toInt()} m",
+                                Modifier.weight(1f),
+                                palette = palette
+                            )
+                            StatCard(
+                                "MAX G",
+                                String.format(Locale.US, "%.2f G", stats.maxGForce),
+                                Modifier.weight(1f),
+                                valueColor = palette.neonBlue,
+                                palette = palette
+                            )
+                        }
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            StatCard(
+                                "TWISTINESS",
+                                TwistinessCalculator.formattedScore(
+                                    TwistinessCalculator.score(
+                                        stats.cornerCount,
+                                        stats.distanceKm.toDouble(),
+                                        stats.maxLateralGForce.toDouble()
+                                    )
+                                ),
+                                Modifier.weight(1f),
+                                valueColor = palette.neonBlue,
+                                palette = palette
+                            )
+                            StatCard(
+                                "CORNERS",
+                                "${stats.cornerCount}",
+                                Modifier.weight(1f),
+                                palette = palette
+                            )
+                        }
                     }
                 }
             }
@@ -604,7 +703,7 @@ private fun TrackerBottomBar(
             .fillMaxWidth()
             .background(palette.bgDeep)
             .navigationBarsPadding()
-            .padding(start = 16.dp, end = 16.dp, bottom = 8.dp, top = 10.dp)
+            .padding(start = 16.dp, end = 16.dp, bottom = 8.dp, top = 0.dp)
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -648,6 +747,135 @@ private fun TrackerBottomBar(
                         fontWeight = FontWeight.Bold
                     )
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun RoutePreviewCard(
+    navigation: NavigationState,
+    palette: AppPalette,
+    onSelectRoute: (String) -> Unit,
+    onStart: () -> Unit,
+    onCancel: () -> Unit,
+) {
+    val canStart = navigation.selectedRouteId != null &&
+        !navigation.isRouting &&
+        navigation.previewErrorMessage == null
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp))
+            .background(palette.bgPanel.copy(alpha = 0.92f))
+            .padding(12.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Icon(
+                Icons.Filled.Flag,
+                contentDescription = null,
+                tint = palette.neonBlue,
+                modifier = Modifier.size(18.dp)
+            )
+            Text(
+                text = navigation.destinationName ?: "Destination",
+                color = palette.textPrimary,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+
+        when {
+            navigation.isRouting -> {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(16.dp),
+                        strokeWidth = 2.dp,
+                        color = palette.neonBlue
+                    )
+                    Text(
+                        "Finding routes…",
+                        color = palette.textSecondary,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+            }
+                            navigation.previewErrorMessage != null -> {
+                Text(
+                    navigation.previewErrorMessage.orEmpty(),
+                    color = palette.routeAmber,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+            else -> {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    navigation.previewRoutes.forEachIndexed { index, option ->
+                        val selected = option.id == navigation.selectedRouteId
+                        Column(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(
+                                    if (selected) palette.neonBlue.copy(alpha = 0.18f)
+                                    else Color.Transparent
+                                )
+                                .clickable { onSelectRoute(option.id) }
+                                .padding(horizontal = 10.dp, vertical = 8.dp)
+                        ) {
+                            Text(
+                                if (index == 0) "Fastest" else "Route ${index + 1}",
+                                color = if (selected) palette.textPrimary else palette.textSecondary,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                "${NavigationState.formatDistance(option.distanceMeters)} · " +
+                                    NavigationState.formatDuration(option.expectedTravelTimeSeconds),
+                                color = if (selected) palette.textPrimary else palette.textSecondary,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Button(
+                onClick = onCancel,
+                modifier = Modifier.weight(1f),
+                colors = ButtonDefaults.buttonColors(containerColor = palette.bgCard),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Text("Cancel", color = palette.textSecondary, fontWeight = FontWeight.Bold)
+            }
+            Button(
+                onClick = onStart,
+                enabled = canStart,
+                modifier = Modifier.weight(1f),
+                colors = ButtonDefaults.buttonColors(containerColor = palette.neonGreen),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Text("Start", color = palette.bgDeep, fontWeight = FontWeight.Bold)
             }
         }
     }
@@ -965,7 +1193,8 @@ fun SpeedometerArc(
     speedLimitKmh: Float = 50f,
     isAutoLimit: Boolean = false,
     flashPhase: SpeedLimitFlashPhase = rememberSpeedLimitFlashPhase(speedKmh > speedLimitKmh),
-    palette: AppPalette = LocalAppPalette.current
+    palette: AppPalette = LocalAppPalette.current,
+    dialSize: Dp = 260.dp
 ) {
     val isOverLimit = speedKmh > speedLimitKmh
     val limitPercent = (speedLimitKmh / maxSpeedKmh).coerceIn(0f, 1f)
@@ -979,7 +1208,7 @@ fun SpeedometerArc(
         label = "speedNum"
     )
 
-    Box(modifier = Modifier.size(260.dp), contentAlignment = Alignment.Center) {
+    Box(modifier = Modifier.size(dialSize), contentAlignment = Alignment.Center) {
         Canvas(modifier = Modifier.fillMaxSize()) {
             val padding = 20.dp.toPx()
             val radius = (minOf(size.width, size.height) - padding * 2) / 2f
@@ -1090,9 +1319,9 @@ fun SpeedometerArc(
             Text(
                 text = animatedSpeed.toString(),
                 color = speedNumColor,
-                fontSize = 64.sp,
+                fontSize = 52.sp,
                 fontWeight = FontWeight.Bold,
-                lineHeight = 64.sp
+                lineHeight = 52.sp
             )
             Text(
                 "km/h",
@@ -1116,12 +1345,12 @@ fun GForceBar(
         modifier = Modifier.fillMaxWidth()
     ) {
         Text(String.format(Locale.US, "%.2f G", value), color = palette.textPrimary,
-            fontSize = 15.sp, fontWeight = FontWeight.Medium)
-        Spacer(Modifier.height(8.dp))
+            fontSize = 13.sp, fontWeight = FontWeight.Medium)
+        Spacer(Modifier.height(4.dp))
         Box(
             modifier = Modifier
                 .fillMaxWidth(0.72f)
-                .height(6.dp)
+                .height(5.dp)
                 .clip(RoundedCornerShape(3.dp))
                 .background(palette.arcTrack)
         ) {
@@ -1142,9 +1371,9 @@ fun GForceBar(
                     .background(palette.gForceTick)
             )
         }
-        Spacer(Modifier.height(6.dp))
+        Spacer(Modifier.height(2.dp))
         Text("MAX: ${String.format(Locale.US, "%.2f", maxValue)} G",
-            color = palette.textMuted, fontSize = 11.sp)
+            color = palette.textMuted, fontSize = 10.sp)
     }
 }
 

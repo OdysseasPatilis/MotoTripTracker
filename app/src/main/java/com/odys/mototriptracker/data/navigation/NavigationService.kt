@@ -54,7 +54,8 @@ import kotlin.math.sqrt
 class NavigationService @Inject constructor(
     @ApplicationContext context: Context,
     mapsApiKeyProvider: MapsApiKeyProvider,
-    private val voice: NavigationVoicePrompt
+    private val voice: NavigationVoicePrompt,
+    private val destinationHistory: DestinationSearchHistory,
 ) {
     private val context = context
     private val apiKey = mapsApiKeyProvider.getApiKey()
@@ -83,6 +84,7 @@ class NavigationService @Inject constructor(
     private var autocompleteToken = AutocompleteSessionToken.newInstance()
     private var approachedStepId: String? = null
     private var announcedStepId: String? = null
+    private var routeRequestGeneration = 0L
 
     private val placesClient: PlacesClient? by lazy {
         val key = apiKey?.takeIf { it.isNotBlank() } ?: return@lazy null
@@ -134,14 +136,19 @@ class NavigationService @Inject constructor(
     fun updateOrigin(latitude: Double, longitude: Double) {
         originLat = latitude
         originLng = longitude
-        if (_state.value.hasDestination && !_state.value.hasRoute && !_state.value.isRouting) {
-            computeRoute(isRecalculation = false)
+        val state = _state.value
+        if (state.isPreviewing &&
+            state.previewRoutes.isEmpty() &&
+            !state.isRouting &&
+            state.hasDestination
+        ) {
+            computeRoute(isRecalculation = false, requestAlternates = true)
         }
-        if (_state.value.hasRoute) {
-            recomputeRemaining(latitude, longitude)
-            advanceStepIfNeeded(latitude, longitude)
-            checkOffRouteAndRecalculate(latitude, longitude)
-        }
+        if (!state.hasRoute) return
+        recomputeRemaining(latitude, longitude)
+        if (!state.isNavigating) return
+        advanceStepIfNeeded(latitude, longitude)
+        checkOffRouteAndRecalculate(latitude, longitude)
     }
 
     fun selectSearchResult(result: NavigationSearchResult) {
@@ -159,16 +166,34 @@ class NavigationService @Inject constructor(
                 return@launch
             }
             autocompleteToken = AutocompleteSessionToken.newInstance()
-            val label = if (result.subtitle.isNotBlank()) {
-                "${result.title} · ${result.subtitle}"
-            } else {
-                result.title
-            }
-            setDestination(latLng.first, latLng.second, label)
+            beginPreview(
+                latitude = latLng.first,
+                longitude = latLng.second,
+                name = result.title,
+                subtitle = result.subtitle,
+            )
         }
     }
 
-    fun setDestination(latitude: Double, longitude: Double, name: String) {
+    fun selectHistoryEntry(entry: DestinationHistoryEntry) {
+        beginPreview(
+            latitude = entry.latitude,
+            longitude = entry.longitude,
+            name = entry.name,
+            subtitle = entry.subtitle,
+        )
+    }
+
+    fun setDestination(latitude: Double, longitude: Double, name: String, subtitle: String = "") {
+        beginPreview(latitude, longitude, name, subtitle)
+    }
+
+    fun beginPreview(latitude: Double, longitude: Double, name: String, subtitle: String = "") {
+        routeRequestGeneration += 1
+        destinationHistory.add(name = name, subtitle = subtitle, latitude = latitude, longitude = longitude)
+        approachedStepId = null
+        announcedStepId = null
+        voice.stop()
         _state.update {
             it.copy(
                 destinationLatitude = latitude,
@@ -177,15 +202,55 @@ class NavigationService @Inject constructor(
                 searchResults = emptyList(),
                 searchQuery = "",
                 isSearching = false,
-                searchError = null
+                searchError = null,
+                previewErrorMessage = null,
+                previewRoutes = emptyList(),
+                selectedRouteId = null,
+                routeCoordinates = emptyList(),
+                steps = emptyList(),
+                currentStepIndex = 0,
+                distanceToNextManeuverMeters = 0.0,
+                distanceRemainingMeters = 0.0,
+                etaEpochMs = null,
+                isOffRoute = false,
+                isRecalculating = false,
+                phase = NavigationPhase.Previewing,
             )
         }
-        computeRoute(isRecalculation = false)
+        computeRoute(isRecalculation = false, requestAlternates = true)
+    }
+
+    fun selectPreviewRoute(id: String) {
+        val state = _state.value
+        if (!state.isPreviewing) return
+        val option = state.previewRoutes.firstOrNull { it.id == id } ?: return
+        applyPreviewSelection(option)
+    }
+
+    fun confirmStartNavigation() {
+        val option = _state.value.selectedPreviewRoute ?: return
+        if (!_state.value.isPreviewing) return
+        _state.update { it.copy(phase = NavigationPhase.Navigating) }
+        applyRoute(
+            DirectionsResult(
+                distanceMeters = option.distanceMeters,
+                travelTimeSeconds = option.expectedTravelTimeSeconds,
+                coordinates = option.coordinates,
+                steps = option.steps,
+            ),
+            isRecalculation = false,
+        )
+        AppLogger.i(AppLogger.Category.UI, "Navigation started with selected preview route")
+    }
+
+    fun cancelPreview() {
+        clear()
     }
 
     fun clear() {
         routeJob?.cancel()
         searchJob?.cancel()
+        routeRequestGeneration += 1
         // Keep origin so the next destination can route immediately.
         totalRouteDistanceMeters = 0.0
         totalTravelTimeSeconds = 0.0
@@ -248,7 +313,7 @@ class NavigationService @Inject constructor(
         }
     }
 
-    private fun computeRoute(isRecalculation: Boolean) {
+    private fun computeRoute(isRecalculation: Boolean, requestAlternates: Boolean = false) {
         val oLat = originLat
         val oLng = originLng
         val destLat = _state.value.destinationLatitude
@@ -258,25 +323,103 @@ class NavigationService @Inject constructor(
                 AppLogger.Category.UI,
                 "Cannot route — origin=${oLat != null} dest=${destLat != null}"
             )
+            if (_state.value.isPreviewing && !isRecalculation) {
+                _state.update { it.copy(previewErrorMessage = "Waiting for your location…") }
+            }
             return
         }
 
         routeJob?.cancel()
+        routeRequestGeneration += 1
+        val generation = routeRequestGeneration
         _state.update {
             it.copy(
                 isRouting = !isRecalculation,
-                isRecalculating = isRecalculation
+                isRecalculating = isRecalculation,
+                previewErrorMessage = if (!isRecalculation) null else it.previewErrorMessage,
             )
         }
         routeJob = scope.launch {
-            val route = fetchDirections(oLat, oLng, destLat, destLng)
-                ?: fetchOsrmDirections(oLat, oLng, destLat, destLng)
-            if (route == null) {
-                AppLogger.w(AppLogger.Category.UI, "All routing providers failed")
-                _state.update { it.copy(isRouting = false, isRecalculating = false) }
+            val wantAlternates = requestAlternates && !isRecalculation
+            val routes = fetchDirections(oLat, oLng, destLat, destLng, alternatives = wantAlternates)
+                .ifEmpty {
+                    listOfNotNull(fetchOsrmDirections(oLat, oLng, destLat, destLng))
+                }
+            if (generation != routeRequestGeneration) return@launch
+            if (isRecalculation) {
+                if (!_state.value.isNavigating) return@launch
+                val route = routes.firstOrNull()
+                if (route == null) {
+                    AppLogger.w(AppLogger.Category.UI, "All routing providers failed")
+                    _state.update { it.copy(isRouting = false, isRecalculating = false) }
+                    return@launch
+                }
+                applyRoute(route, isRecalculation = true)
                 return@launch
             }
-            applyRoute(route, isRecalculation)
+            if (!_state.value.isPreviewing) return@launch
+            applyPreviewRoutes(routes)
+        }
+    }
+
+    private fun applyPreviewRoutes(routes: List<DirectionsResult>) {
+        if (routes.isEmpty()) {
+            _state.update {
+                it.copy(
+                    isRouting = false,
+                    isRecalculating = false,
+                    previewRoutes = emptyList(),
+                    selectedRouteId = null,
+                    routeCoordinates = emptyList(),
+                    previewErrorMessage = "Couldn't find a driving route.",
+                )
+            }
+            return
+        }
+        val options = routes.map { route ->
+            NavRouteOption(
+                coordinates = route.coordinates,
+                distanceMeters = route.distanceMeters,
+                expectedTravelTimeSeconds = route.travelTimeSeconds,
+                steps = route.steps,
+            )
+        }
+        val first = options.first()
+        applyPreviewSelection(first, allOptions = options)
+        AppLogger.i(
+            AppLogger.Category.UI,
+            "Preview routes ready: ${options.size} option(s)"
+        )
+    }
+
+    private fun applyPreviewSelection(
+        option: NavRouteOption,
+        allOptions: List<NavRouteOption> = _state.value.previewRoutes,
+    ) {
+        totalRouteDistanceMeters = option.distanceMeters
+        totalTravelTimeSeconds = option.expectedTravelTimeSeconds
+        nearestRouteDistanceMeters = 0.0
+        _state.update {
+            it.copy(
+                previewRoutes = allOptions.ifEmpty { listOf(option) },
+                selectedRouteId = option.id,
+                routeCoordinates = option.coordinates,
+                distanceRemainingMeters = option.distanceMeters,
+                etaEpochMs = if (option.expectedTravelTimeSeconds > 0) {
+                    System.currentTimeMillis() + (option.expectedTravelTimeSeconds * 1000).toLong()
+                } else {
+                    null
+                },
+                steps = option.steps,
+                currentStepIndex = 0,
+                distanceToNextManeuverMeters = option.steps.firstOrNull()?.distanceMeters
+                    ?: option.distanceMeters,
+                isRouting = false,
+                isRecalculating = false,
+                isOffRoute = false,
+                previewErrorMessage = null,
+                phase = NavigationPhase.Previewing,
+            )
         }
     }
 
@@ -303,7 +446,11 @@ class NavigationService @Inject constructor(
                 distanceToNextManeuverMeters = route.steps.firstOrNull()?.distanceMeters ?: route.distanceMeters,
                 isRouting = false,
                 isRecalculating = false,
-                isOffRoute = false
+                isOffRoute = false,
+                phase = NavigationPhase.Navigating,
+                previewRoutes = emptyList(),
+                selectedRouteId = null,
+                previewErrorMessage = null,
             )
         }
         onRouteApplied?.invoke(route.coordinates, route.travelTimeSeconds)
@@ -696,51 +843,59 @@ class NavigationService @Inject constructor(
         originLat: Double,
         originLng: Double,
         destLat: Double,
-        destLng: Double
-    ): DirectionsResult? = withContext(Dispatchers.IO) {
-        val key = apiKey ?: return@withContext null
+        destLng: Double,
+        alternatives: Boolean = false,
+    ): List<DirectionsResult> = withContext(Dispatchers.IO) {
+        val key = apiKey ?: return@withContext emptyList()
         val url =
             "https://maps.googleapis.com/maps/api/directions/json?" +
-                "origin=$originLat,$originLng&destination=$destLat,$destLng&mode=driving&key=$key"
+                "origin=$originLat,$originLng&destination=$destLat,$destLng&mode=driving" +
+                "${if (alternatives) "&alternatives=true" else ""}&key=$key"
         runCatching {
-            val body = httpGet(url) ?: return@runCatching null
+            val body = httpGet(url) ?: return@runCatching emptyList()
             val json = JSONObject(body)
             val status = json.optString("status")
             if (status != "OK") {
                 AppLogger.w(AppLogger.Category.UI, "Directions status=$status")
-                return@runCatching null
+                return@runCatching emptyList()
             }
-            val route = json.getJSONArray("routes").getJSONObject(0)
-            val leg = route.getJSONArray("legs").getJSONObject(0)
-            val distance = leg.getJSONObject("distance").getDouble("value")
-            val duration = leg.getJSONObject("duration").getDouble("value")
-            val encoded = route.getJSONObject("overview_polyline").getString("points")
-            val coordinates = PolyUtil.decode(encoded).map { RouteCoordinate(it.latitude, it.longitude) }
-
-            val steps = buildList {
-                val stepsArray = leg.optJSONArray("steps") ?: return@buildList
-                for (i in 0 until stepsArray.length()) {
-                    val step = stepsArray.getJSONObject(i)
-                    val instruction = step.optString("html_instructions")
-                        .replace(Regex("<[^>]+>"), " ")
-                        .replace(Regex("\\s+"), " ")
-                        .trim()
-                    if (instruction.isEmpty()) continue
-                    val end = step.getJSONObject("end_location")
-                    add(
-                        NavStep(
-                            instruction = instruction,
-                            distanceMeters = step.getJSONObject("distance").getDouble("value"),
-                            endLatitude = end.getDouble("lat"),
-                            endLongitude = end.getDouble("lng")
-                        )
-                    )
+            val routesArray = json.getJSONArray("routes")
+            buildList {
+                for (ri in 0 until routesArray.length()) {
+                    val route = routesArray.getJSONObject(ri)
+                    val leg = route.getJSONArray("legs").getJSONObject(0)
+                    val distance = leg.getJSONObject("distance").getDouble("value")
+                    val duration = leg.getJSONObject("duration").getDouble("value")
+                    val encoded = route.getJSONObject("overview_polyline").getString("points")
+                    val coordinates = PolyUtil.decode(encoded).map {
+                        RouteCoordinate(it.latitude, it.longitude)
+                    }
+                    val steps = buildList {
+                        val stepsArray = leg.optJSONArray("steps") ?: return@buildList
+                        for (i in 0 until stepsArray.length()) {
+                            val step = stepsArray.getJSONObject(i)
+                            val instruction = step.optString("html_instructions")
+                                .replace(Regex("<[^>]+>"), " ")
+                                .replace(Regex("\\s+"), " ")
+                                .trim()
+                            if (instruction.isEmpty()) continue
+                            val end = step.getJSONObject("end_location")
+                            add(
+                                NavStep(
+                                    instruction = instruction,
+                                    distanceMeters = step.getJSONObject("distance").getDouble("value"),
+                                    endLatitude = end.getDouble("lat"),
+                                    endLongitude = end.getDouble("lng")
+                                )
+                            )
+                        }
+                    }
+                    add(DirectionsResult(distance, duration, coordinates, steps))
                 }
             }
-            DirectionsResult(distance, duration, coordinates, steps)
         }.getOrElse {
             AppLogger.w(AppLogger.Category.UI, "Directions failed", it)
-            null
+            emptyList()
         }
     }
 

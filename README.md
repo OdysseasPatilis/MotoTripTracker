@@ -1,8 +1,8 @@
 # MotoTripTracker
 
-Android motorcycle ride tracker. Records high-accuracy GPS rides, shows a live dashboard (speed, G-force, road speed limits, fuel range), stores trips locally, and offers history, summary, map replay, share card, and GPX export. Destination search, in-app routing, ranked petrol stops, and route weather sit alongside the tracker.
+Android motorcycle ride tracker. Records high-accuracy GPS rides, shows a live dashboard (speed, G-force, road speed limits, fuel range), stores trips locally, and offers history, summary, map replay, share card, and GPX export. Destination search with **route preview**, ranked petrol stops, route weather, and optional **cloud trip upload** sit alongside the tracker.
 
-The app is the Android counterpart of the iOS **MotoTripTracker** project, with feature parity for tracking, navigation, fuel/petrol, Overpass speed limits, twistiness, ride moments, favorites, and GPX/share.
+The app is the Android counterpart of the iOS **MotoTripTracker** project, with feature parity for tracking, navigation (preview + history), fuel/petrol, Overpass speed limits, twistiness, ride moments, favorites, and GPX/share.
 
 | | |
 |---|---|
@@ -29,12 +29,15 @@ The app is the Android counterpart of the iOS **MotoTripTracker** project, with 
 
 ### Navigation (destination & route)
 - **Set destination** via search sheet (Google Places autocomplete + text search; Nominatim/Photon fallbacks)
-- **Driving route** from Directions API with **OSRM** fallback; drawn on the live map
-- **Slim turn HUD**: top next-maneuver card (icon + distance + instruction); bottom chip with remaining distance, ETA, weather, voice mute, open in Maps, clear
-- **Spoken turns** (TextToSpeech, prefers Greek): approach prompt within 250 m (`In {dist}, {instruction}`), instruction again on step advance; mute persists; light haptic on advance
+- **Recent destinations** (cap 20, nearby dedupe, removable) shown when the query is empty
+- Selecting a place (or petrol **Go**) enters **route preview** — not turn-by-turn yet
+- Directions with **`alternatives=true`** (OSRM fallback if Google fails); alternate polylines on the map; bottom card with route chips + **Start** / **Cancel**
+- Map camera fits the selected preview route with extra bottom padding so the destination stays clear of the preview card
+- **Start** begins navigating: slim turn HUD, spoken steps, off-route recalculation
+- **Spoken turns** (TextToSpeech, **English** voice — prompts are English): approach within 250 m (`In {dist}, {instruction}`), instruction again on step advance; mute persists; light haptic on advance
 - Step advance at 35 m; off-route at 80 m with 12 s recalculate cooldown
-- Distance remaining and ETA update as you move
-- **Open in Google Maps** for voice guidance handoff; clear route from the dashboard
+- Distance remaining and ETA update while navigating
+- **Open in Google Maps** for handoff; clear / cancel from the dashboard
 - Origin is kept when clearing a destination so the next search still has a GPS fix
 
 ### Fuel & range
@@ -48,7 +51,7 @@ The app is the Android counterpart of the iOS **MotoTripTracker** project, with 
 - Search radius **adapts to context** — tighter in cities (~2 km), wider rural (~20 km+), **highway-biased** when riding fast on motorways
 - OSM Overpass discovery + Google Places enrichment (open now, hours, rating, phone)
 - Closed stations filtered out when status is known
-- **Details** sheet with place photo (Google Places) or Static Maps preview; **Go** starts in-app navigation
+- **Details** sheet with place photo (Google Places) or Static Maps preview; **Go** opens **route preview** (same as destination search)
 - Brand / octane prefs live in Fuel settings
 
 ### Route weather
@@ -57,7 +60,7 @@ The app is the Android counterpart of the iOS **MotoTripTracker** project, with 
 
 ### Road speed limits
 - Live limits from OpenStreetMap via Overpass (mirrors, 30 m then 60 m radii, 35 m / 15 s throttle)
-- On-screen speed-limit sign; translucent flash when over the limit
+- On-screen speed-limit sign warns as soon as you exceed the limit; full-screen translucent flash at **+10 km/h** over the limit
 - Offline SharedPreferences grid cache + neighbour soft fallback
 - Bundled Greater Athens region pack (`athens_speed_limits.json`) — used first offline; pack miss or implausible hits (e.g. 50 while riding highway speed) fall through to Overpass
 - OSM tag parsing includes country implicits (`GR:urban`, etc.)
@@ -82,6 +85,7 @@ The app is the Android counterpart of the iOS **MotoTripTracker** project, with 
 
 ### Ride summary & map
 - Post-ride summary with stats (including twistiness), rename, favorite, delete
+- Optional **Cloud Sync**: configure backend URL + display name on summary; upload trip JSON (also auto on stop when a URL is set)
 - **Ride moments** highlights (e.g. top speed, max G, elevation, longest stop, corners, lean G)
 - Full-route Google Map: speed / elevation colored polyline, profile chart, waypoints
 - **Route replay**: play / pause at 1× / 2× / 5×; mint traveled trail + faded remaining; camera follows the rider
@@ -116,8 +120,10 @@ Single Gradle module (`:app`) with a layered package layout. ViewModels talk to 
 ┌────────────────────────────▼────────────────────────────────┐
 │  Data                                                       │
 │  TripRepository · LocationRepository · NavigationService    │
+│  DestinationSearchHistory · NavigationVoicePrompt           │
 │  FuelService · PetrolStationFinder · PetrolPlacesEnricher   │
 │  RouteWeatherService · OverpassSpeedLimitProvider           │
+│  TripCloudUploader · BackendSettingsStore                   │
 │  GpxExporter · AdvancedWaypointAnalyzer                     │
 │  ObjectBox entities (TripEntity, RoutePointEntity)          │
 └────────────────────────────┬────────────────────────────────┘
@@ -142,7 +148,8 @@ com.odys.mototriptracker/
 │   ├── trip/           # TripEntity, TripRepository, service controller
 │   ├── checkpoint/     # RoutePointEntity
 │   ├── location/       # Fused location Flow
-│   ├── navigation/     # destination search, directions, nav state
+│   ├── navigation/     # search, preview/nav phases, history, TTS
+│   ├── backend/        # optional trip upload + backend settings
 │   ├── fuel/           # tank / consumption / range
 │   ├── petrol/         # OSM finder, prefs, Places enricher, hours parsers
 │   ├── weather/        # Open-Meteo route sampling
@@ -187,6 +194,7 @@ Defined in `ui/navigation/Routes.kt`, hosted by `MotoTripNavHost`.
 | `DeleteTripUseCase` | Remove trip |
 | `UpdateTripTitleUseCase` / `ToggleFavoriteUseCase` | Rename / favorite |
 | `GetLeaderboardUseCase` | Rank trips by speed / distance / turns / twistiness |
+| `UploadTripToCloudUseCase` | Optional backend upload of a finished trip |
 
 ViewModels depend on these use cases for trip lifecycle and history. Tracker overlays (navigation, fuel, petrol, weather) call injected services from `RideTrackerViewModel`.
 
@@ -215,8 +223,14 @@ Interpolates rider position along saved route points for playback (speed multipl
 ### `RideMomentsCalculator`
 Builds a short list of highlight moments from the saved trip and route points for the summary UI and share card.
 
-### `NavigationService` / `FuelService` / `PetrolStationFinder` / `RouteWeatherService`
-Destination search + routing; tank/range persistence; OSM + Google petrol ranking and details (including place photo / map preview); Open-Meteo samples along the active route.
+### `NavigationService` / `DestinationSearchHistory` / `NavigationVoicePrompt`
+Destination search → **preview** (alternate routes) → **Start** navigating; recent history in SharedPreferences; English TTS for turn prompts.
+
+### `FuelService` / `PetrolStationFinder` / `RouteWeatherService`
+Tank/range persistence; OSM + Google petrol ranking and details (including place photo / map preview); Open-Meteo samples along the active route.
+
+### `TripCloudUploader` / `BackendSettingsStore`
+Optional HTTP upload of finished trip JSON to a configured backend (`docs/API-and-Storage.md`).
 
 ---
 
@@ -246,10 +260,11 @@ Waypoint types written on finalize include e.g. `START`, `END`, `TOP_SPEED`, `SU
 5. **Stop** → finalize trip (end time, polyline encode, waypoints, twistiness) and stop the service.
 6. Rides under ~50 m are flagged as short in the stop result (logged); they are still saved.
 
-### Destination → route → petrol / weather
-1. Search sheet → Places (or fallback geocoders) → select result → Directions / OSRM polyline on the map.
-2. Weather samples the route asynchronously; petrol search uses GPS + prefs + OSM/Places and presents a ranked sheet.
-3. **Go** on a station sets destination and navigates in-app.
+### Destination → preview → navigate / petrol / weather
+1. Search sheet (or Recent) → Places (or fallback geocoders) → select result → **preview** with alternate Directions routes (OSRM fallback).
+2. Choose a route chip → **Start** for turn-by-turn, or **Cancel** to clear.
+3. Weather samples the route asynchronously; petrol search uses GPS + prefs + OSM/Places and presents a ranked sheet.
+4. **Go** on a station enters the same preview flow.
 
 ### History → summary → map / share / replay
 1. History loads trips newest-first; tab / search / date filter refine the list.
@@ -318,8 +333,11 @@ Unit tests under `app/src/test/…`:
 - `GpsQualityTest` — GPS bar thresholds
 - `TwistinessCalculatorTest` — score / rating bands
 - `GoogleWeekdayHoursParserTest` — Google weekday text → open/closed
+- `DestinationSearchHistoryLogicTest` — distance/duration helpers + preview selection fallback
 
 Instrumented / Compose UI tests are mostly scaffold; ride and ObjectBox flows are not fully covered by instrumentation yet.
+
+API / storage inventory: [`docs/API-and-Storage.md`](docs/API-and-Storage.md).
 
 ---
 
@@ -340,6 +358,7 @@ Instrumented / Compose UI tests are mostly scaffold; ride and ObjectBox flows ar
 
 - **UI → use cases → data/domain** keeps screens thin and testable; tracker overlays use focused services (`NavigationService`, `FuelService`, petrol, weather).
 - **Foreground service + singleton `TripManager`** is the source of truth for an active ride, not the Compose lifecycle.
-- **ObjectBox** is on-device only; there is no account or cloud sync in this codebase.
+- **ObjectBox** is on-device; optional **cloud upload** posts trip JSON when a backend URL is configured (summary Cloud Sync / auto on stop).
 - History UX separates **Favorites** into its own tab and uses **date filters** for range queries; free-text search stays focused on naming and related fields.
 - Petrol ranking mirrors the iOS twin: prefs → open status → highway bias → distance, with Google hours/photos when a Place match exists.
+- Navigation preview mirrors iOS: pick destination → choose alternate → **Start**; voice language matches English step text.

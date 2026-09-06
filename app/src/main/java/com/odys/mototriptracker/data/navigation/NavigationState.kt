@@ -2,6 +2,7 @@ package com.odys.mototriptracker.data.navigation
 
 import com.odys.mototriptracker.domain.RouteCoordinate
 import java.util.Locale
+import java.util.UUID
 
 data class NavigationSearchResult(
     val placeId: String,
@@ -12,11 +13,25 @@ data class NavigationSearchResult(
 )
 
 data class NavStep(
-    val id: String = java.util.UUID.randomUUID().toString(),
+    val id: String = UUID.randomUUID().toString(),
     val instruction: String,
     val distanceMeters: Double,
     val endLatitude: Double,
     val endLongitude: Double
+)
+
+enum class NavigationPhase {
+    Idle,
+    Previewing,
+    Navigating,
+}
+
+data class NavRouteOption(
+    val id: String = UUID.randomUUID().toString(),
+    val coordinates: List<RouteCoordinate>,
+    val distanceMeters: Double,
+    val expectedTravelTimeSeconds: Double,
+    val steps: List<NavStep>,
 )
 
 data class NavigationState(
@@ -36,11 +51,19 @@ data class NavigationState(
     val isVoiceEnabled: Boolean = true,
     val steps: List<NavStep> = emptyList(),
     val currentStepIndex: Int = 0,
-    val distanceToNextManeuverMeters: Double = 0.0
+    val distanceToNextManeuverMeters: Double = 0.0,
+    val phase: NavigationPhase = NavigationPhase.Idle,
+    val previewRoutes: List<NavRouteOption> = emptyList(),
+    val selectedRouteId: String? = null,
+    val previewErrorMessage: String? = null,
 ) {
     val hasDestination: Boolean = destinationLatitude != null && destinationLongitude != null
     val hasRoute: Boolean = routeCoordinates.size > 1
     val currentStep: NavStep? = steps.getOrNull(currentStepIndex)
+    val isPreviewing: Boolean = phase == NavigationPhase.Previewing
+    val isNavigating: Boolean = phase == NavigationPhase.Navigating
+    val selectedPreviewRoute: NavRouteOption?
+        get() = previewRoutes.firstOrNull { it.id == selectedRouteId } ?: previewRoutes.firstOrNull()
 
     val summaryText: String
         get() {
@@ -64,6 +87,11 @@ data class NavigationState(
             String.format(Locale.US, "%.1f km", meters / 1000.0)
         } else {
             "${maxOf(0, meters.toInt())} m"
+        }
+
+        fun formatDuration(seconds: Double): String {
+            val minutes = maxOf(1, (seconds / 60.0).toInt())
+            return "$minutes min"
         }
     }
 }

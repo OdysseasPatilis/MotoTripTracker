@@ -53,7 +53,7 @@ Not a REST call you write by hand — Google Maps Compose / Maps SDK loads tiles
 
 | Call | Endpoint / API | File | Trigger |
 |------|----------------|------|---------|
-| Driving route | `maps/api/directions/json` | `NavigationService.fetchDirections` | Set destination / off-route recalculate |
+| Driving route | `maps/api/directions/json` (`alternatives=true` in preview) | `NavigationService.fetchDirections` | Preview routes / Start navigation / off-route recalculate |
 | Fallback | OSRM (not Google) | `fetchOsrmDirections` | Google Directions fails |
 
 **Recalculate:** if rider is **>80 m** off the polyline, cooldown **12 s** (`RECALCULATE_COOLDOWN_MS`).
@@ -150,7 +150,7 @@ No Room / SQLite — durable ride data is **ObjectBox only**.
 |-------------|----------------|
 | Start ride, ride without nav/petrol | GPS only (Fused Location). Speed limit: local pack → cache → maybe Overpass |
 | Type destination | Places (± Photon / Nominatim) |
-| Confirm destination | Directions (± OSRM) |
+| Confirm destination | Directions with alternatives → preview → Start |
 | Leave route | Directions again (12 s cooldown) |
 | Open petrol sheet | Overpass + Places Nearby + up to 12× open-info |
 | Open petrol details | Place Details + Photo + Static Maps |

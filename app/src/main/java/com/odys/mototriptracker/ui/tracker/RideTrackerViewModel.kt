@@ -4,6 +4,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.odys.mototriptracker.data.fuel.FuelService
 import com.odys.mototriptracker.data.location.LocationRepository
+import com.odys.mototriptracker.data.navigation.DestinationHistoryEntry
+import com.odys.mototriptracker.data.navigation.DestinationSearchHistory
 import com.odys.mototriptracker.data.navigation.NavigationService
 import com.odys.mototriptracker.data.navigation.NavigationSearchResult
 import com.odys.mototriptracker.data.petrol.GooglePetrolDetails
@@ -39,6 +41,7 @@ class RideTrackerViewModel @Inject constructor(
     observeRideSessionUseCase: ObserveRideSessionUseCase,
     private val tripManager: TripManager,
     private val navigationService: NavigationService,
+    private val destinationHistory: DestinationSearchHistory,
     private val routeWeatherService: RouteWeatherService,
     private val fuelService: FuelService,
     private val petrolPreferences: PetrolPreferences,
@@ -257,10 +260,15 @@ class RideTrackerViewModel @Inject constructor(
     }
 
     fun selectPetrolStation(station: PetrolStationRecommendation) {
-        navigationService.setDestination(station.latitude, station.longitude, station.name)
+        navigationService.setDestination(
+            latitude = station.latitude,
+            longitude = station.longitude,
+            name = station.name,
+            subtitle = "Petrol station",
+        )
         showPetrolStations.value = false
         petrolDetails.value = null
-        petrolMessage.value = "Navigating to ${station.name}"
+        petrolMessage.value = "Previewing route to ${station.name}"
         viewModelScope.launch {
             delay(2_500)
             petrolMessage.value = null
@@ -290,7 +298,16 @@ class RideTrackerViewModel @Inject constructor(
         navigationService.selectSearchResult(result)
         showDestinationSearch.value = false
     }
+    fun selectHistoryDestination(entry: DestinationHistoryEntry) {
+        navigationService.selectHistoryEntry(entry)
+        showDestinationSearch.value = false
+    }
+    fun removeHistoryDestination(id: String) = destinationHistory.remove(id)
+    fun destinationHistoryEntries(): List<DestinationHistoryEntry> = destinationHistory.all()
     fun clearNavigation() = navigationService.clear()
+    fun confirmStartNavigation() = navigationService.confirmStartNavigation()
+    fun cancelNavigationPreview() = navigationService.cancelPreview()
+    fun selectPreviewRoute(id: String) = navigationService.selectPreviewRoute(id)
     fun openNavigationInMaps() = navigationService.openInGoogleMaps()
     fun toggleNavigationVoice() = navigationService.toggleVoice()
     fun fuelService(): FuelService = fuelService
