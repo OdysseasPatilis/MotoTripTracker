@@ -173,7 +173,10 @@ fun RideTrackerScreen(
 
     val effectiveSpeedLimitKmh = themeStore.effectiveLimitKmh(stats.roadSpeedLimitKmh).toFloat()
     val isAutoLimit = themeStore.hasAutoLimit(stats.roadSpeedLimitKmh)
+    // Sign / dial warn as soon as you exceed the limit; full-screen flash only at +10 km/h.
     val isOverLimit = isTracking && !isPaused && stats.speed > effectiveSpeedLimitKmh
+    val shouldFlashScreen = isTracking && !isPaused &&
+        stats.speed >= effectiveSpeedLimitKmh + SCREEN_FLASH_TOLERANCE_KMH
     val flashPhase = rememberSpeedLimitFlashPhase(isOverLimit)
     val isRiding = isTracking && !isPaused
 
@@ -543,7 +546,7 @@ fun RideTrackerScreen(
         }
 
         OverLimitScreenFlash(
-            isOverLimit = isOverLimit,
+            isActive = shouldFlashScreen,
             flashPhase = flashPhase,
             modifier = Modifier.fillMaxSize()
         )

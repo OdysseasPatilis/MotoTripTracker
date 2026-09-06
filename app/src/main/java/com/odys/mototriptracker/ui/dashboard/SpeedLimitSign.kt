@@ -72,17 +72,20 @@ fun speedLimitFlashNumber(phase: SpeedLimitFlashPhase): Color = when (phase) {
 
 private const val SCREEN_FLASH_ALPHA = 0.28f
 
+/** Full-screen flash starts this far above the posted limit (km/h). Sign still flashes sooner. */
+const val SCREEN_FLASH_TOLERANCE_KMH = 10f
+
 /**
  * Full-screen translucent flash matching the speed-limit sign.
  * Uses [Canvas] (no pointer handlers) so Pause / Stop stay tappable underneath.
  */
 @Composable
 fun OverLimitScreenFlash(
-    isOverLimit: Boolean,
+    isActive: Boolean,
     flashPhase: SpeedLimitFlashPhase,
     modifier: Modifier = Modifier
 ) {
-    if (!isOverLimit) return
+    if (!isActive) return
 
     val color = speedLimitFlashFill(flashPhase).copy(alpha = SCREEN_FLASH_ALPHA)
     Canvas(modifier = modifier.fillMaxSize()) {
