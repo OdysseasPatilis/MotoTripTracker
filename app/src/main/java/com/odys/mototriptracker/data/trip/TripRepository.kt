@@ -96,13 +96,26 @@ class TripRepository @Inject constructor(
             maxLateralGForce = finalStats.maxLateralGForce.toDouble()
         ).toFloat()
 
-        // 1. Fetch all the raw GPS points
-        val savedPoints = trip.routePoints
+        // Prefer an explicit tripId query (same path as Full Route) over ToMany.
+        val savedPoints = getRoutePointsForMap(tripId)
         AppLogger.d(
             AppLogger.Category.PERSISTENCE,
             "Finalizing trip id=$tripId points=${savedPoints.size} ${AppLogger.tripSummary(finalStats)}"
         )
-        // --- NEW: GENERATE WAYPOINTS ---
+
+        // Persist polyline immediately so Summary / share / Full Route fallback work
+        // even if waypoint geocoding is slow or interrupted (long background rides).
+        val latLngList = savedPoints.map { LatLng(it.latitude, it.longitude) }
+        if (latLngList.isNotEmpty()) {
+            trip.encodedRoutePolyline = PolyUtil.encode(latLngList)
+        }
+        tripBox.put(trip)
+        AppLogger.i(
+            AppLogger.Category.PERSISTENCE,
+            "Trip stats+polyline saved id=$tripId dist=${trip.distanceMeters}m " +
+                "polyline=${!trip.encodedRoutePolyline.isNullOrBlank()} verts=${latLngList.size}"
+        )
+
         val updatedWaypoints = try {
             AdvancedWaypointAnalyzer.analyzeAndMarkWaypoints(
                 context = context,
@@ -113,7 +126,6 @@ class TripRepository @Inject constructor(
             AppLogger.e(AppLogger.Category.WAYPOINT, "Waypoint analysis failed", t)
             emptyList()
         }
-        // Save only the modified points back to the database
         if (updatedWaypoints.isNotEmpty()) {
             routePointBox.put(updatedWaypoints)
             AppLogger.i(
@@ -121,17 +133,6 @@ class TripRepository @Inject constructor(
                 "Marked ${updatedWaypoints.size} waypoints for trip id=$tripId"
             )
         }
-
-        val latLngList = savedPoints.map { LatLng(it.latitude, it.longitude) }
-        if (latLngList.isNotEmpty()) {
-            trip.encodedRoutePolyline = PolyUtil.encode(latLngList)
-        }
-
-        tripBox.put(trip)
-        AppLogger.i(
-            AppLogger.Category.PERSISTENCE,
-            "Ride saved id=$tripId dist=${trip.distanceMeters}m polyline=${!trip.encodedRoutePolyline.isNullOrBlank()}"
-        )
     }
 
     fun getTrips(): List<TripEntity> {

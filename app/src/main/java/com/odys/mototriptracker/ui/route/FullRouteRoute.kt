@@ -45,6 +45,7 @@ fun FullRouteRoute(
                 ridePoints = uiState.ridePoints,
                 routePointEntities = uiState.routePointEntities,
                 waypoints = uiState.waypoints,
+                usedPolylineFallback = uiState.usedPolylineFallback,
                 onBack = onBack
             )
         }

@@ -42,7 +42,8 @@ class FullRouteViewModel @Inject constructor(
                 ridePoints = details.routePoints.map { it.toRidePoint() },
                 routePointEntities = details.routePoints,
                 waypoints = details.waypoints.map { it.toWaypoint() },
-                isLoading = false
+                isLoading = false,
+                usedPolylineFallback = details.usedPolylineFallback,
             )
         }
     }

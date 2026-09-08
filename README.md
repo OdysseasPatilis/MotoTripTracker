@@ -88,6 +88,7 @@ The app is the Android counterpart of the iOS **MotoTripTracker** project, with 
 - Optional **Cloud Sync**: configure backend URL + display name on summary; upload trip JSON (also auto on stop when a URL is set)
 - **Ride moments** highlights (e.g. top speed, max G, elevation, longest stop, corners, lean G)
 - Full-route Google Map: speed / elevation colored polyline, profile chart, waypoints
+- If raw GPS points fail to load after a long background ride, Full Route **falls back** to the encoded summary polyline (waypoints may be empty in that mode)
 - **Route replay**: play / pause at 1× / 2× / 5×; mint traveled trail + faded remaining; camera follows the rider
 - Share **PNG card** or export **GPX** (FileProvider)
 
@@ -334,6 +335,7 @@ Unit tests under `app/src/test/…`:
 - `TwistinessCalculatorTest` — score / rating bands
 - `GoogleWeekdayHoursParserTest` — Google weekday text → open/closed
 - `DestinationSearchHistoryLogicTest` — distance/duration helpers + preview selection fallback
+- `RoutePolylineFallbackTest` — reconstruct Full Route points from encoded polyline when DB points are missing
 
 Instrumented / Compose UI tests are mostly scaffold; ride and ObjectBox flows are not fully covered by instrumentation yet.
 

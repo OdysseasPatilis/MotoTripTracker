@@ -224,6 +224,7 @@ fun FullRouteScreenGMaps(
     ridePoints: List<RidePoint>,
     routePointEntities: List<RoutePointEntity> = emptyList(),
     waypoints: List<Waypoint> ,
+    usedPolylineFallback: Boolean = false,
     onBack: () -> Unit = {},
     onShare: () -> Unit = {}
 ) {
@@ -306,7 +307,12 @@ fun FullRouteScreenGMaps(
             modifier = Modifier.padding(horizontal = 20.dp)
         )
         Spacer(Modifier.height(12.dp))
-        WaypointsPanel(summary, waypoints, palette, onWaypointClick = { latLng ->
+        WaypointsPanel(
+            summary = summary,
+            waypoints = waypoints,
+            usedPolylineFallback = usedPolylineFallback,
+            palette = palette,
+            onWaypointClick = { latLng ->
             // WHEN A WAYPOINT IS CLICKED:
             coroutineScope.launch {
                 // 1. Smoothly scroll the screen back to the top so they can see the map
@@ -647,6 +653,7 @@ private fun LegendSegment(color: Color) {
 private fun WaypointsPanel(
     summary: TripEntity,
     waypoints: List<Waypoint>,
+    usedPolylineFallback: Boolean,
     palette: com.odys.mototriptracker.ui.theme.AppPalette,
     onWaypointClick: (LatLng) -> Unit
 ) {
@@ -660,8 +667,25 @@ private fun WaypointsPanel(
             Text(formatTimestampToDate(summary.startTime), color = palette.textSecondary, fontSize = 12.sp)
         }
         Spacer(Modifier.height(12.dp))
-        waypoints.forEachIndexed { i, wp ->
-            WaypointRow(wp, showLine = i < waypoints.lastIndex, palette = palette, onClick = { onWaypointClick(wp.position) })
+        if (waypoints.isEmpty()) {
+            Text(
+                text = if (usedPolylineFallback) {
+                    "Trail rebuilt from the summary polyline. Waypoints weren’t available for this ride."
+                } else {
+                    "No waypoints recorded for this ride."
+                },
+                color = palette.textSecondary,
+                fontSize = 13.sp
+            )
+        } else {
+            waypoints.forEachIndexed { i, wp ->
+                WaypointRow(
+                    wp,
+                    showLine = i < waypoints.lastIndex,
+                    palette = palette,
+                    onClick = { onWaypointClick(wp.position) }
+                )
+            }
         }
     }
 }

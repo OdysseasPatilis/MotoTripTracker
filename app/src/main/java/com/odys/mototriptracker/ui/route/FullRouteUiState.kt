@@ -11,5 +11,7 @@ data class FullRouteUiState(
     val routePointEntities: List<RoutePointEntity> = emptyList(),
     val waypoints: List<Waypoint> = emptyList(),
     val isLoading: Boolean = true,
-    val notFound: Boolean = false
+    val notFound: Boolean = false,
+    /** Trail rebuilt from encoded polyline; waypoints unavailable in this mode. */
+    val usedPolylineFallback: Boolean = false,
 )
