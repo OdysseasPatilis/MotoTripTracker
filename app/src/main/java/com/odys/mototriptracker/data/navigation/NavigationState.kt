@@ -30,7 +30,11 @@ data class NavRouteOption(
     val id: String = UUID.randomUUID().toString(),
     val coordinates: List<RouteCoordinate>,
     val distanceMeters: Double,
+    /** Car / traffic-aware ETA from Directions. */
     val expectedTravelTimeSeconds: Double,
+    /** Motorcycle-adjusted ETA (filters part of car traffic delay). */
+    val motoTravelTimeSeconds: Double,
+    val trafficDelaySeconds: Double = 0.0,
     val steps: List<NavStep>,
 )
 
@@ -56,6 +60,9 @@ data class NavigationState(
     val previewRoutes: List<NavRouteOption> = emptyList(),
     val selectedRouteId: String? = null,
     val previewErrorMessage: String? = null,
+    val plannedCarTravelTimeSeconds: Double = 0.0,
+    val plannedMotoTravelTimeSeconds: Double = 0.0,
+    val lastTimingResult: NavTimingResult? = null,
 ) {
     val hasDestination: Boolean = destinationLatitude != null && destinationLongitude != null
     val hasRoute: Boolean = routeCoordinates.size > 1
@@ -71,7 +78,16 @@ data class NavigationState(
             val eta = etaEpochMs ?: return distanceString
             val time = java.text.SimpleDateFormat.getTimeInstance(java.text.DateFormat.SHORT)
                 .format(java.util.Date(eta))
-            return "$distanceString · ETA $time"
+            return "$distanceString · Moto ETA $time"
+        }
+
+    /** Extra chip line when car traffic is meaningfully worse than the moto estimate. */
+    val trafficHintText: String?
+        get() {
+            if (!isNavigating && !isPreviewing) return null
+            val delay = plannedCarTravelTimeSeconds - plannedMotoTravelTimeSeconds
+            if (delay < 90) return null
+            return "Cars +${MotoTravelEstimator.formatMinutes(delay)}"
         }
 
     val guidanceSummary: String
@@ -89,10 +105,7 @@ data class NavigationState(
             "${maxOf(0, meters.toInt())} m"
         }
 
-        fun formatDuration(seconds: Double): String {
-            val minutes = maxOf(1, (seconds / 60.0).toInt())
-            return "$minutes min"
-        }
+        fun formatDuration(seconds: Double): String = MotoTravelEstimator.formatMinutes(seconds)
     }
 }
 

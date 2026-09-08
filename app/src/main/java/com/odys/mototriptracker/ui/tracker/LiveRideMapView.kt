@@ -138,6 +138,7 @@ fun LiveRideMapView(
         contentPadding = previewContentPadding,
         properties = MapProperties(
             isMyLocationEnabled = true,
+            isTrafficEnabled = true,
             mapStyleOptions = mapStyle
         ),
         uiSettings = MapUiSettings(

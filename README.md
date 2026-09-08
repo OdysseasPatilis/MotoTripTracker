@@ -31,12 +31,17 @@ The app is the Android counterpart of the iOS **MotoTripTracker** project, with 
 - **Set destination** via search sheet (Google Places autocomplete + text search; Nominatim/Photon fallbacks)
 - **Recent destinations** (cap 20, nearby dedupe, removable) shown when the query is empty
 - Selecting a place (or petrol **Go**) enters **route preview** — not turn-by-turn yet
-- Directions with **`alternatives=true`** (OSRM fallback if Google fails); alternate polylines on the map; bottom card with route chips + **Start** / **Cancel**
+- Directions with **`alternatives=true`** and **`departure_time=now`** (traffic-aware car ETA when available; OSRM fallback)
+- **Live traffic** layer on the tracker map
+- **Moto ETA** on preview and guidance: car traffic delays are only partly applied (bikes can filter); the factor **learns** from completed navigations
+- After a guided trip ends (arrive or clear), a short banner compares **actual time vs car traffic ETA**
+- **Auto-arrives** within ~45 m of the destination (with a short dwell), speaks “You have arrived”, then shows the timing banner
+- Alternate polylines on the map; bottom card with route chips + **Start** / **Cancel**
 - Map camera fits the selected preview route with extra bottom padding so the destination stays clear of the preview card
-- **Start** begins navigating: slim turn HUD, spoken steps, off-route recalculation
+- **Start** begins navigating: slim turn HUD, spoken steps, off-route recalculation, optional “Cars +N min” hint
 - **Spoken turns** (TextToSpeech, **English** voice — prompts are English): approach within 250 m (`In {dist}, {instruction}`), instruction again on step advance; mute persists; light haptic on advance
 - Step advance at 35 m; off-route at 80 m with 12 s recalculate cooldown
-- Distance remaining and ETA update while navigating
+- Distance remaining and moto ETA update while navigating
 - **Open in Google Maps** for handoff; clear / cancel from the dashboard
 - Origin is kept when clearing a destination so the next search still has a GPS fix
 
@@ -336,6 +341,7 @@ Unit tests under `app/src/test/…`:
 - `GoogleWeekdayHoursParserTest` — Google weekday text → open/closed
 - `DestinationSearchHistoryLogicTest` — distance/duration helpers + preview selection fallback
 - `RoutePolylineFallbackTest` — reconstruct Full Route points from encoded polyline when DB points are missing
+- `MotoTravelEstimatorTest` — moto ETA vs car traffic delay + learning
 
 Instrumented / Compose UI tests are mostly scaffold; ride and ObjectBox flows are not fully covered by instrumentation yet.
 

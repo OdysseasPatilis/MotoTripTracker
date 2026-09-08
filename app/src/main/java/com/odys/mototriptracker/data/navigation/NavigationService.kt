@@ -56,6 +56,7 @@ class NavigationService @Inject constructor(
     mapsApiKeyProvider: MapsApiKeyProvider,
     private val voice: NavigationVoicePrompt,
     private val destinationHistory: DestinationSearchHistory,
+    private val motoTravelEstimator: MotoTravelEstimatorStore,
 ) {
     private val context = context
     private val apiKey = mapsApiKeyProvider.getApiKey()
@@ -77,6 +78,10 @@ class NavigationService @Inject constructor(
     private var originLng: Double? = null
     private var totalRouteDistanceMeters = 0.0
     private var totalTravelTimeSeconds = 0.0
+    private var plannedCarTravelTimeSeconds = 0.0
+    private var plannedMotoTravelTimeSeconds = 0.0
+    private var navigationStartedAtMs: Long? = null
+    private var arrivalCandidateSinceMs: Long? = null
     private var nearestRouteDistanceMeters = 0.0
     private var lastRecalculateAtMs = 0L
     private var searchJob: Job? = null
@@ -149,6 +154,7 @@ class NavigationService @Inject constructor(
         if (!state.isNavigating) return
         advanceStepIfNeeded(latitude, longitude)
         checkOffRouteAndRecalculate(latitude, longitude)
+        checkArrival(latitude, longitude)
     }
 
     fun selectSearchResult(result: NavigationSearchResult) {
@@ -230,17 +236,34 @@ class NavigationService @Inject constructor(
     fun confirmStartNavigation() {
         val option = _state.value.selectedPreviewRoute ?: return
         if (!_state.value.isPreviewing) return
-        _state.update { it.copy(phase = NavigationPhase.Navigating) }
+        navigationStartedAtMs = System.currentTimeMillis()
+        plannedCarTravelTimeSeconds = option.expectedTravelTimeSeconds
+        plannedMotoTravelTimeSeconds = option.motoTravelTimeSeconds
+        arrivalCandidateSinceMs = null
+        _state.update {
+            it.copy(
+                phase = NavigationPhase.Navigating,
+                lastTimingResult = null,
+                plannedCarTravelTimeSeconds = option.expectedTravelTimeSeconds,
+                plannedMotoTravelTimeSeconds = option.motoTravelTimeSeconds,
+            )
+        }
         applyRoute(
             DirectionsResult(
                 distanceMeters = option.distanceMeters,
-                travelTimeSeconds = option.expectedTravelTimeSeconds,
+                carTravelTimeSeconds = option.expectedTravelTimeSeconds,
+                motoTravelTimeSeconds = option.motoTravelTimeSeconds,
+                trafficDelaySeconds = option.trafficDelaySeconds,
                 coordinates = option.coordinates,
                 steps = option.steps,
             ),
             isRecalculation = false,
         )
-        AppLogger.i(AppLogger.Category.UI, "Navigation started with selected preview route")
+        AppLogger.i(
+            AppLogger.Category.UI,
+            "Navigation started car=${option.expectedTravelTimeSeconds.toInt()}s " +
+                "moto=${option.motoTravelTimeSeconds.toInt()}s"
+        )
     }
 
     fun cancelPreview() {
@@ -248,20 +271,39 @@ class NavigationService @Inject constructor(
     }
 
     fun clear() {
+        clear(stopVoice = true)
+    }
+
+    fun clear(stopVoice: Boolean) {
+        if (navigationStartedAtMs != null) {
+            finalizeTimingIfNeeded()
+        }
         routeJob?.cancel()
         searchJob?.cancel()
         routeRequestGeneration += 1
         // Keep origin so the next destination can route immediately.
         totalRouteDistanceMeters = 0.0
         totalTravelTimeSeconds = 0.0
+        plannedCarTravelTimeSeconds = 0.0
+        plannedMotoTravelTimeSeconds = 0.0
+        navigationStartedAtMs = null
+        arrivalCandidateSinceMs = null
         nearestRouteDistanceMeters = 0.0
         approachedStepId = null
         announcedStepId = null
-        voice.stop()
+        if (stopVoice) voice.stop()
         val voiceEnabled = _state.value.isVoiceEnabled
-        _state.value = NavigationState(isVoiceEnabled = voiceEnabled)
+        val timing = _state.value.lastTimingResult
+        _state.value = NavigationState(
+            isVoiceEnabled = voiceEnabled,
+            lastTimingResult = timing,
+        )
         onRouteCleared?.invoke()
         AppLogger.i(AppLogger.Category.UI, "Navigation cleared")
+    }
+
+    fun dismissTimingResult() {
+        _state.update { it.copy(lastTimingResult = null) }
     }
 
     fun toggleVoice() {
@@ -380,7 +422,9 @@ class NavigationService @Inject constructor(
             NavRouteOption(
                 coordinates = route.coordinates,
                 distanceMeters = route.distanceMeters,
-                expectedTravelTimeSeconds = route.travelTimeSeconds,
+                expectedTravelTimeSeconds = route.carTravelTimeSeconds,
+                motoTravelTimeSeconds = route.motoTravelTimeSeconds,
+                trafficDelaySeconds = route.trafficDelaySeconds,
                 steps = route.steps,
             )
         }
@@ -397,7 +441,9 @@ class NavigationService @Inject constructor(
         allOptions: List<NavRouteOption> = _state.value.previewRoutes,
     ) {
         totalRouteDistanceMeters = option.distanceMeters
-        totalTravelTimeSeconds = option.expectedTravelTimeSeconds
+        totalTravelTimeSeconds = option.motoTravelTimeSeconds
+        plannedCarTravelTimeSeconds = option.expectedTravelTimeSeconds
+        plannedMotoTravelTimeSeconds = option.motoTravelTimeSeconds
         nearestRouteDistanceMeters = 0.0
         _state.update {
             it.copy(
@@ -405,8 +451,8 @@ class NavigationService @Inject constructor(
                 selectedRouteId = option.id,
                 routeCoordinates = option.coordinates,
                 distanceRemainingMeters = option.distanceMeters,
-                etaEpochMs = if (option.expectedTravelTimeSeconds > 0) {
-                    System.currentTimeMillis() + (option.expectedTravelTimeSeconds * 1000).toLong()
+                etaEpochMs = if (option.motoTravelTimeSeconds > 0) {
+                    System.currentTimeMillis() + (option.motoTravelTimeSeconds * 1000).toLong()
                 } else {
                     null
                 },
@@ -418,6 +464,8 @@ class NavigationService @Inject constructor(
                 isRecalculating = false,
                 isOffRoute = false,
                 previewErrorMessage = null,
+                plannedCarTravelTimeSeconds = option.expectedTravelTimeSeconds,
+                plannedMotoTravelTimeSeconds = option.motoTravelTimeSeconds,
                 phase = NavigationPhase.Previewing,
             )
         }
@@ -425,7 +473,9 @@ class NavigationService @Inject constructor(
 
     private fun applyRoute(route: DirectionsResult, isRecalculation: Boolean) {
         totalRouteDistanceMeters = route.distanceMeters
-        totalTravelTimeSeconds = route.travelTimeSeconds
+        totalTravelTimeSeconds = route.motoTravelTimeSeconds
+        plannedCarTravelTimeSeconds = route.carTravelTimeSeconds
+        plannedMotoTravelTimeSeconds = route.motoTravelTimeSeconds
         nearestRouteDistanceMeters = 0.0
         approachedStepId = null
         announcedStepId = null
@@ -436,8 +486,8 @@ class NavigationService @Inject constructor(
             it.copy(
                 routeCoordinates = route.coordinates,
                 distanceRemainingMeters = route.distanceMeters,
-                etaEpochMs = if (route.travelTimeSeconds > 0) {
-                    System.currentTimeMillis() + (route.travelTimeSeconds * 1000).toLong()
+                etaEpochMs = if (route.motoTravelTimeSeconds > 0) {
+                    System.currentTimeMillis() + (route.motoTravelTimeSeconds * 1000).toLong()
                 } else {
                     null
                 },
@@ -451,14 +501,108 @@ class NavigationService @Inject constructor(
                 previewRoutes = emptyList(),
                 selectedRouteId = null,
                 previewErrorMessage = null,
+                plannedCarTravelTimeSeconds = route.carTravelTimeSeconds,
+                plannedMotoTravelTimeSeconds = route.motoTravelTimeSeconds,
             )
         }
-        onRouteApplied?.invoke(route.coordinates, route.travelTimeSeconds)
+        onRouteApplied?.invoke(route.coordinates, route.motoTravelTimeSeconds)
         AppLogger.i(
             AppLogger.Category.UI,
             "Route ${if (isRecalculation) "recalculated" else "computed"}: " +
-                "${route.distanceMeters.toInt()}m, ${route.steps.size} steps"
+                "${route.distanceMeters.toInt()}m, ${route.steps.size} steps, " +
+                "car=${route.carTravelTimeSeconds.toInt()}s moto=${route.motoTravelTimeSeconds.toInt()}s"
         )
+    }
+
+    private fun finalizeTimingIfNeeded() {
+        val started = navigationStartedAtMs ?: return
+        if (!_state.value.isNavigating) return
+        if (plannedCarTravelTimeSeconds <= 0) return
+        val actual = (System.currentTimeMillis() - started) / 1000.0
+        if (actual < 45) return
+
+        val result = NavTimingResult(
+            distanceMeters = totalRouteDistanceMeters,
+            carEstimateSeconds = plannedCarTravelTimeSeconds,
+            motoEstimateSeconds = if (plannedMotoTravelTimeSeconds > 0) {
+                plannedMotoTravelTimeSeconds
+            } else {
+                plannedCarTravelTimeSeconds
+            },
+            actualSeconds = actual,
+        )
+        motoTravelEstimator.learn(from = result)
+        navigationStartedAtMs = null
+        _state.update { it.copy(lastTimingResult = result) }
+        AppLogger.i(
+            AppLogger.Category.UI,
+            "Nav timing actual=${actual.toInt()}s car=${result.carEstimateSeconds.toInt()}s " +
+                "moto=${result.motoEstimateSeconds.toInt()}s savedVsCar=${result.savedVersusCarSeconds.toInt()}s"
+        )
+    }
+
+    private fun checkArrival(latitude: Double, longitude: Double) {
+        val destLat = _state.value.destinationLatitude
+        val destLng = _state.value.destinationLongitude
+        if (destLat == null || destLng == null) {
+            arrivalCandidateSinceMs = null
+            return
+        }
+
+        val toDestination = haversineMeters(latitude, longitude, destLat, destLng)
+        val nearDestination = toDestination <= ARRIVAL_THRESHOLD_METERS
+        val nearRouteEnd = _state.value.distanceRemainingMeters <= ARRIVAL_REMAINING_MAX_METERS
+        val steps = _state.value.steps
+        val onFinalStep = steps.isNotEmpty() && _state.value.currentStepIndex >= steps.lastIndex
+
+        if (nearDestination && (nearRouteEnd || onFinalStep)) {
+            if (arrivalCandidateSinceMs == null) {
+                arrivalCandidateSinceMs = System.currentTimeMillis()
+                AppLogger.d(
+                    AppLogger.Category.UI,
+                    "Arrival candidate dest=${toDestination.toInt()}m " +
+                        "remaining=${_state.value.distanceRemainingMeters.toInt()}m"
+                )
+            }
+            val since = arrivalCandidateSinceMs
+            if (since != null &&
+                System.currentTimeMillis() - since >= ARRIVAL_DWELL_MS
+            ) {
+                completeArrival()
+            }
+        } else {
+            arrivalCandidateSinceMs = null
+        }
+    }
+
+    private fun completeArrival() {
+        if (!_state.value.isNavigating) return
+        arrivalCandidateSinceMs = null
+        AppLogger.i(AppLogger.Category.UI, "Arrived at destination — ending navigation")
+        hapticSuccess()
+        finalizeTimingIfNeeded()
+        clear(stopVoice = false)
+        voice.speak("You have arrived")
+    }
+
+    private fun hapticSuccess() {
+        runCatching {
+            val vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                val manager = context.getSystemService(VibratorManager::class.java)
+                manager?.defaultVibrator
+            } else {
+                @Suppress("DEPRECATION")
+                context.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
+            } ?: return
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                vibrator.vibrate(
+                    VibrationEffect.createWaveform(longArrayOf(0, 40, 60, 40), -1)
+                )
+            } else {
+                @Suppress("DEPRECATION")
+                vibrator.vibrate(80)
+            }
+        }
     }
 
     private suspend fun findNearestPetrol(lat: Double, lng: Double): PetrolSearchOutcome =
@@ -850,6 +994,7 @@ class NavigationService @Inject constructor(
         val url =
             "https://maps.googleapis.com/maps/api/directions/json?" +
                 "origin=$originLat,$originLng&destination=$destLat,$destLng&mode=driving" +
+                "&departure_time=now" +
                 "${if (alternatives) "&alternatives=true" else ""}&key=$key"
         runCatching {
             val body = httpGet(url) ?: return@runCatching emptyList()
@@ -866,6 +1011,10 @@ class NavigationService @Inject constructor(
                     val leg = route.getJSONArray("legs").getJSONObject(0)
                     val distance = leg.getJSONObject("distance").getDouble("value")
                     val duration = leg.getJSONObject("duration").getDouble("value")
+                    val carTime = leg.optJSONObject("duration_in_traffic")
+                        ?.optDouble("value", duration)
+                        ?: duration
+                    val estimate = motoTravelEstimator.estimate(distance, carTime)
                     val encoded = route.getJSONObject("overview_polyline").getString("points")
                     val coordinates = PolyUtil.decode(encoded).map {
                         RouteCoordinate(it.latitude, it.longitude)
@@ -890,7 +1039,16 @@ class NavigationService @Inject constructor(
                             )
                         }
                     }
-                    add(DirectionsResult(distance, duration, coordinates, steps))
+                    add(
+                        DirectionsResult(
+                            distanceMeters = distance,
+                            carTravelTimeSeconds = estimate.carTravelTimeSeconds,
+                            motoTravelTimeSeconds = estimate.motoTravelTimeSeconds,
+                            trafficDelaySeconds = estimate.trafficDelaySeconds,
+                            coordinates = coordinates,
+                            steps = steps,
+                        )
+                    )
                 }
             }
         }.getOrElse {
@@ -920,6 +1078,7 @@ class NavigationService @Inject constructor(
             val route = json.getJSONArray("routes").getJSONObject(0)
             val distance = route.getDouble("distance")
             val duration = route.getDouble("duration")
+            val estimate = motoTravelEstimator.estimate(distance, duration)
             val encoded = route.getString("geometry")
             val coordinates = PolyUtil.decode(encoded).map { RouteCoordinate(it.latitude, it.longitude) }
             val steps = buildList {
@@ -946,7 +1105,14 @@ class NavigationService @Inject constructor(
                     }
                 }
             }
-            DirectionsResult(distance, duration, coordinates, steps)
+            DirectionsResult(
+                distanceMeters = distance,
+                carTravelTimeSeconds = estimate.carTravelTimeSeconds,
+                motoTravelTimeSeconds = estimate.motoTravelTimeSeconds,
+                trafficDelaySeconds = estimate.trafficDelaySeconds,
+                coordinates = coordinates,
+                steps = steps,
+            )
         }.getOrElse {
             AppLogger.w(AppLogger.Category.UI, "OSRM routing failed", it)
             null
@@ -1142,7 +1308,9 @@ class NavigationService @Inject constructor(
 
     private data class DirectionsResult(
         val distanceMeters: Double,
-        val travelTimeSeconds: Double,
+        val carTravelTimeSeconds: Double,
+        val motoTravelTimeSeconds: Double,
+        val trafficDelaySeconds: Double = 0.0,
         val coordinates: List<RouteCoordinate>,
         val steps: List<NavStep>
     )
@@ -1159,6 +1327,9 @@ class NavigationService @Inject constructor(
         private const val STEP_ADVANCE_METERS = 35.0
         private const val APPROACH_ANNOUNCE_METERS = 250.0
         private const val RECALCULATE_COOLDOWN_MS = 12_000L
+        private const val ARRIVAL_THRESHOLD_METERS = 45.0
+        private const val ARRIVAL_REMAINING_MAX_METERS = 120.0
+        private const val ARRIVAL_DWELL_MS = 2_500L
         private const val SEARCH_DEBOUNCE_MS = 350L
         private const val USER_AGENT = "MotoTripTracker/1.0 (Android; motorcycle trip tracker)"
 

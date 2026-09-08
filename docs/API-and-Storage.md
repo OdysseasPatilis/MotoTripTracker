@@ -53,7 +53,7 @@ Not a REST call you write by hand — Google Maps Compose / Maps SDK loads tiles
 
 | Call | Endpoint / API | File | Trigger |
 |------|----------------|------|---------|
-| Driving route | `maps/api/directions/json` (`alternatives=true` in preview) | `NavigationService.fetchDirections` | Preview routes / Start navigation / off-route recalculate |
+| Driving route | `maps/api/directions/json` (`alternatives=true` in preview, `departure_time=now` for traffic) | `NavigationService.fetchDirections` | Preview routes / Start navigation / off-route recalculate |
 | Fallback | OSRM (not Google) | `fetchOsrmDirections` | Google Directions fails |
 
 **Recalculate:** if rider is **>80 m** off the polyline, cooldown **12 s** (`RECALCULATE_COOLDOWN_MS`).

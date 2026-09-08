@@ -308,6 +308,7 @@ class RideTrackerViewModel @Inject constructor(
     fun confirmStartNavigation() = navigationService.confirmStartNavigation()
     fun cancelNavigationPreview() = navigationService.cancelPreview()
     fun selectPreviewRoute(id: String) = navigationService.selectPreviewRoute(id)
+    fun dismissTimingResult() = navigationService.dismissTimingResult()
     fun openNavigationInMaps() = navigationService.openInGoogleMaps()
     fun toggleNavigationVoice() = navigationService.toggleVoice()
     fun fuelService(): FuelService = fuelService

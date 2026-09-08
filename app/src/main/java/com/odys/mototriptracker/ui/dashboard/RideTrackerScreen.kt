@@ -86,7 +86,9 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import kotlinx.coroutines.delay
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -168,7 +170,8 @@ fun RideTrackerScreen(
     onCancelNavigationPreview: () -> Unit = {},
     onSelectPreviewRoute: (String) -> Unit = {},
     onOpenNavigationInMaps: () -> Unit,
-    onToggleNavigationVoice: () -> Unit
+    onToggleNavigationVoice: () -> Unit,
+    onDismissTimingResult: () -> Unit = {},
 ) {
     val stats = uiState.stats
     val isTracking = uiState.isTracking
@@ -189,6 +192,17 @@ fun RideTrackerScreen(
     val isRiding = isTracking && !isPaused
 
     var optionsExpanded by remember { mutableStateOf(false) }
+    var timingBanner by remember { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(navigation.lastTimingResult) {
+        val result = navigation.lastTimingResult ?: return@LaunchedEffect
+        timingBanner = result.summaryLine
+        delay(8_000)
+        if (timingBanner == result.summaryLine) {
+            timingBanner = null
+            onDismissTimingResult()
+        }
+    }
 
     KeepScreenOn()
 
@@ -421,20 +435,46 @@ fun RideTrackerScreen(
                                 )
                             }
                             navigation.isNavigating -> {
-                                ActiveRouteChip(
-                                    navigation = navigation,
+                                Column(
+                                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    navigation.trafficHintText?.let { hint ->
+                                        Text(
+                                            hint,
+                                            color = palette.routeAmber,
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                            modifier = Modifier
+                                                .clip(RoundedCornerShape(999.dp))
+                                                .background(palette.bgPanel.copy(alpha = 0.82f))
+                                                .padding(horizontal = 10.dp, vertical = 4.dp)
+                                        )
+                                    }
+                                    ActiveRouteChip(
+                                        navigation = navigation,
+                                        palette = palette,
+                                        onOpenInMaps = onOpenNavigationInMaps,
+                                        onClear = onClearNavigation,
+                                        onToggleVoice = onToggleNavigationVoice,
+                                        onShowWeather = if (uiState.weather.hasData || navigation.hasRoute) {
+                                            onShowRouteWeather
+                                        } else {
+                                            null
+                                        }
+                                    )
+                                }
+                            }
+                            else -> {
+                            timingBanner?.let { banner ->
+                                TimingResultBanner(
+                                    text = banner,
                                     palette = palette,
-                                    onOpenInMaps = onOpenNavigationInMaps,
-                                    onClear = onClearNavigation,
-                                    onToggleVoice = onToggleNavigationVoice,
-                                    onShowWeather = if (uiState.weather.hasData || navigation.hasRoute) {
-                                        onShowRouteWeather
-                                    } else {
-                                        null
+                                    onDismiss = {
+                                        timingBanner = null
+                                        onDismissTimingResult()
                                     }
                                 )
                             }
-                            else -> {
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -844,12 +884,19 @@ private fun RoutePreviewCard(
                                 fontWeight = FontWeight.Bold
                             )
                             Text(
-                                "${NavigationState.formatDistance(option.distanceMeters)} · " +
-                                    NavigationState.formatDuration(option.expectedTravelTimeSeconds),
+                                "${NavigationState.formatDistance(option.distanceMeters)} · Moto " +
+                                    NavigationState.formatDuration(option.motoTravelTimeSeconds),
                                 color = if (selected) palette.textPrimary else palette.textSecondary,
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Medium
                             )
+                            if (option.trafficDelaySeconds >= 90) {
+                                Text(
+                                    "Cars ${NavigationState.formatDuration(option.expectedTravelTimeSeconds)}",
+                                    color = if (selected) palette.routeAmber else palette.textMuted,
+                                    fontSize = 10.sp
+                                )
+                            }
                         }
                     }
                 }
@@ -877,6 +924,45 @@ private fun RoutePreviewCard(
             ) {
                 Text("Start", color = palette.bgDeep, fontWeight = FontWeight.Bold)
             }
+        }
+    }
+}
+
+@Composable
+private fun TimingResultBanner(
+    text: String,
+    palette: AppPalette,
+    onDismiss: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .background(palette.bgPanel.copy(alpha = 0.92f))
+            .padding(horizontal = 12.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        Icon(
+            Icons.Filled.Flag,
+            contentDescription = null,
+            tint = palette.neonGreen,
+            modifier = Modifier.size(18.dp)
+        )
+        Text(
+            text = text,
+            color = palette.textPrimary,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.SemiBold,
+            modifier = Modifier.weight(1f)
+        )
+        IconButton(onClick = onDismiss, modifier = Modifier.size(28.dp)) {
+            Icon(
+                Icons.Filled.Close,
+                contentDescription = "Dismiss timing summary",
+                tint = palette.textSecondary,
+                modifier = Modifier.size(18.dp)
+            )
         }
     }
 }

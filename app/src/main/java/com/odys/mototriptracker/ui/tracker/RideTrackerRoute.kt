@@ -73,7 +73,8 @@ fun RideTrackerRoute(
         onCancelNavigationPreview = viewModel::cancelNavigationPreview,
         onSelectPreviewRoute = viewModel::selectPreviewRoute,
         onOpenNavigationInMaps = viewModel::openNavigationInMaps,
-        onToggleNavigationVoice = viewModel::toggleNavigationVoice
+        onToggleNavigationVoice = viewModel::toggleNavigationVoice,
+        onDismissTimingResult = viewModel::dismissTimingResult,
     )
 }
 

@@ -25,6 +25,8 @@ class DestinationSearchHistoryLogicTest {
             coordinates = emptyList(),
             distanceMeters = 1000.0,
             expectedTravelTimeSeconds = 100.0,
+            motoTravelTimeSeconds = 80.0,
+            trafficDelaySeconds = 20.0,
             steps = emptyList(),
         )
         val b = a.copy(id = "b")
