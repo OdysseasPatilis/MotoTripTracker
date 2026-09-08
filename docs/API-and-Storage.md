@@ -64,8 +64,7 @@ Not a REST call you write by hand — Google Maps Compose / Maps SDK loads tiles
 
 | Call | Endpoint | File | Trigger |
 |------|----------|------|---------|
-| Reverse geocode | `maps/api/geocode/json` | `data/waypoint/AdvancedWaypointAnalyzer.kt` → `getStreetName` | End of ride: **start**, **end**, and each **rest stop >5 min** |
-| Fallback | Android `Geocoder` | same | Google geocode fails (not a Google Cloud SKU) |
+| Reverse geocode | `maps/api/geocode/json` (+ Android `Geocoder` + Nominatim reverse) | `data/waypoint/WaypointReverseGeocoder.kt` | End of ride: **start**, **end**, up to 3 rest stops; also refreshes coordinate labels when opening Full Route |
 
 ---
 

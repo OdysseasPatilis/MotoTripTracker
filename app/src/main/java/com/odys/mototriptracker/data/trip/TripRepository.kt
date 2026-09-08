@@ -11,6 +11,8 @@ import com.odys.mototriptracker.domain.TwistinessCalculator
 import com.odys.mototriptracker.util.AppLogger
 import dagger.hilt.android.qualifiers.ApplicationContext
 import io.objectbox.BoxStore
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.runBlocking
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -116,15 +118,17 @@ class TripRepository @Inject constructor(
                 "polyline=${!trip.encodedRoutePolyline.isNullOrBlank()} verts=${latLngList.size}"
         )
 
-        val updatedWaypoints = try {
-            AdvancedWaypointAnalyzer.analyzeAndMarkWaypoints(
-                context = context,
-                points = savedPoints,
-                totalDistanceMeters = finalStats.distanceMeters
-            )
-        } catch (t: Throwable) {
-            AppLogger.e(AppLogger.Category.WAYPOINT, "Waypoint analysis failed", t)
-            emptyList()
+        val updatedWaypoints = runBlocking(Dispatchers.IO) {
+            try {
+                AdvancedWaypointAnalyzer.analyzeAndMarkWaypoints(
+                    context = context,
+                    points = savedPoints,
+                    totalDistanceMeters = finalStats.distanceMeters
+                )
+            } catch (t: Throwable) {
+                AppLogger.e(AppLogger.Category.WAYPOINT, "Waypoint analysis failed", t)
+                emptyList()
+            }
         }
         if (updatedWaypoints.isNotEmpty()) {
             routePointBox.put(updatedWaypoints)
@@ -133,6 +137,11 @@ class TripRepository @Inject constructor(
                 "Marked ${updatedWaypoints.size} waypoints for trip id=$tripId"
             )
         }
+    }
+
+    fun updateWaypointSubtitles(points: List<RoutePointEntity>) {
+        if (points.isEmpty()) return
+        routePointBox.put(points)
     }
 
     fun getTrips(): List<TripEntity> {
