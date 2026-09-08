@@ -71,6 +71,13 @@ The app is the Android counterpart of the iOS **MotoTripTracker** project, with 
 - OSM tag parsing includes country implicits (`GR:urban`, etc.)
 - No manual tap-to-override (legacy preference is cleared on launch)
 
+### Traffic cameras
+- While recording (active, not paused): warn for **speed** and **red-light** cameras ahead (voice + haptic + HUD banner)
+- Map icons for cameras within ~1.5 km
+- Warn distance: `clamp(speed_mps × 8, 250…700)` m; ahead filter ±45° (treat as ahead under ~3 m/s)
+- Bundled Greater Athens pack (`athens_traffic_cameras.json`) + Overpass fill-in + disk cache
+- Voice follows the navigation mute toggle
+
 ### Sensors & dynamics
 - Linear acceleration → current / max G and lateral G (`GForceTracker`)
 - Corner detection from bearing change while moving (`CornerDetector`)
@@ -129,7 +136,7 @@ Single Gradle module (`:app`) with a layered package layout. ViewModels talk to 
 │  DestinationSearchHistory · NavigationVoicePrompt           │
 │  FuelService · PetrolStationFinder · PetrolPlacesEnricher   │
 │  RouteWeatherService · OverpassSpeedLimitProvider           │
-│  TripCloudUploader · BackendSettingsStore                   │
+│  TrafficCameraService · TripCloudUploader · BackendSettings │
 │  GpxExporter · AdvancedWaypointAnalyzer                     │
 │  ObjectBox entities (TripEntity, RoutePointEntity)          │
 └────────────────────────────┬────────────────────────────────┘
@@ -160,6 +167,7 @@ com.odys.mototriptracker/
 │   ├── petrol/         # OSM finder, prefs, Places enricher, hours parsers
 │   ├── weather/        # Open-Meteo route sampling
 │   ├── road/           # Overpass + offline cache
+│   ├── camera/         # Traffic cameras (pack + Overpass + alerts)
 │   ├── export/         # GPX
 │   └── waypoint/       # post-ride waypoint tagging
 ├── ui/

@@ -19,6 +19,7 @@ object AppLogger {
         const val TRIP = "Trip"
         const val PERSISTENCE = "Persistence"
         const val SPEED_LIMIT = "SpeedLimit"
+        const val TRAFFIC_CAMERA = "TrafficCamera"
         const val WAYPOINT = "Waypoint"
         const val SENSORS = "Sensors"
         const val SERVICE = "Service"

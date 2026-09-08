@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.odys.mototriptracker.data.fuel.FuelService
 import com.odys.mototriptracker.data.location.LocationRepository
+import com.odys.mototriptracker.data.camera.TrafficCameraService
 import com.odys.mototriptracker.data.navigation.DestinationHistoryEntry
 import com.odys.mototriptracker.data.navigation.DestinationSearchHistory
 import com.odys.mototriptracker.data.navigation.NavigationService
@@ -42,6 +43,7 @@ class RideTrackerViewModel @Inject constructor(
     private val tripManager: TripManager,
     private val navigationService: NavigationService,
     private val destinationHistory: DestinationSearchHistory,
+    private val trafficCameraService: TrafficCameraService,
     private val routeWeatherService: RouteWeatherService,
     private val fuelService: FuelService,
     private val petrolPreferences: PetrolPreferences,
@@ -135,10 +137,18 @@ class RideTrackerViewModel @Inject constructor(
         OverlayInputs(sheets, petrol)
     }
 
+    private val cameraInputs = combine(
+        trafficCameraService.nearbyCameras,
+        trafficCameraService.activeAlert,
+    ) { nearby, alert ->
+        nearby to alert
+    }
+
     val uiState: StateFlow<RideTrackerUiState> = combine(
         coreInputs,
-        overlayInputs
-    ) { core, overlay ->
+        overlayInputs,
+        cameraInputs,
+    ) { core, overlay, cameras ->
         val liveAccuracy = core.ride.lastLocation?.takeIf { it.hasAccuracy() && it.accuracy >= 0f }?.accuracy
             ?: core.dashAccuracy
             ?: core.ride.session.stats.gpsAccuracyMeters
@@ -174,7 +184,9 @@ class RideTrackerViewModel @Inject constructor(
             lastLatitude = core.ride.lastLocation?.latitude,
             lastLongitude = core.ride.lastLocation?.longitude,
             lastBearing = core.ride.lastLocation?.bearing ?: 0f,
-            lastSpeedMps = core.ride.lastLocation?.speed ?: 0f
+            lastSpeedMps = core.ride.lastLocation?.speed ?: 0f,
+            nearbyTrafficCameras = cameras.first,
+            trafficCameraAlert = cameras.second,
         )
     }.stateIn(
         scope = viewModelScope,
@@ -218,12 +230,14 @@ class RideTrackerViewModel @Inject constructor(
     fun startRide() {
         if (uiState.value.isTracking) return
         fuelService.resetRideConsumption()
+        trafficCameraService.reset()
         startRideUseCase()
     }
 
     fun stopRide() {
         if (!uiState.value.isTracking) return
         val result = stopRideUseCase()
+        trafficCameraService.reset()
         if (!result.saved) {
             discardBanner.value = "Ride too short — not saved"
             viewModelScope.launch {

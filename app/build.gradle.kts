@@ -85,6 +85,8 @@ dependencies {
     implementation(libs.okhttp)
     implementation(libs.androidx.core.splashscreen)
     testImplementation(libs.junit)
+    // Real org.json for JVM unit tests (Android stubs throw Method not mocked).
+    testImplementation("org.json:json:20240303")
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(platform(libs.androidx.compose.bom))

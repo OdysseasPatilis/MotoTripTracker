@@ -37,6 +37,9 @@ class TripForegroundService : LifecycleService() {
     @Inject
     lateinit var speedLimitResolver: SpeedLimitResolver
 
+    @Inject
+    lateinit var trafficCameraService: com.odys.mototriptracker.data.camera.TrafficCameraService
+
     private var locationJob: Job? = null
     private var watchdogJob: Job? = null
     private var isForegroundStarted = false
@@ -68,6 +71,7 @@ class TripForegroundService : LifecycleService() {
     @RequiresPermission(allOf = [Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION])
     private fun startTracking() {
         speedLimitResolver.reset()
+        trafficCameraService.reset()
         acquireWakeLock()
         ensureForeground(contentText = "Tracking your ride")
         startLocationCollection()
@@ -109,6 +113,10 @@ class TripForegroundService : LifecycleService() {
                         speedMps = if (location.hasSpeed()) location.speed else -1f,
                         scope = lifecycleScope
                     )
+                    val session = tripManager.sessionState.value
+                    if (session.isActive && !session.isPaused) {
+                        trafficCameraService.refresh(location)
+                    }
                 }
             } catch (t: Throwable) {
                 AppLogger.e(AppLogger.Category.SERVICE, "Location collection failed", t)
@@ -222,6 +230,7 @@ class TripForegroundService : LifecycleService() {
 
     override fun onDestroy() {
         AppLogger.i(AppLogger.Category.SERVICE, "Service onDestroy")
+        trafficCameraService.reset()
         stopLocationCollection()
         releaseWakeLock()
         isForegroundStarted = false

@@ -22,6 +22,8 @@ import com.google.maps.android.compose.Marker
 import com.google.maps.android.compose.MarkerState
 import com.google.maps.android.compose.Polyline
 import com.google.maps.android.compose.rememberCameraPositionState
+import com.odys.mototriptracker.data.camera.TrafficCamera
+import com.odys.mototriptracker.data.camera.TrafficCameraKind
 import com.odys.mototriptracker.data.navigation.NavRouteOption
 import com.odys.mototriptracker.domain.RouteCoordinate
 import com.odys.mototriptracker.ui.dashboard.DARK_MAP_STYLE_JSON
@@ -29,6 +31,14 @@ import com.odys.mototriptracker.ui.theme.AppPalette
 import com.odys.mototriptracker.ui.theme.LocalAppPalette
 import com.odys.mototriptracker.ui.theme.LocalThemeStore
 import com.odys.mototriptracker.ui.theme.ThemeMode
+import com.google.android.gms.maps.model.BitmapDescriptor
+import com.google.android.gms.maps.model.BitmapDescriptorFactory
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.toArgb
+import android.graphics.Canvas
+import android.graphics.Paint
+import android.graphics.Typeface
+import androidx.core.graphics.createBitmap
 
 @Composable
 fun LiveRideMapView(
@@ -44,6 +54,8 @@ fun LiveRideMapView(
     userLongitude: Double?,
     userBearing: Float,
     userSpeedMps: Float,
+    trafficCameras: List<TrafficCamera> = emptyList(),
+    showTrafficCameras: Boolean = false,
     modifier: Modifier = Modifier,
     palette: AppPalette = LocalAppPalette.current
 ) {
@@ -203,7 +215,48 @@ fun LiveRideMapView(
                 title = "Destination"
             )
         }
+
+        if (showTrafficCameras) {
+            val speedIcon = remember(palette.routeAmber) {
+                cameraMarkerIcon(palette.routeAmber.toArgb(), "S")
+            }
+            val redLightIcon = remember(palette.neonBlue) {
+                cameraMarkerIcon(palette.neonBlue.toArgb(), "R")
+            }
+            trafficCameras.forEach { camera ->
+                Marker(
+                    state = MarkerState(LatLng(camera.latitude, camera.longitude)),
+                    title = if (camera.kind == TrafficCameraKind.Speed) {
+                        "Speed camera"
+                    } else {
+                        "Red light camera"
+                    },
+                    icon = if (camera.kind == TrafficCameraKind.Speed) speedIcon else redLightIcon,
+                    anchor = Offset(0.5f, 0.5f),
+                )
+            }
+        }
     }
+}
+
+private fun cameraMarkerIcon(colorArgb: Int, label: String): BitmapDescriptor {
+    val size = 72
+    val bitmap = createBitmap(size, size)
+    val canvas = Canvas(bitmap)
+    val fill = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = colorArgb
+        style = Paint.Style.FILL
+    }
+    val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = android.graphics.Color.WHITE
+        textAlign = Paint.Align.CENTER
+        textSize = 28f
+        typeface = Typeface.create(Typeface.DEFAULT_BOLD, Typeface.BOLD)
+    }
+    canvas.drawCircle(size / 2f, size / 2f, size / 2.4f, fill)
+    val textY = size / 2f - (textPaint.descent() + textPaint.ascent()) / 2f
+    canvas.drawText(label, size / 2f, textY, textPaint)
+    return BitmapDescriptorFactory.fromBitmap(bitmap)
 }
 
 private fun zoomFromDistance(distanceMeters: Double): Float {

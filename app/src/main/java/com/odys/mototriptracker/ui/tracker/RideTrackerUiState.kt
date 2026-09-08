@@ -35,5 +35,7 @@ data class RideTrackerUiState(
     val lastLatitude: Double? = null,
     val lastLongitude: Double? = null,
     val lastBearing: Float = 0f,
-    val lastSpeedMps: Float = 0f
+    val lastSpeedMps: Float = 0f,
+    val nearbyTrafficCameras: List<com.odys.mototriptracker.data.camera.TrafficCamera> = emptyList(),
+    val trafficCameraAlert: com.odys.mototriptracker.data.camera.TrafficCameraAlert? = null,
 )

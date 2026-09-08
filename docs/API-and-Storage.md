@@ -74,6 +74,7 @@ Not a REST call you write by hand — Google Maps Compose / Maps SDK loads tiles
 |---------|-------------|------|---------|------|
 | **OpenStreetMap Overpass** | `lz4.overpass-api.de`, `z.overpass-api.de`, `overpass.kumi.systems`, `overpass-api.de` | `data/road/OverpassSpeedLimitProvider.kt` | Road `maxspeed` | Speed-limit miss / implausible Athens pack hit |
 | **Overpass** (petrol) | same mirrors | `data/petrol/PetrolStationFinder.kt` (+ helpers in `NavigationService`) | OSM fuel stations | Petrol search (merged with Google Places) |
+| **Overpass** (traffic cameras) | same mirrors | `data/camera/TrafficCameraService.kt` | Speed / red-light cameras | Active ride outside/near Athens pack; throttled fill-in |
 | **Open-Meteo** | `api.open-meteo.com/v1/forecast` | `data/weather/RouteWeatherService.kt` | Hourly weather along route | User opens route weather (samples along polyline) |
 | **Photon** | `photon.komoot.io/api` | `NavigationService.fetchPhotonSearch` | Destination search fallback | Google Places returned nothing |
 | **Nominatim** | `nominatim.openstreetmap.org/search` | `NavigationService` | Destination search last resort | Photon empty |
@@ -89,6 +90,7 @@ Config: runtime URL in summary **Cloud Sync** (SharedPreferences via `BackendSet
 | Resource | File | Purpose |
 |----------|------|---------|
 | Athens / region speed-limit packs | `data/road/SpeedLimitRegionPackStore.kt` (+ assets) | Offline-first speed limits before Overpass |
+| Athens traffic-camera pack | `data/camera/TrafficCameraRegionPackStore.kt` + `assets/athens_traffic_cameras.json` | Offline-first speed / red-light cameras |
 | Dark map style JSON | inline / style options in map screens | Visual only |
 
 ---
@@ -147,7 +149,7 @@ No Room / SQLite — durable ride data is **ObjectBox only**.
 
 | User action | Likely network |
 |-------------|----------------|
-| Start ride, ride without nav/petrol | GPS only (Fused Location). Speed limit: local pack → cache → maybe Overpass |
+| Start ride, ride without nav/petrol | GPS only (Fused Location). Speed limit: local pack → cache → maybe Overpass. Traffic cameras: Athens pack → cache → throttled Overpass |
 | Type destination | Places (± Photon / Nominatim) |
 | Confirm destination | Directions with alternatives → preview → Start |
 | Leave route | Directions again (12 s cooldown) |
@@ -167,6 +169,7 @@ data/navigation/NavigationService.kt     # Places, Directions, search fallbacks,
 data/petrol/PetrolPlacesEnricher.kt      # Places nearby / details / photo / static map
 data/petrol/PetrolStationFinder.kt       # Overpass petrol + merge with Google
 data/road/OverpassSpeedLimitProvider.kt  # Overpass maxspeed
+data/camera/TrafficCameraService.kt      # Pack + Overpass cameras + alerts
 data/weather/RouteWeatherService.kt      # Open-Meteo
 data/waypoint/AdvancedWaypointAnalyzer.kt# Geocode on finalize
 data/backend/TripCloudUploader.kt        # Own backend upload
