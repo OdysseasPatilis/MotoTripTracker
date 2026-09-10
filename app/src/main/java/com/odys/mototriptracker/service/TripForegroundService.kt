@@ -114,8 +114,11 @@ class TripForegroundService : LifecycleService() {
                         scope = lifecycleScope
                     )
                     val session = tripManager.sessionState.value
-                    if (session.isActive && !session.isPaused) {
-                        trafficCameraService.refresh(location)
+                    if (session.isActive) {
+                        trafficCameraService.refresh(
+                            location,
+                            alertsEnabled = !session.isPaused,
+                        )
                     }
                 }
             } catch (t: Throwable) {

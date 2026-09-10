@@ -10,6 +10,15 @@ enum class TrafficCameraKind {
     RedLight,
 }
 
+sealed class TrafficCameraPackDownloadStatus {
+    data object Idle : TrafficCameraPackDownloadStatus()
+    data class Downloading(
+        val countryCode: String,
+        val countryName: String?,
+    ) : TrafficCameraPackDownloadStatus()
+    data class Failed(val message: String) : TrafficCameraPackDownloadStatus()
+}
+
 data class TrafficCamera(
     val id: String,
     val latitude: Double,
@@ -87,12 +96,43 @@ object TrafficCameraLogic {
         return (bearing + 360.0) % 360.0
     }
 
+    /** Great-circle distance in meters (WGS84 sphere approximation). */
+    fun distanceMeters(
+        fromLat: Double,
+        fromLng: Double,
+        toLat: Double,
+        toLng: Double,
+    ): Double {
+        val earthRadius = 6_371_000.0
+        val dLat = Math.toRadians(toLat - fromLat)
+        val dLon = Math.toRadians(toLng - fromLng)
+        val a = sin(dLat / 2) * sin(dLat / 2) +
+            cos(Math.toRadians(fromLat)) * cos(Math.toRadians(toLat)) *
+            sin(dLon / 2) * sin(dLon / 2)
+        val c = 2 * atan2(kotlin.math.sqrt(a), kotlin.math.sqrt(1 - a))
+        return earthRadius * c
+    }
+
     fun kindFromOsmTags(tags: Map<String, String>): TrafficCameraKind? {
-        if (tags["highway"] == "speed_camera") return TrafficCameraKind.Speed
-        return when (tags["enforcement"]) {
-            "maxspeed" -> TrafficCameraKind.Speed
-            "traffic_signals" -> TrafficCameraKind.RedLight
-            else -> null
+        // Prefer explicit red-light signals when multiple tags are present.
+        when (tags["camera:type"]?.lowercase()) {
+            "red_light", "traffic_signals", "signal" -> return TrafficCameraKind.RedLight
+            "speed", "speed_camera", "alpr", "plate" -> return TrafficCameraKind.Speed
         }
+
+        when (tags["enforcement"]?.lowercase()) {
+            "traffic_signals" -> return TrafficCameraKind.RedLight
+            "maxspeed", "speed", "speeding" -> return TrafficCameraKind.Speed
+        }
+
+        if (tags["highway"] == "speed_camera") return TrafficCameraKind.Speed
+        if (tags["device"]?.lowercase() == "speed_camera") return TrafficCameraKind.Speed
+        if (tags["type"] == "enforcement") {
+            when (tags["enforcement"]?.lowercase()) {
+                "traffic_signals" -> return TrafficCameraKind.RedLight
+                "maxspeed", "speed", "speeding" -> return TrafficCameraKind.Speed
+            }
+        }
+        return null
     }
 }

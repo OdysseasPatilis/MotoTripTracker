@@ -37,7 +37,6 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.toArgb
 import android.graphics.Canvas
 import android.graphics.Paint
-import android.graphics.Typeface
 import androidx.core.graphics.createBitmap
 
 @Composable
@@ -218,10 +217,10 @@ fun LiveRideMapView(
 
         if (showTrafficCameras) {
             val speedIcon = remember(palette.routeAmber) {
-                cameraMarkerIcon(palette.routeAmber.toArgb(), "S")
+                cameraMarkerIcon(palette.routeAmber.toArgb(), kind = TrafficCameraKind.Speed)
             }
             val redLightIcon = remember(palette.neonBlue) {
-                cameraMarkerIcon(palette.neonBlue.toArgb(), "R")
+                cameraMarkerIcon(palette.neonBlue.toArgb(), kind = TrafficCameraKind.RedLight)
             }
             trafficCameras.forEach { camera ->
                 Marker(
@@ -239,7 +238,7 @@ fun LiveRideMapView(
     }
 }
 
-private fun cameraMarkerIcon(colorArgb: Int, label: String): BitmapDescriptor {
+private fun cameraMarkerIcon(colorArgb: Int, kind: TrafficCameraKind): BitmapDescriptor {
     val size = 72
     val bitmap = createBitmap(size, size)
     val canvas = Canvas(bitmap)
@@ -247,15 +246,41 @@ private fun cameraMarkerIcon(colorArgb: Int, label: String): BitmapDescriptor {
         color = colorArgb
         style = Paint.Style.FILL
     }
-    val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+    val glyph = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = android.graphics.Color.WHITE
-        textAlign = Paint.Align.CENTER
-        textSize = 28f
-        typeface = Typeface.create(Typeface.DEFAULT_BOLD, Typeface.BOLD)
+        style = Paint.Style.FILL
     }
-    canvas.drawCircle(size / 2f, size / 2f, size / 2.4f, fill)
-    val textY = size / 2f - (textPaint.descent() + textPaint.ascent()) / 2f
-    canvas.drawText(label, size / 2f, textY, textPaint)
+    val cx = size / 2f
+    val cy = size / 2f
+    canvas.drawCircle(cx, cy, size / 2.4f, fill)
+
+    when (kind) {
+        TrafficCameraKind.Speed -> {
+            // Compact camera body + lens (iOS camera.fill parity).
+            val bodyLeft = cx - 14f
+            val bodyTop = cy - 8f
+            val bodyW = 26f
+            val bodyH = 18f
+            canvas.drawRoundRect(bodyLeft, bodyTop, bodyLeft + bodyW, bodyTop + bodyH, 4f, 4f, glyph)
+            // Viewfinder bump
+            canvas.drawRoundRect(cx - 4f, bodyTop - 5f, cx + 8f, bodyTop + 2f, 2f, 2f, glyph)
+            // Lens cutout
+            glyph.color = colorArgb
+            canvas.drawCircle(cx + 1f, cy + 1f, 6f, glyph)
+            glyph.color = android.graphics.Color.WHITE
+            canvas.drawCircle(cx + 1f, cy + 1f, 3.5f, glyph)
+        }
+        TrafficCameraKind.RedLight -> {
+            // Traffic light housing + three lamps.
+            val left = cx - 7f
+            val top = cy - 14f
+            canvas.drawRoundRect(left, top, left + 14f, top + 28f, 4f, 4f, glyph)
+            glyph.color = colorArgb
+            canvas.drawCircle(cx, cy - 8f, 3.2f, glyph)
+            canvas.drawCircle(cx, cy, 3.2f, glyph)
+            canvas.drawCircle(cx, cy + 8f, 3.2f, glyph)
+        }
+    }
     return BitmapDescriptorFactory.fromBitmap(bitmap)
 }
 

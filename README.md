@@ -73,10 +73,13 @@ The app is the Android counterpart of the iOS **MotoTripTracker** project, with 
 
 ### Traffic cameras
 - While recording (active, not paused): warn for **speed** and **red-light** cameras ahead (voice + haptic + HUD banner)
-- Map icons for cameras within ~1.5 km
+- Map icons for nearby cameras (~3 km) even before a ride starts; alerts remain ride-only
 - Warn distance: `clamp(speed_mps × 8, 250…700)` m; ahead filter ±45° (treat as ahead under ~3 m/s)
-- Bundled Greater Athens pack (`athens_traffic_cameras.json`) + Overpass fill-in + disk cache
+- Bundled Greece + Athens packs (`greece_traffic_cameras.json`, `athens_traffic_cameras.json`)
+- Auto-download country packs from [speedcams.world](https://speedcams.world/download) CSV (30-day TTL, ~10-country LRU, 24h unsupported cooldown) with HUD status chip
+- Live Overpass fill-in (expanded OSM tags) + disk cache
 - Voice follows the navigation mute toggle
+- Coverage follows OSM / pack data; many real cameras (especially red-light) remain unmapped
 
 ### Sensors & dynamics
 - Linear acceleration → current / max G and lateral G (`GForceTracker`)
@@ -167,7 +170,7 @@ com.odys.mototriptracker/
 │   ├── petrol/         # OSM finder, prefs, Places enricher, hours parsers
 │   ├── weather/        # Open-Meteo route sampling
 │   ├── road/           # Overpass + offline cache
-│   ├── camera/         # Traffic cameras (pack + Overpass + alerts)
+│   ├── camera/         # Traffic cameras (packs + Overpass + country CSV downloads)
 │   ├── export/         # GPX
 │   └── waypoint/       # post-ride waypoint tagging
 ├── ui/

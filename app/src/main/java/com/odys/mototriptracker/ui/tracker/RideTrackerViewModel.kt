@@ -140,8 +140,9 @@ class RideTrackerViewModel @Inject constructor(
     private val cameraInputs = combine(
         trafficCameraService.nearbyCameras,
         trafficCameraService.activeAlert,
-    ) { nearby, alert ->
-        nearby to alert
+        trafficCameraService.downloadStatus,
+    ) { nearby, alert, download ->
+        Triple(nearby, alert, download)
     }
 
     val uiState: StateFlow<RideTrackerUiState> = combine(
@@ -187,6 +188,7 @@ class RideTrackerViewModel @Inject constructor(
             lastSpeedMps = core.ride.lastLocation?.speed ?: 0f,
             nearbyTrafficCameras = cameras.first,
             trafficCameraAlert = cameras.second,
+            trafficCameraDownloadStatus = cameras.third,
         )
     }.stateIn(
         scope = viewModelScope,
@@ -220,6 +222,11 @@ class RideTrackerViewModel @Inject constructor(
             try {
                 locationRepository.getLocationFlow().collect { location ->
                     if (location.hasAccuracy()) dashboardGpsAccuracy.value = location.accuracy
+                    val session = tripManager.sessionState.value
+                    if (!session.isActive) {
+                        // Idle map icons (alerts stay ride-only).
+                        trafficCameraService.refresh(location, alertsEnabled = false)
+                    }
                 }
             } catch (e: Exception) {
                 AppLogger.w(AppLogger.Category.UI, "Dashboard GPS failed", e)
@@ -238,6 +245,9 @@ class RideTrackerViewModel @Inject constructor(
         if (!uiState.value.isTracking) return
         val result = stopRideUseCase()
         trafficCameraService.reset()
+        locationRepository.lastLocation.value?.let { location ->
+            trafficCameraService.refresh(location, alertsEnabled = false)
+        }
         if (!result.saved) {
             discardBanner.value = "Ride too short — not saved"
             viewModelScope.launch {

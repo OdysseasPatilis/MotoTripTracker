@@ -53,11 +53,27 @@ class TrafficCameraLogicTest {
         )
         assertEquals(
             TrafficCameraKind.Speed,
+            TrafficCameraLogic.kindFromOsmTags(mapOf("device" to "speed_camera")),
+        )
+        assertEquals(
+            TrafficCameraKind.Speed,
             TrafficCameraLogic.kindFromOsmTags(mapOf("enforcement" to "maxspeed")),
+        )
+        assertEquals(
+            TrafficCameraKind.Speed,
+            TrafficCameraLogic.kindFromOsmTags(mapOf("enforcement" to "speed")),
         )
         assertEquals(
             TrafficCameraKind.RedLight,
             TrafficCameraLogic.kindFromOsmTags(mapOf("enforcement" to "traffic_signals")),
+        )
+        assertEquals(
+            TrafficCameraKind.RedLight,
+            TrafficCameraLogic.kindFromOsmTags(mapOf("camera:type" to "red_light")),
+        )
+        assertEquals(
+            TrafficCameraKind.Speed,
+            TrafficCameraLogic.kindFromOsmTags(mapOf("camera:type" to "speed")),
         )
         assertNull(TrafficCameraLogic.kindFromOsmTags(mapOf("highway" to "stop")))
     }
@@ -69,25 +85,131 @@ class TrafficCameraLogicTest {
               "elements": [
                 {
                   "type": "node",
-                  "id": 1,
+                  "id": 10,
                   "lat": 37.97,
                   "lon": 23.72,
                   "tags": { "highway": "speed_camera" }
                 },
                 {
                   "type": "way",
-                  "id": 2,
+                  "id": 20,
                   "center": { "lat": 37.98, "lon": 23.73 },
                   "tags": { "enforcement": "traffic_signals" }
+                },
+                {
+                  "type": "node",
+                  "id": 25,
+                  "lat": 37.975,
+                  "lon": 23.725,
+                  "tags": { "device": "speed_camera" }
+                },
+                {
+                  "type": "node",
+                  "id": 26,
+                  "lat": 37.976,
+                  "lon": 23.726,
+                  "tags": { "camera:type": "red_light" }
+                },
+                {
+                  "type": "node",
+                  "id": 30,
+                  "lat": 37.99,
+                  "lon": 23.74,
+                  "tags": { "highway": "bus_stop" }
                 }
               ]
             }
         """.trimIndent()
         val cameras = TrafficCameraService.parseOverpassCameras(body)
-        assertEquals(2, cameras.size)
-        assertEquals("osm:node/1", cameras[0].id)
+        assertEquals(4, cameras.size)
+        assertEquals("osm:node/10", cameras[0].id)
         assertEquals(TrafficCameraKind.Speed, cameras[0].kind)
-        assertEquals("osm:way/2", cameras[1].id)
+        assertEquals("osm:way/20", cameras[1].id)
         assertEquals(TrafficCameraKind.RedLight, cameras[1].kind)
+        assertEquals(TrafficCameraKind.Speed, cameras[2].kind)
+        assertEquals(TrafficCameraKind.RedLight, cameras[3].kind)
+    }
+
+    @Test
+    fun parseSpeedcamsCsv() {
+        val csv = """
+            # comment
+            id,latitude,longitude,type,maxspeed,unit,country_code,region
+            123,37.97,23.72,fixed,50,kmh,GR,
+            456,38.0,23.8,fixed,,,GR,
+        """.trimIndent()
+        val pack = TrafficCameraPackDownloader.parseCsv(csv, "GR")
+        assertEquals(2, pack.cameras.size)
+        assertEquals("osm:node/123", pack.cameras[0].id)
+        assertEquals(TrafficCameraKind.Speed, pack.cameras[0].kind)
+        assertEquals(37.97, pack.cameras[0].latitude, 0.0001)
+        assertEquals("country_GR", pack.id)
+        assertEquals(
+            "https://speedcams.world/downloads/it/it-all.csv",
+            TrafficCameraPackDownloader.csvUrl("IT"),
+        )
+    }
+
+    @Test
+    fun parseSpeedcamsCsv_skipsBadRows() {
+        val csv = """
+            id,latitude,longitude,type,maxspeed,unit,country_code,region
+            bad,x,y,fixed,,,GR,
+            789,40.5,22.9,fixed,,,GR,
+        """.trimIndent()
+        val pack = TrafficCameraPackDownloader.parseCsv(csv, "GR")
+        assertEquals(1, pack.cameras.size)
+        assertEquals("osm:node/789", pack.cameras[0].id)
+    }
+
+    @Test
+    fun packEncodeDecode_roundTrip() {
+        val pack = TrafficCameraPackDownloader.parseCsv(
+            """
+            id,latitude,longitude,type,maxspeed,unit,country_code,region
+            1,1,1,fixed,,,IT,
+            """.trimIndent(),
+            "IT",
+        )
+        val decoded = TrafficCameraRegionPackStore.decode(TrafficCameraRegionPackStore.encode(pack))
+        assertEquals(1, decoded.cameras.size)
+        assertEquals("country_IT", decoded.id)
+        assertTrue(TrafficCameraPackStore.DEFAULT_TTL_MS > 0)
+        assertTrue(TrafficCameraPackStore.DEFAULT_UNSUPPORTED_COOLDOWN_MS > 0)
+    }
+
+    @Test
+    fun countryResolver_refreshGate() {
+        val t0 = 0L
+        assertFalse(
+            TrafficCameraCountryResolver.shouldRefresh(
+                lastLat = 37.97,
+                lastLng = 23.72,
+                lastResolvedAtMs = t0,
+                newLat = 37.971,
+                newLng = 23.721,
+                nowMs = t0 + 60_000,
+            )
+        )
+        assertTrue(
+            TrafficCameraCountryResolver.shouldRefresh(
+                lastLat = 37.97,
+                lastLng = 23.72,
+                lastResolvedAtMs = t0,
+                newLat = 38.2,
+                newLng = 23.9,
+                nowMs = t0 + 60_000,
+            )
+        )
+        assertTrue(
+            TrafficCameraCountryResolver.shouldRefresh(
+                lastLat = 37.97,
+                lastLng = 23.72,
+                lastResolvedAtMs = t0,
+                newLat = 37.971,
+                newLng = 23.721,
+                nowMs = t0 + 601_000,
+            )
+        )
     }
 }

@@ -25,6 +25,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.json.JSONArray
 import org.json.JSONObject
+import java.util.Locale
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -33,12 +34,18 @@ import javax.inject.Singleton
 class TrafficCameraService @Inject constructor(
     @param:ApplicationContext private val context: Context,
     private val regionPackStore: TrafficCameraRegionPackStore,
+    private val packStore: TrafficCameraPackStore,
+    private val countryResolver: TrafficCameraCountryResolver,
     private val voice: NavigationVoicePrompt,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val httpClient = OkHttpClient.Builder()
         .connectTimeout(10, TimeUnit.SECONDS)
         .readTimeout(18, TimeUnit.SECONDS)
+        .build()
+    private val packHttpClient = OkHttpClient.Builder()
+        .connectTimeout(15, TimeUnit.SECONDS)
+        .readTimeout(45, TimeUnit.SECONDS)
         .build()
 
     private val _nearbyCameras = MutableStateFlow<List<TrafficCamera>>(emptyList())
@@ -47,28 +54,46 @@ class TrafficCameraService @Inject constructor(
     private val _activeAlert = MutableStateFlow<TrafficCameraAlert?>(null)
     val activeAlert: StateFlow<TrafficCameraAlert?> = _activeAlert.asStateFlow()
 
+    private val _downloadStatus =
+        MutableStateFlow<TrafficCameraPackDownloadStatus>(TrafficCameraPackDownloadStatus.Idle)
+    val downloadStatus: StateFlow<TrafficCameraPackDownloadStatus> = _downloadStatus.asStateFlow()
+
     private val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
     private var cacheById: MutableMap<String, CachedEntry> = loadCache().toMutableMap()
     private val liveById = mutableMapOf<String, TrafficCamera>()
+    private var downloadedPacksByCountry: MutableMap<String, TrafficCameraRegionPack> =
+        packStore.loadAllPacks().toMutableMap()
     private val announcedIds = mutableSetOf<String>()
     private var lastFetchLat: Double? = null
     private var lastFetchLng: Double? = null
     private var lastFetchTimeMs: Long = 0L
     private var preferredEndpointIndex = 0
     private var fetchJob: Job? = null
+    private var packJob: Job? = null
     private var alertClearJob: Job? = null
+    private var statusClearJob: Job? = null
+    private var downloadingCountry: String? = null
+    private var alertsEnabled = false
     private var isFetching = false
 
     init {
         AppLogger.i(
             AppLogger.Category.TRAFFIC_CAMERA,
-            "TrafficCameraService ready packs=${regionPackStore.packs.size} cache=${cacheById.size}"
+            "TrafficCameraService ready packs=${regionPackStore.packs.size} " +
+                "downloaded=${downloadedPacksByCountry.size} cache=${cacheById.size}",
         )
     }
 
-    fun refresh(location: Location) {
+    fun refresh(location: Location, alertsEnabled: Boolean = true) {
+        this.alertsEnabled = alertsEnabled
         publishNearby(location)
-        evaluateAlert(location)
+        if (alertsEnabled) {
+            evaluateAlert(location)
+        } else if (_activeAlert.value != null) {
+            _activeAlert.value = null
+        }
+        ensureCountryPack(location, alertsEnabled)
+
         if (!shouldFetch(location)) return
         fetchJob?.cancel()
         fetchJob = scope.launch {
@@ -79,17 +104,27 @@ class TrafficCameraService @Inject constructor(
     fun reset() {
         fetchJob?.cancel()
         fetchJob = null
+        packJob?.cancel()
+        packJob = null
         alertClearJob?.cancel()
         alertClearJob = null
+        statusClearJob?.cancel()
+        statusClearJob = null
+        downloadingCountry = null
+        _downloadStatus.value = TrafficCameraPackDownloadStatus.Idle
         _activeAlert.value = null
         announcedIds.clear()
         _nearbyCameras.value = emptyList()
+        // Keep pack + disk cache + last live results for the next ride.
         AppLogger.i(AppLogger.Category.TRAFFIC_CAMERA, "Traffic camera alerts reset")
     }
 
     private fun allKnownCameras(): List<TrafficCamera> {
         val byId = linkedMapOf<String, TrafficCamera>()
         regionPackStore.packs.forEach { pack ->
+            pack.cameras.forEach { byId[it.id] = it }
+        }
+        downloadedPacksByCountry.values.forEach { pack ->
             pack.cameras.forEach { byId[it.id] = it }
         }
         cacheById.values.forEach { byId[it.camera.id] = it.camera }
@@ -103,6 +138,76 @@ class TrafficCameraService @Inject constructor(
             .filter { it.second <= NEARBY_RADIUS_METERS }
             .sortedBy { it.second }
             .map { it.first }
+    }
+
+    private fun ensureCountryPack(location: Location, alertsEnabled: Boolean) {
+        // Avoid canceling an in-flight download on every GPS tick.
+        if (packJob?.isActive == true) return
+        packJob = scope.launch {
+            try {
+                ensureCountryPackAsync(location, alertsEnabled)
+            } finally {
+                packJob = null
+            }
+        }
+    }
+
+    private suspend fun ensureCountryPackAsync(location: Location, alertsEnabled: Boolean) {
+        val country = countryResolver.resolve(location) ?: return
+        if (packStore.isUnsupported(country)) return
+
+        packStore.loadPack(country)?.let { (loaded, _) ->
+            packStore.touch(country)
+            downloadedPacksByCountry[country] = loaded
+            publishNearby(location)
+            if (alertsEnabled) evaluateAlert(location)
+            if (packStore.isFresh(country)) return
+        }
+
+        if (downloadingCountry == country) return
+        downloadingCountry = country
+        val localeName = runCatching {
+            Locale.Builder().setRegion(country).build().displayCountry
+                .takeIf { it.isNotBlank() && !it.equals(country, ignoreCase = true) }
+        }.getOrNull()
+        _downloadStatus.value = TrafficCameraPackDownloadStatus.Downloading(country, localeName)
+
+        try {
+            val pack = TrafficCameraPackDownloader.download(country, packHttpClient)
+            packStore.save(pack, country, System.currentTimeMillis())
+            downloadedPacksByCountry[country] = pack
+            downloadingCountry = null
+            _downloadStatus.value = TrafficCameraPackDownloadStatus.Idle
+            publishNearby(location)
+            if (alertsEnabled) evaluateAlert(location)
+            AppLogger.i(
+                AppLogger.Category.TRAFFIC_CAMERA,
+                "Downloaded camera pack $country count=${pack.cameras.size}",
+            )
+        } catch (_: TrafficCameraPackDownloadError.UnsupportedCountry) {
+            packStore.markUnsupported(country)
+            downloadingCountry = null
+            showTransientFailure("Camera pack unavailable — using live data")
+            AppLogger.i(AppLogger.Category.TRAFFIC_CAMERA, "No camera pack for $country")
+        } catch (t: Throwable) {
+            downloadingCountry = null
+            showTransientFailure("Camera pack unavailable — using live data")
+            AppLogger.w(
+                AppLogger.Category.TRAFFIC_CAMERA,
+                "Camera pack download failed $country: ${t.message}",
+            )
+        }
+    }
+
+    private fun showTransientFailure(message: String) {
+        _downloadStatus.value = TrafficCameraPackDownloadStatus.Failed(message)
+        statusClearJob?.cancel()
+        statusClearJob = scope.launch {
+            delay(4_000)
+            if (_downloadStatus.value is TrafficCameraPackDownloadStatus.Failed) {
+                _downloadStatus.value = TrafficCameraPackDownloadStatus.Idle
+            }
+        }
     }
 
     private fun evaluateAlert(location: Location) {
@@ -150,7 +255,7 @@ class TrafficCameraService @Inject constructor(
         hapticMedium()
         AppLogger.i(
             AppLogger.Category.TRAFFIC_CAMERA,
-            "Camera alert ${camera.kind} ${distance.toInt()}m id=${camera.id}"
+            "Camera alert ${camera.kind} ${distance.toInt()}m id=${camera.id}",
         )
         scheduleAlertClear()
     }
@@ -183,12 +288,18 @@ class TrafficCameraService @Inject constructor(
             val query = """
                 [out:json][timeout:15];
                 (
-                  node(around:$OVERPASS_RADIUS_METERS,$lat,$lon)["highway"="speed_camera"];
-                  way(around:$OVERPASS_RADIUS_METERS,$lat,$lon)["highway"="speed_camera"];
-                  node(around:$OVERPASS_RADIUS_METERS,$lat,$lon)["enforcement"="maxspeed"];
-                  way(around:$OVERPASS_RADIUS_METERS,$lat,$lon)["enforcement"="maxspeed"];
-                  node(around:$OVERPASS_RADIUS_METERS,$lat,$lon)["enforcement"="traffic_signals"];
-                  way(around:$OVERPASS_RADIUS_METERS,$lat,$lon)["enforcement"="traffic_signals"];
+                  nwr(around:$OVERPASS_RADIUS_METERS,$lat,$lon)["highway"="speed_camera"];
+                  nwr(around:$OVERPASS_RADIUS_METERS,$lat,$lon)["device"="speed_camera"];
+                  nwr(around:$OVERPASS_RADIUS_METERS,$lat,$lon)["enforcement"="maxspeed"];
+                  nwr(around:$OVERPASS_RADIUS_METERS,$lat,$lon)["enforcement"="speed"];
+                  nwr(around:$OVERPASS_RADIUS_METERS,$lat,$lon)["enforcement"="traffic_signals"];
+                  nwr(around:$OVERPASS_RADIUS_METERS,$lat,$lon)["camera:type"="speed"];
+                  nwr(around:$OVERPASS_RADIUS_METERS,$lat,$lon)["camera:type"="speed_camera"];
+                  nwr(around:$OVERPASS_RADIUS_METERS,$lat,$lon)["camera:type"="red_light"];
+                  nwr(around:$OVERPASS_RADIUS_METERS,$lat,$lon)["camera:type"="traffic_signals"];
+                  relation(around:$OVERPASS_RADIUS_METERS,$lat,$lon)["type"="enforcement"]["enforcement"="maxspeed"];
+                  relation(around:$OVERPASS_RADIUS_METERS,$lat,$lon)["type"="enforcement"]["enforcement"="traffic_signals"];
+                  relation(around:$OVERPASS_RADIUS_METERS,$lat,$lon)["type"="enforcement"]["enforcement"="speed"];
                 );
                 out center tags;
             """.trimIndent()
@@ -201,7 +312,7 @@ class TrafficCameraService @Inject constructor(
             if (cameras == null) {
                 AppLogger.w(
                     AppLogger.Category.TRAFFIC_CAMERA,
-                    "Overpass camera fetch failed @ ${AppLogger.coordinate(lat, lon)}"
+                    "Overpass camera fetch failed @ ${AppLogger.coordinate(lat, lon)}",
                 )
                 return
             }
@@ -212,10 +323,10 @@ class TrafficCameraService @Inject constructor(
             }
             pruneAndPersistCache()
             publishNearby(location)
-            evaluateAlert(location)
+            if (alertsEnabled) evaluateAlert(location)
             AppLogger.i(
                 AppLogger.Category.TRAFFIC_CAMERA,
-                "Overpass cameras +${cameras.size} live=${liveById.size}"
+                "Overpass cameras +${cameras.size} live=${liveById.size}",
             )
         } finally {
             isFetching = false
@@ -258,7 +369,7 @@ class TrafficCameraService @Inject constructor(
                     if (!response.isSuccessful) {
                         AppLogger.w(
                             AppLogger.Category.TRAFFIC_CAMERA,
-                            "Overpass HTTP ${response.code} from $endpoint"
+                            "Overpass HTTP ${response.code} from $endpoint",
                         )
                         return@runCatching null
                     }
@@ -267,7 +378,7 @@ class TrafficCameraService @Inject constructor(
             }.onFailure {
                 AppLogger.w(
                     AppLogger.Category.TRAFFIC_CAMERA,
-                    "Overpass $endpoint failed: ${it.message}"
+                    "Overpass $endpoint failed: ${it.message}",
                 )
             }.getOrNull()
         }
@@ -291,9 +402,9 @@ class TrafficCameraService @Inject constructor(
                         when (entry.camera.kind) {
                             TrafficCameraKind.Speed -> "speed"
                             TrafficCameraKind.RedLight -> "redLight"
-                        }
+                        },
                     )
-                    .put("savedAtMs", entry.savedAtMs)
+                    .put("savedAtMs", entry.savedAtMs),
             )
         }
         prefs.edit { putString(KEY_CACHE, array.toString()) }
@@ -351,8 +462,8 @@ class TrafficCameraService @Inject constructor(
     companion object {
         private const val PREFS_NAME = "moto_app_prefs"
         private const val KEY_CACHE = "moto_traffic_camera_cache_v1"
-        private const val NEARBY_RADIUS_METERS = 1_500.0
-        private const val OVERPASS_RADIUS_METERS = 1_200
+        private const val NEARBY_RADIUS_METERS = 3_000.0
+        private const val OVERPASS_RADIUS_METERS = 2_500
         private const val MIN_FETCH_INTERVAL_MS = 45_000L
         private const val MIN_FETCH_DISTANCE_METERS = 400f
         private const val CLEAR_APPROACH_EXTRA_METERS = 80.0
@@ -400,13 +511,13 @@ class TrafficCameraService @Inject constructor(
                             latitude = lat,
                             longitude = lon,
                             kind = kind,
-                        )
+                        ),
                     )
                 }
             }
         }
 
-        private fun distanceMeters(location: Location, camera: TrafficCamera): Double {
+        fun distanceMeters(location: Location, camera: TrafficCamera): Double {
             val results = FloatArray(1)
             Location.distanceBetween(
                 location.latitude,

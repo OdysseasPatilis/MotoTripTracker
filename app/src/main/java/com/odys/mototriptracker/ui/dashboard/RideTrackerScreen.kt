@@ -72,12 +72,13 @@ import androidx.compose.material.icons.filled.NorthEast
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.automirrored.filled.VolumeOff
 import androidx.compose.material.icons.filled.Place
-import androidx.compose.material.icons.filled.PhotoCamera
+import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Traffic
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextOverflow
 import com.odys.mototriptracker.data.camera.TrafficCameraAlert
 import com.odys.mototriptracker.data.camera.TrafficCameraKind
+import com.odys.mototriptracker.data.camera.TrafficCameraPackDownloadStatus
 import com.odys.mototriptracker.data.fuel.FuelService
 import com.odys.mototriptracker.domain.TwistinessCalculator
 import com.odys.mototriptracker.ui.tracker.FuelSettingsSheet
@@ -296,7 +297,7 @@ fun RideTrackerScreen(
                         userBearing = uiState.lastBearing,
                         userSpeedMps = uiState.lastSpeedMps,
                         trafficCameras = uiState.nearbyTrafficCameras,
-                        showTrafficCameras = isRiding,
+                        showTrafficCameras = true,
                         modifier = Modifier.fillMaxSize()
                     )
 
@@ -427,6 +428,23 @@ fun RideTrackerScreen(
                                 palette = palette,
                                 modifier = Modifier.padding(horizontal = 10.dp)
                             )
+                        }
+                        when (val status = uiState.trafficCameraDownloadStatus) {
+                            TrafficCameraPackDownloadStatus.Idle -> Unit
+                            is TrafficCameraPackDownloadStatus.Downloading -> {
+                                TrafficCameraStatusBanner(
+                                    text = "Downloading cameras for ${status.countryName ?: status.countryCode}…",
+                                    palette = palette,
+                                    modifier = Modifier.padding(horizontal = 10.dp),
+                                )
+                            }
+                            is TrafficCameraPackDownloadStatus.Failed -> {
+                                TrafficCameraStatusBanner(
+                                    text = status.message,
+                                    palette = palette,
+                                    modifier = Modifier.padding(horizontal = 10.dp),
+                                )
+                            }
                         }
                     }
 
@@ -958,7 +976,7 @@ private fun TrafficCameraBanner(
     ) {
         Icon(
             imageVector = if (alert.camera.kind == TrafficCameraKind.Speed) {
-                Icons.Filled.PhotoCamera
+                Icons.Filled.CameraAlt
             } else {
                 Icons.Filled.Traffic
             },
@@ -974,6 +992,25 @@ private fun TrafficCameraBanner(
             modifier = Modifier.weight(1f)
         )
     }
+}
+
+@Composable
+private fun TrafficCameraStatusBanner(
+    text: String,
+    palette: AppPalette,
+    modifier: Modifier = Modifier,
+) {
+    Text(
+        text = text,
+        color = palette.textPrimary,
+        fontSize = 12.sp,
+        fontWeight = FontWeight.SemiBold,
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .background(palette.bgPanel.copy(alpha = 0.92f))
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+    )
 }
 
 @Composable

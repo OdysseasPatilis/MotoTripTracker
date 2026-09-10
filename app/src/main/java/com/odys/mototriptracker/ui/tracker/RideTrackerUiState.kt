@@ -38,4 +38,6 @@ data class RideTrackerUiState(
     val lastSpeedMps: Float = 0f,
     val nearbyTrafficCameras: List<com.odys.mototriptracker.data.camera.TrafficCamera> = emptyList(),
     val trafficCameraAlert: com.odys.mototriptracker.data.camera.TrafficCameraAlert? = null,
+    val trafficCameraDownloadStatus: com.odys.mototriptracker.data.camera.TrafficCameraPackDownloadStatus =
+        com.odys.mototriptracker.data.camera.TrafficCameraPackDownloadStatus.Idle,
 )
