@@ -1,15 +1,16 @@
 package com.odys.mototriptracker.ui.tracker
 
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.google.android.gms.maps.CameraUpdateFactory
+import com.google.android.gms.maps.model.BitmapDescriptor
+import com.google.android.gms.maps.model.BitmapDescriptorFactory
 import com.google.android.gms.maps.model.CameraPosition
 import com.google.android.gms.maps.model.LatLng
 import com.google.android.gms.maps.model.LatLngBounds
@@ -31,13 +32,13 @@ import com.odys.mototriptracker.ui.theme.AppPalette
 import com.odys.mototriptracker.ui.theme.LocalAppPalette
 import com.odys.mototriptracker.ui.theme.LocalThemeStore
 import com.odys.mototriptracker.ui.theme.ThemeMode
-import com.google.android.gms.maps.model.BitmapDescriptor
-import com.google.android.gms.maps.model.BitmapDescriptorFactory
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.toArgb
 import android.graphics.Canvas
 import android.graphics.Paint
 import androidx.core.graphics.createBitmap
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.fillMaxSize
 
 @Composable
 fun LiveRideMapView(
@@ -223,16 +224,20 @@ fun LiveRideMapView(
                 cameraMarkerIcon(palette.neonBlue.toArgb(), kind = TrafficCameraKind.RedLight)
             }
             trafficCameras.forEach { camera ->
-                Marker(
-                    state = MarkerState(LatLng(camera.latitude, camera.longitude)),
-                    title = if (camera.kind == TrafficCameraKind.Speed) {
-                        "Speed camera"
-                    } else {
-                        "Red light camera"
-                    },
-                    icon = if (camera.kind == TrafficCameraKind.Speed) speedIcon else redLightIcon,
-                    anchor = Offset(0.5f, 0.5f),
-                )
+                key(camera.id) {
+                    val position = LatLng(camera.latitude, camera.longitude)
+                    val markerState = remember(camera.id) { MarkerState(position) }
+                    Marker(
+                        state = markerState,
+                        title = if (camera.kind == TrafficCameraKind.Speed) {
+                            "Speed camera"
+                        } else {
+                            "Red light camera"
+                        },
+                        icon = if (camera.kind == TrafficCameraKind.Speed) speedIcon else redLightIcon,
+                        anchor = Offset(0.5f, 0.5f),
+                    )
+                }
             }
         }
     }
