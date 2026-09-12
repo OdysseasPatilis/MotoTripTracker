@@ -9,6 +9,7 @@ import com.odys.mototriptracker.data.navigation.DestinationHistoryEntry
 import com.odys.mototriptracker.data.navigation.DestinationSearchHistory
 import com.odys.mototriptracker.data.navigation.NavigationService
 import com.odys.mototriptracker.data.navigation.NavigationSearchResult
+import com.odys.mototriptracker.data.navigation.PickedMapPlace
 import com.odys.mototriptracker.data.petrol.GooglePetrolDetails
 import com.odys.mototriptracker.data.petrol.PetrolPreferences
 import com.odys.mototriptracker.data.petrol.PetrolSearchPlan
@@ -68,8 +69,11 @@ class RideTrackerViewModel @Inject constructor(
     private val petrolDetailsLoading = MutableStateFlow(false)
     private val discardBanner = MutableStateFlow<String?>(null)
     private val petrolMessage = MutableStateFlow<String?>(null)
+    private val selectedMapPlace = MutableStateFlow<PickedMapPlace?>(null)
     private var dashboardLocationJob: Job? = null
     private var petrolSearchJob: Job? = null
+    private var mapPlaceJob: Job? = null
+    private var mapPlaceGeneration = 0
 
     private val rideInputs = combine(
         observeRideSession(),
@@ -138,18 +142,19 @@ class RideTrackerViewModel @Inject constructor(
     }
 
     private val cameraInputs = combine(
-        trafficCameraService.nearbyCameras,
+        trafficCameraService.mapCameras,
         trafficCameraService.activeAlert,
         trafficCameraService.downloadStatus,
-    ) { nearby, alert, download ->
-        Triple(nearby, alert, download)
+    ) { mapCams, alert, download ->
+        Triple(mapCams, alert, download)
     }
 
     val uiState: StateFlow<RideTrackerUiState> = combine(
         coreInputs,
         overlayInputs,
         cameraInputs,
-    ) { core, overlay, cameras ->
+        selectedMapPlace,
+    ) { core, overlay, cameras, mapPlace ->
         val liveAccuracy = core.ride.lastLocation?.takeIf { it.hasAccuracy() && it.accuracy >= 0f }?.accuracy
             ?: core.dashAccuracy
             ?: core.ride.session.stats.gpsAccuracyMeters
@@ -189,6 +194,7 @@ class RideTrackerViewModel @Inject constructor(
             nearbyTrafficCameras = cameras.first,
             trafficCameraAlert = cameras.second,
             trafficCameraDownloadStatus = cameras.third,
+            selectedMapPlace = mapPlace,
         )
     }.stateIn(
         scope = viewModelScope,
@@ -328,6 +334,65 @@ class RideTrackerViewModel @Inject constructor(
     }
     fun removeHistoryDestination(id: String) = destinationHistory.remove(id)
     fun destinationHistoryEntries(): List<DestinationHistoryEntry> = destinationHistory.all()
+
+    fun updateVisibleMapRegion(
+        centerLat: Double,
+        centerLng: Double,
+        latDelta: Double,
+        lngDelta: Double,
+        fetchRemote: Boolean,
+    ) {
+        trafficCameraService.updateVisibleMapRegion(
+            centerLatitude = centerLat,
+            centerLongitude = centerLng,
+            latitudeDelta = latDelta,
+            longitudeDelta = lngDelta,
+            fetchRemote = fetchRemote,
+        )
+    }
+
+    fun onMapPoiClick(placeId: String, name: String, latitude: Double, longitude: Double) {
+        mapPlaceGeneration += 1
+        val generation = mapPlaceGeneration
+        selectedMapPlace.value = PickedMapPlace(
+            name = name.ifBlank { "Selected place" },
+            latitude = latitude,
+            longitude = longitude,
+            placeId = placeId,
+            isResolving = true,
+        )
+        mapPlaceJob?.cancel()
+        mapPlaceJob = viewModelScope.launch {
+            val resolved = navigationService.resolveMapPlace(
+                placeId = placeId,
+                fallbackName = name,
+                latitude = latitude,
+                longitude = longitude,
+            )
+            if (generation != mapPlaceGeneration) return@launch
+            selectedMapPlace.value = resolved.copy(isResolving = false)
+        }
+    }
+
+    fun dismissMapPlace() {
+        mapPlaceGeneration += 1
+        mapPlaceJob?.cancel()
+        mapPlaceJob = null
+        selectedMapPlace.value = null
+    }
+
+    fun goToSelectedMapPlace() {
+        val place = selectedMapPlace.value ?: return
+        if (place.isResolving) return
+        dismissMapPlace()
+        navigationService.setDestination(
+            latitude = place.latitude,
+            longitude = place.longitude,
+            name = place.name,
+            subtitle = place.address,
+        )
+    }
+
     fun clearNavigation() = navigationService.clear()
     fun confirmStartNavigation() = navigationService.confirmStartNavigation()
     fun cancelNavigationPreview() = navigationService.cancelPreview()

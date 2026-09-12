@@ -51,6 +51,10 @@ class TrafficCameraService @Inject constructor(
     private val _nearbyCameras = MutableStateFlow<List<TrafficCamera>>(emptyList())
     val nearbyCameras: StateFlow<List<TrafficCamera>> = _nearbyCameras.asStateFlow()
 
+    /** Cameras inside the live map viewport (updated as the user pans/zooms). */
+    private val _mapCameras = MutableStateFlow<List<TrafficCamera>>(emptyList())
+    val mapCameras: StateFlow<List<TrafficCamera>> = _mapCameras.asStateFlow()
+
     private val _activeAlert = MutableStateFlow<TrafficCameraAlert?>(null)
     val activeAlert: StateFlow<TrafficCameraAlert?> = _activeAlert.asStateFlow()
 
@@ -75,6 +79,7 @@ class TrafficCameraService @Inject constructor(
     private var downloadingCountry: String? = null
     private var alertsEnabled = false
     private var isFetching = false
+    private var lastVisibleMap: VisibleMapRegion? = null
 
     init {
         AppLogger.i(
@@ -87,6 +92,7 @@ class TrafficCameraService @Inject constructor(
     fun refresh(location: Location, alertsEnabled: Boolean = true) {
         this.alertsEnabled = alertsEnabled
         publishNearby(location)
+        republishMapCamerasIfNeeded()
         if (alertsEnabled) {
             evaluateAlert(location)
         } else if (_activeAlert.value != null) {
@@ -98,6 +104,39 @@ class TrafficCameraService @Inject constructor(
         fetchJob?.cancel()
         fetchJob = scope.launch {
             fetchOverpass(location)
+        }
+    }
+
+    /**
+     * Updates map icons for the visible viewport. When [fetchRemote] is true (user exploring),
+     * also pulls Overpass / country packs around the map center.
+     */
+    fun updateVisibleMapRegion(
+        centerLatitude: Double,
+        centerLongitude: Double,
+        latitudeDelta: Double,
+        longitudeDelta: Double,
+        fetchRemote: Boolean,
+    ) {
+        val region = VisibleMapRegion(
+            centerLatitude = centerLatitude,
+            centerLongitude = centerLongitude,
+            latitudeDelta = latitudeDelta,
+            longitudeDelta = longitudeDelta,
+        )
+        lastVisibleMap = region
+        publishMapCameras(region)
+
+        if (!fetchRemote) return
+        val center = Location("map").apply {
+            latitude = centerLatitude
+            longitude = centerLongitude
+        }
+        ensureCountryPack(center, alertsEnabled = false)
+        if (!shouldFetch(center)) return
+        fetchJob?.cancel()
+        fetchJob = scope.launch {
+            fetchOverpass(center)
         }
     }
 
@@ -115,6 +154,7 @@ class TrafficCameraService @Inject constructor(
         _activeAlert.value = null
         announcedIds.clear()
         _nearbyCameras.value = emptyList()
+        _mapCameras.value = emptyList()
         // Keep pack + disk cache + last live results for the next ride.
         AppLogger.i(AppLogger.Category.TRAFFIC_CAMERA, "Traffic camera alerts reset")
     }
@@ -140,6 +180,24 @@ class TrafficCameraService @Inject constructor(
             .map { it.first }
     }
 
+    private fun publishMapCameras(region: VisibleMapRegion) {
+        _mapCameras.value = TrafficCameraLogic.cameras(
+            from = allKnownCameras(),
+            region = region,
+            limit = MAX_MAP_CAMERAS,
+        )
+    }
+
+    private fun republishMapCamerasIfNeeded() {
+        val region = lastVisibleMap
+        if (region == null) {
+            // Before the first map camera callback, mirror GPS-nearby icons.
+            _mapCameras.value = _nearbyCameras.value
+            return
+        }
+        publishMapCameras(region)
+    }
+
     private fun ensureCountryPack(location: Location, alertsEnabled: Boolean) {
         // Avoid canceling an in-flight download on every GPS tick.
         if (packJob?.isActive == true) return
@@ -160,6 +218,7 @@ class TrafficCameraService @Inject constructor(
             packStore.touch(country)
             downloadedPacksByCountry[country] = loaded
             publishNearby(location)
+            republishMapCamerasIfNeeded()
             if (alertsEnabled) evaluateAlert(location)
             if (packStore.isFresh(country)) return
         }
@@ -179,6 +238,7 @@ class TrafficCameraService @Inject constructor(
             downloadingCountry = null
             _downloadStatus.value = TrafficCameraPackDownloadStatus.Idle
             publishNearby(location)
+            republishMapCamerasIfNeeded()
             if (alertsEnabled) evaluateAlert(location)
             AppLogger.i(
                 AppLogger.Category.TRAFFIC_CAMERA,
@@ -323,6 +383,7 @@ class TrafficCameraService @Inject constructor(
             }
             pruneAndPersistCache()
             publishNearby(location)
+            republishMapCamerasIfNeeded()
             if (alertsEnabled) evaluateAlert(location)
             AppLogger.i(
                 AppLogger.Category.TRAFFIC_CAMERA,
@@ -470,6 +531,7 @@ class TrafficCameraService @Inject constructor(
         private const val ALERT_BANNER_MS = 6_000L
         private const val CACHE_TTL_MS = 30L * 24 * 60 * 60 * 1000
         private const val MAX_CACHE_ENTRIES = 2_000
+        private const val MAX_MAP_CAMERAS = 250
         private const val USER_AGENT = "MotoTripTracker/1.0 (Android; motorcycle trip tracker)"
 
         private val OVERPASS_ENDPOINTS = listOf(

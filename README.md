@@ -74,6 +74,9 @@ The app is the Android counterpart of the iOS **MotoTripTracker** project, with 
 ### Traffic cameras
 - While recording (active, not paused): warn for **speed** and **red-light** cameras ahead (voice + haptic + HUD banner)
 - Map icons for nearby cameras (~3 km) even before a ride starts; alerts remain ride-only
+- Camera icons follow the **visible map area** as you pan/zoom (while exploring, Overpass/country packs refresh around the map center)
+- Free map explore: pan pauses follow-camera; **Recenter** sits above the search/petrol row
+- Tap a map place for a Go card (category / address / phone / website when available) → route preview
 - Warn distance: `clamp(speed_mps × 8, 250…700)` m; ahead filter ±45° (treat as ahead under ~3 m/s)
 - Bundled Greece + Athens packs (`greece_traffic_cameras.json`, `athens_traffic_cameras.json`)
 - Auto-download country packs from [speedcams.world](https://speedcams.world/download) CSV (30-day TTL, ~10-country LRU, 24h unsupported cooldown) with HUD status chip

@@ -75,6 +75,11 @@ fun RideTrackerRoute(
         onOpenNavigationInMaps = viewModel::openNavigationInMaps,
         onToggleNavigationVoice = viewModel::toggleNavigationVoice,
         onDismissTimingResult = viewModel::dismissTimingResult,
+        onVisibleMapRegionChanged = viewModel::updateVisibleMapRegion,
+        onMapPoiClick = viewModel::onMapPoiClick,
+        onDismissMapPlace = viewModel::dismissMapPlace,
+        onGoToMapPlace = viewModel::goToSelectedMapPlace,
+        onMapRecenter = viewModel::dismissMapPlace,
     )
 }
 

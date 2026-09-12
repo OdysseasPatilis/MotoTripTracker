@@ -47,6 +47,14 @@ data class TrafficCameraAlert(
     val bannerText: String get() = camera.bannerText(distanceMeters)
 }
 
+/** Visible map viewport used to choose which cameras to draw while exploring. */
+data class VisibleMapRegion(
+    val centerLatitude: Double,
+    val centerLongitude: Double,
+    val latitudeDelta: Double,
+    val longitudeDelta: Double,
+)
+
 /** Pure helpers for warn distance, heading filter, and OSM tag mapping. */
 object TrafficCameraLogic {
     const val MIN_WARN_METERS = 250.0
@@ -134,5 +142,26 @@ object TrafficCameraLogic {
             }
         }
         return null
+    }
+
+    /** Cameras inside a map viewport (with a small pad). When over [limit], keep closest to center. */
+    fun cameras(
+        from: List<TrafficCamera>,
+        region: VisibleMapRegion,
+        limit: Int,
+    ): List<TrafficCamera> {
+        val halfLat = maxOf(region.latitudeDelta, 0.002) / 2.0 * 1.15
+        val halfLon = maxOf(region.longitudeDelta, 0.002) / 2.0 * 1.15
+        val centerLat = region.centerLatitude
+        val centerLon = region.centerLongitude
+        val matched = from.filter { camera ->
+            kotlin.math.abs(camera.latitude - centerLat) <= halfLat &&
+                kotlin.math.abs(camera.longitude - centerLon) <= halfLon
+        }.toMutableList()
+        if (matched.size <= limit) return matched
+        matched.sortBy {
+            distanceMeters(centerLat, centerLon, it.latitude, it.longitude)
+        }
+        return matched.take(limit)
     }
 }

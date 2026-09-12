@@ -40,4 +40,5 @@ data class RideTrackerUiState(
     val trafficCameraAlert: com.odys.mototriptracker.data.camera.TrafficCameraAlert? = null,
     val trafficCameraDownloadStatus: com.odys.mototriptracker.data.camera.TrafficCameraPackDownloadStatus =
         com.odys.mototriptracker.data.camera.TrafficCameraPackDownloadStatus.Idle,
+    val selectedMapPlace: com.odys.mototriptracker.data.navigation.PickedMapPlace? = null,
 )

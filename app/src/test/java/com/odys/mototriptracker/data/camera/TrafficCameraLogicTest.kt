@@ -212,4 +212,25 @@ class TrafficCameraLogicTest {
             )
         )
     }
+
+    @Test
+    fun visibleRegion_filtersAndLimits() {
+        val cameras = listOf(
+            TrafficCamera(id = "a", latitude = 37.97, longitude = 23.73, kind = TrafficCameraKind.Speed),
+            TrafficCamera(id = "b", latitude = 37.98, longitude = 23.74, kind = TrafficCameraKind.RedLight),
+            TrafficCamera(id = "c", latitude = 40.0, longitude = 23.0, kind = TrafficCameraKind.Speed),
+        )
+        val region = VisibleMapRegion(
+            centerLatitude = 37.975,
+            centerLongitude = 23.735,
+            latitudeDelta = 0.05,
+            longitudeDelta = 0.05,
+        )
+        val visible = TrafficCameraLogic.cameras(from = cameras, region = region, limit = 10)
+        assertEquals(setOf("a", "b"), visible.map { it.id }.toSet())
+
+        val limited = TrafficCameraLogic.cameras(from = cameras, region = region, limit = 1)
+        assertEquals(1, limited.size)
+        assertTrue(limited[0].id == "a" || limited[0].id == "b")
+    }
 }

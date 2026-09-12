@@ -194,6 +194,58 @@ class NavigationService @Inject constructor(
         beginPreview(latitude, longitude, name, subtitle)
     }
 
+    suspend fun resolveMapPlace(
+        placeId: String,
+        fallbackName: String,
+        latitude: Double,
+        longitude: Double,
+    ): PickedMapPlace = withContext(Dispatchers.IO) {
+        val fallback = PickedMapPlace(
+            name = fallbackName.ifBlank { "Selected place" },
+            latitude = latitude,
+            longitude = longitude,
+            placeId = placeId,
+        )
+        if (placeId.isBlank()) return@withContext fallback
+        val client = placesClient ?: return@withContext fallback
+        val fields = listOf(
+            Place.Field.ID,
+            Place.Field.DISPLAY_NAME,
+            Place.Field.FORMATTED_ADDRESS,
+            Place.Field.NATIONAL_PHONE_NUMBER,
+            Place.Field.INTERNATIONAL_PHONE_NUMBER,
+            Place.Field.WEBSITE_URI,
+            Place.Field.LOCATION,
+            Place.Field.PRIMARY_TYPE_DISPLAY_NAME,
+            Place.Field.TYPES,
+        )
+        runCatching {
+            val place = client.fetchPlace(
+                FetchPlaceRequest.builder(placeId, fields).build()
+            ).awaitTask().place
+            val website = place.websiteUri
+            val host = website?.host?.removePrefix("www.")?.takeIf { it.isNotBlank() }
+                ?: website?.toString()?.takeIf { it.isNotBlank() }
+            val category = place.primaryTypeDisplayName
+                ?: place.placeTypes?.firstOrNull()
+                    ?.replace('_', ' ')
+                    ?.replaceFirstChar { it.titlecase() }
+            PickedMapPlace(
+                name = place.displayName?.takeIf { it.isNotBlank() } ?: fallback.name,
+                category = category,
+                address = place.formattedAddress.orEmpty(),
+                phone = place.nationalPhoneNumber ?: place.internationalPhoneNumber,
+                websiteHost = host,
+                websiteUrl = website?.toString(),
+                latitude = place.location?.latitude ?: latitude,
+                longitude = place.location?.longitude ?: longitude,
+                placeId = place.id ?: placeId,
+            )
+        }.onFailure {
+            AppLogger.w(AppLogger.Category.UI, "Map place details failed for $placeId", it)
+        }.getOrDefault(fallback)
+    }
+
     fun beginPreview(latitude: Double, longitude: Double, name: String, subtitle: String = "") {
         routeRequestGeneration += 1
         destinationHistory.add(name = name, subtitle = subtitle, latitude = latitude, longitude = longitude)
