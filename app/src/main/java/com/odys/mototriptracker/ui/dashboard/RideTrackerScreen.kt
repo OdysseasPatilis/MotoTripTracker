@@ -300,7 +300,10 @@ fun RideTrackerScreen(
                         isPreviewing = navigation.isPreviewing,
                         destinationLatitude = navigation.destinationLatitude,
                         destinationLongitude = navigation.destinationLongitude,
-                        isRiding = isRiding && navigation.isNavigating,
+                        isRiding = isRiding,
+                        isNavigating = navigation.isNavigating,
+                        isRecalculating = navigation.isRecalculating,
+                        distanceToNextManeuverMeters = navigation.distanceToNextManeuverMeters,
                         userLatitude = uiState.lastLatitude,
                         userLongitude = uiState.lastLongitude,
                         userBearing = uiState.lastBearing,
@@ -1309,16 +1312,16 @@ private fun ManeuverBanner(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
+            .clip(RoundedCornerShape(16.dp))
             .background(palette.bgPanel.copy(alpha = 0.92f))
-            .padding(horizontal = 12.dp, vertical = 8.dp),
+            .padding(horizontal = 14.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
+        horizontalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         Box(
             modifier = Modifier
-                .size(44.dp)
-                .clip(RoundedCornerShape(12.dp))
+                .size(56.dp)
+                .clip(RoundedCornerShape(14.dp))
                 .background(accent),
             contentAlignment = Alignment.Center
         ) {
@@ -1326,17 +1329,20 @@ private fun ManeuverBanner(
                 imageVector = maneuverIcon(navigation),
                 contentDescription = null,
                 tint = palette.bgDeep,
-                modifier = Modifier.size(24.dp)
+                modifier = Modifier.size(28.dp)
             )
         }
-        Column(modifier = Modifier.weight(1f)) {
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
             when {
                 navigation.isRecalculating -> {
                     Text(
                         "Recalculating…",
                         color = palette.textPrimary,
                         fontWeight = FontWeight.SemiBold,
-                        fontSize = 14.sp
+                        fontSize = 18.sp
                     )
                 }
                 navigation.isOffRoute -> {
@@ -1344,7 +1350,7 @@ private fun ManeuverBanner(
                         "Off route",
                         color = palette.textPrimary,
                         fontWeight = FontWeight.SemiBold,
-                        fontSize = 14.sp
+                        fontSize = 18.sp
                     )
                 }
                 navigation.currentStep != null -> {
@@ -1352,13 +1358,14 @@ private fun ManeuverBanner(
                         NavigationState.formatDistance(navigation.distanceToNextManeuverMeters),
                         color = palette.textPrimary,
                         fontWeight = FontWeight.Bold,
-                        fontSize = 18.sp
+                        fontSize = 22.sp
                     )
                     Text(
                         navigation.currentStep.instruction,
                         color = palette.textSecondary,
-                        fontSize = 12.sp,
-                        maxLines = 1,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 2,
                         overflow = TextOverflow.Ellipsis
                     )
                 }
@@ -1367,7 +1374,7 @@ private fun ManeuverBanner(
                         "Calculating route…",
                         color = palette.textPrimary,
                         fontWeight = FontWeight.SemiBold,
-                        fontSize = 14.sp
+                        fontSize = 18.sp
                     )
                 }
                 else -> {
@@ -1375,8 +1382,8 @@ private fun ManeuverBanner(
                         navigation.destinationName ?: "Destination",
                         color = palette.textPrimary,
                         fontWeight = FontWeight.SemiBold,
-                        fontSize = 14.sp,
-                        maxLines = 1,
+                        fontSize = 18.sp,
+                        maxLines = 2,
                         overflow = TextOverflow.Ellipsis
                     )
                 }
