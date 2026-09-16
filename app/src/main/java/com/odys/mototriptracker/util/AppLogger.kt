@@ -23,6 +23,7 @@ object AppLogger {
         const val WAYPOINT = "Waypoint"
         const val SENSORS = "Sensors"
         const val SERVICE = "Service"
+        const val NETWORK = "Network"
         const val UI = "UI"
     }
 

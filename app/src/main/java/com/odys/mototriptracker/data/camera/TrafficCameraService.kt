@@ -8,6 +8,7 @@ import android.os.Vibrator
 import android.os.VibratorManager
 import androidx.core.content.edit
 import com.odys.mototriptracker.data.navigation.NavigationVoicePrompt
+import com.odys.mototriptracker.data.network.OverpassClient
 import com.odys.mototriptracker.util.AppLogger
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
@@ -20,9 +21,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import okhttp3.FormBody
 import okhttp3.OkHttpClient
-import okhttp3.Request
 import org.json.JSONArray
 import org.json.JSONObject
 import java.util.Locale
@@ -37,12 +36,9 @@ class TrafficCameraService @Inject constructor(
     private val packStore: TrafficCameraPackStore,
     private val countryResolver: TrafficCameraCountryResolver,
     private val voice: NavigationVoicePrompt,
+    private val overpassClient: OverpassClient,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
-    private val httpClient = OkHttpClient.Builder()
-        .connectTimeout(10, TimeUnit.SECONDS)
-        .readTimeout(18, TimeUnit.SECONDS)
-        .build()
     private val packHttpClient = OkHttpClient.Builder()
         .connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(45, TimeUnit.SECONDS)
@@ -71,7 +67,6 @@ class TrafficCameraService @Inject constructor(
     private var lastFetchLat: Double? = null
     private var lastFetchLng: Double? = null
     private var lastFetchTimeMs: Long = 0L
-    private var preferredEndpointIndex = 0
     private var fetchJob: Job? = null
     private var packJob: Job? = null
     private var alertClearJob: Job? = null
@@ -394,54 +389,10 @@ class TrafficCameraService @Inject constructor(
         }
     }
 
-    private suspend fun queryCameras(query: String): List<TrafficCamera>? {
-        val endpoints = rotatedEndpoints()
-        endpoints.forEachIndexed { rotationIndex, endpoint ->
-            val cameras = requestCameras(endpoint, query)
-            if (cameras != null) {
-                preferredEndpointIndex =
-                    (preferredEndpointIndex + rotationIndex) % OVERPASS_ENDPOINTS.size
-                return cameras
-            }
-        }
-        return null
-    }
-
-    private fun rotatedEndpoints(): List<String> {
-        val list = OVERPASS_ENDPOINTS.toMutableList()
-        if (preferredEndpointIndex in list.indices) {
-            val preferred = list.removeAt(preferredEndpointIndex)
-            list.add(0, preferred)
-        }
-        return list
-    }
-
-    private suspend fun requestCameras(endpoint: String, query: String): List<TrafficCamera>? =
+    private suspend fun queryCameras(query: String): List<TrafficCamera>? =
         withContext(Dispatchers.IO) {
-            runCatching {
-                val body = FormBody.Builder().add("data", query).build()
-                val request = Request.Builder()
-                    .url(endpoint)
-                    .post(body)
-                    .header("User-Agent", USER_AGENT)
-                    .header("Accept", "application/json")
-                    .build()
-                httpClient.newCall(request).execute().use { response ->
-                    if (!response.isSuccessful) {
-                        AppLogger.w(
-                            AppLogger.Category.TRAFFIC_CAMERA,
-                            "Overpass HTTP ${response.code} from $endpoint",
-                        )
-                        return@runCatching null
-                    }
-                    parseOverpassCameras(response.body?.string().orEmpty())
-                }
-            }.onFailure {
-                AppLogger.w(
-                    AppLogger.Category.TRAFFIC_CAMERA,
-                    "Overpass $endpoint failed: ${it.message}",
-                )
-            }.getOrNull()
+            val payload = overpassClient.post(query) ?: return@withContext null
+            parseOverpassCameras(payload)
         }
 
     private fun pruneAndPersistCache() {
@@ -532,14 +483,6 @@ class TrafficCameraService @Inject constructor(
         private const val CACHE_TTL_MS = 30L * 24 * 60 * 60 * 1000
         private const val MAX_CACHE_ENTRIES = 2_000
         private const val MAX_MAP_CAMERAS = 250
-        private const val USER_AGENT = "MotoTripTracker/1.0 (Android; motorcycle trip tracker)"
-
-        private val OVERPASS_ENDPOINTS = listOf(
-            "https://lz4.overpass-api.de/api/interpreter",
-            "https://z.overpass-api.de/api/interpreter",
-            "https://overpass.kumi.systems/api/interpreter",
-            "https://overpass-api.de/api/interpreter",
-        )
 
         fun parseOverpassCameras(body: String): List<TrafficCamera> {
             if (body.isBlank()) return emptyList()

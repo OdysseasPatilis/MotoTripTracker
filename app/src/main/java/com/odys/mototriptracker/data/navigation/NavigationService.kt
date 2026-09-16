@@ -17,7 +17,10 @@ import com.google.android.libraries.places.api.net.FindAutocompletePredictionsRe
 import com.google.android.libraries.places.api.net.PlacesClient
 import com.google.android.libraries.places.api.net.SearchByTextRequest
 import com.google.maps.android.PolyUtil
+import com.odys.mototriptracker.domain.Geo
 import com.odys.mototriptracker.domain.RouteCoordinate
+import com.odys.mototriptracker.data.network.OverpassClient
+import com.odys.mototriptracker.di.AppHttpClient
 import com.odys.mototriptracker.util.AppLogger
 import com.odys.mototriptracker.util.MapsApiKeyProvider
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -33,22 +36,13 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
-import okhttp3.Dns
-import okhttp3.FormBody
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.json.JSONObject
-import java.net.Inet4Address
-import java.net.InetAddress
 import java.net.URLEncoder
-import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.coroutines.resume
-import kotlin.math.atan2
-import kotlin.math.cos
-import kotlin.math.sin
-import kotlin.math.sqrt
 
 @Singleton
 class NavigationService @Inject constructor(
@@ -57,14 +51,11 @@ class NavigationService @Inject constructor(
     private val voice: NavigationVoicePrompt,
     private val destinationHistory: DestinationSearchHistory,
     private val motoTravelEstimator: MotoTravelEstimatorStore,
+    private val overpassClient: OverpassClient,
+    @param:AppHttpClient private val httpClient: OkHttpClient,
 ) {
     private val context = context
     private val apiKey = mapsApiKeyProvider.getApiKey()
-    private val httpClient = OkHttpClient.Builder()
-        .dns(Ipv4PreferringDns)
-        .connectTimeout(10, TimeUnit.SECONDS)
-        .readTimeout(20, TimeUnit.SECONDS)
-        .build()
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
@@ -601,7 +592,7 @@ class NavigationService @Inject constructor(
             return
         }
 
-        val toDestination = haversineMeters(latitude, longitude, destLat, destLng)
+        val toDestination = Geo.distanceMeters(latitude, longitude, destLat, destLng)
         val nearDestination = toDestination <= ARRIVAL_THRESHOLD_METERS
         val nearRouteEnd = _state.value.distanceRemainingMeters <= ARRIVAL_REMAINING_MAX_METERS
         val steps = _state.value.steps
@@ -716,56 +707,40 @@ class NavigationService @Inject constructor(
                 out center tags;
             """.trimIndent()
 
-            for (endpoint in OVERPASS_ENDPOINTS) {
-                val body = FormBody.Builder().add("data", query).build()
-                val request = Request.Builder()
-                    .url(endpoint)
-                    .post(body)
-                    .header("User-Agent", USER_AGENT)
-                    .header("Accept", "application/json")
-                    .build()
-                val stations = runCatching {
-                    httpClient.newCall(request).execute().use { response ->
-                        if (!response.isSuccessful) {
-                            AppLogger.w(AppLogger.Category.UI, "Petrol Overpass HTTP ${response.code} from $endpoint")
-                            return@runCatching emptyList()
+            val payload = overpassClient.post(query, USER_AGENT) ?: return@withContext emptyList()
+            runCatching {
+                val json = JSONObject(payload)
+                val elements = json.optJSONArray("elements") ?: return@runCatching emptyList()
+                buildList {
+                    for (i in 0 until elements.length()) {
+                        val el = elements.getJSONObject(i)
+                        val stationLat = el.optDouble("lat", Double.NaN).takeIf { !it.isNaN() }
+                            ?: el.optJSONObject("center")?.optDouble("lat") ?: continue
+                        val stationLng = el.optDouble("lon", Double.NaN).takeIf { !it.isNaN() }
+                            ?: el.optJSONObject("center")?.optDouble("lon") ?: continue
+                        val tags = el.optJSONObject("tags")
+                        val brand = tags?.optString("brand").orEmpty().takeIf { it.isNotBlank() }
+                        val nameTag = tags?.optString("name").orEmpty().takeIf { it.isNotBlank() }
+                        val name = when {
+                            brand != null && nameTag != null && brand != nameTag -> "$brand · $nameTag"
+                            nameTag != null -> nameTag
+                            brand != null -> brand
+                            else -> "Petrol station"
                         }
-                        val json = JSONObject(response.body?.string().orEmpty())
-                        val elements = json.optJSONArray("elements") ?: return@runCatching emptyList()
-                        buildList {
-                            for (i in 0 until elements.length()) {
-                                val el = elements.getJSONObject(i)
-                                val stationLat = el.optDouble("lat", Double.NaN).takeIf { !it.isNaN() }
-                                    ?: el.optJSONObject("center")?.optDouble("lat") ?: continue
-                                val stationLng = el.optDouble("lon", Double.NaN).takeIf { !it.isNaN() }
-                                    ?: el.optJSONObject("center")?.optDouble("lon") ?: continue
-                                val tags = el.optJSONObject("tags")
-                                val brand = tags?.optString("brand").orEmpty().takeIf { it.isNotBlank() }
-                                val nameTag = tags?.optString("name").orEmpty().takeIf { it.isNotBlank() }
-                                val name = when {
-                                    brand != null && nameTag != null && brand != nameTag -> "$brand · $nameTag"
-                                    nameTag != null -> nameTag
-                                    brand != null -> brand
-                                    else -> "Petrol station"
-                                }
-                                add(
-                                    PetrolCandidate(
-                                        name = name,
-                                        latitude = stationLat,
-                                        longitude = stationLng,
-                                        distanceMeters = haversineMeters(lat, lng, stationLat, stationLng)
-                                    )
-                                )
-                            }
-                        }
+                        add(
+                            PetrolCandidate(
+                                name = name,
+                                latitude = stationLat,
+                                longitude = stationLng,
+                                distanceMeters = Geo.distanceMeters(lat, lng, stationLat, stationLng),
+                            ),
+                        )
                     }
-                }.getOrElse {
-                    AppLogger.w(AppLogger.Category.UI, "Petrol Overpass $endpoint failed", it)
-                    emptyList()
                 }
-                if (stations.isNotEmpty()) return@withContext stations
+            }.getOrElse {
+                AppLogger.w(AppLogger.Category.UI, "Petrol Overpass parse failed", it)
+                emptyList()
             }
-            emptyList()
         }
 
     private suspend fun searchDestinations(query: String): List<NavigationSearchResult> {
@@ -1206,7 +1181,7 @@ class NavigationService @Inject constructor(
         var nearestIndex = 0
         var nearestDistance = Double.MAX_VALUE
         route.forEachIndexed { index, coord ->
-            val distance = haversineMeters(latitude, longitude, coord.latitude, coord.longitude)
+            val distance = Geo.distanceMeters(latitude, longitude, coord.latitude, coord.longitude)
             if (distance < nearestDistance) {
                 nearestDistance = distance
                 nearestIndex = index
@@ -1216,7 +1191,7 @@ class NavigationService @Inject constructor(
 
         var remaining = nearestDistance
         for (index in nearestIndex until route.lastIndex) {
-            remaining += haversineMeters(
+            remaining += Geo.distanceMeters(
                 route[index].latitude, route[index].longitude,
                 route[index + 1].latitude, route[index + 1].longitude
             )
@@ -1243,7 +1218,7 @@ class NavigationService @Inject constructor(
 
         val current = steps.getOrNull(_state.value.currentStepIndex)
         if (current != null) {
-            val toEnd = haversineMeters(
+            val toEnd = Geo.distanceMeters(
                 latitude, longitude,
                 current.endLatitude, current.endLongitude
             )
@@ -1254,7 +1229,7 @@ class NavigationService @Inject constructor(
         var index = _state.value.currentStepIndex
         while (index < steps.size) {
             val candidate = steps[index]
-            val distance = haversineMeters(
+            val distance = Geo.distanceMeters(
                 latitude, longitude,
                 candidate.endLatitude, candidate.endLongitude
             )
@@ -1269,7 +1244,7 @@ class NavigationService @Inject constructor(
             approachedStepId = null
             val next = steps.getOrNull(index)
             val distanceToManeuver = next?.let {
-                haversineMeters(latitude, longitude, it.endLatitude, it.endLongitude)
+                Geo.distanceMeters(latitude, longitude, it.endLatitude, it.endLongitude)
             } ?: _state.value.distanceRemainingMeters
             _state.update {
                 it.copy(currentStepIndex = index, distanceToNextManeuverMeters = distanceToManeuver)
@@ -1348,16 +1323,6 @@ class NavigationService @Inject constructor(
             addOnCanceledListener { cont.cancel() }
         }
 
-    private fun haversineMeters(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Double {
-        val earthRadius = 6_371_000.0
-        val dLat = Math.toRadians(lat2 - lat1)
-        val dLon = Math.toRadians(lon2 - lon1)
-        val a = sin(dLat / 2) * sin(dLat / 2) +
-            cos(Math.toRadians(lat1)) * cos(Math.toRadians(lat2)) *
-            sin(dLon / 2) * sin(dLon / 2)
-        return earthRadius * 2 * atan2(sqrt(a), sqrt(1 - a))
-    }
-
     private data class DirectionsResult(
         val distanceMeters: Double,
         val carTravelTimeSeconds: Double,
@@ -1384,20 +1349,5 @@ class NavigationService @Inject constructor(
         private const val ARRIVAL_DWELL_MS = 2_500L
         private const val SEARCH_DEBOUNCE_MS = 350L
         private const val USER_AGENT = "MotoTripTracker/1.0 (Android; motorcycle trip tracker)"
-
-        private val OVERPASS_ENDPOINTS = listOf(
-            "https://lz4.overpass-api.de/api/interpreter",
-            "https://z.overpass-api.de/api/interpreter",
-            "https://overpass.kumi.systems/api/interpreter",
-            "https://overpass-api.de/api/interpreter"
-        )
-    }
-
-    private object Ipv4PreferringDns : Dns {
-        override fun lookup(hostname: String): List<InetAddress> {
-            val all = Dns.SYSTEM.lookup(hostname)
-            val ipv4 = all.filterIsInstance<Inet4Address>()
-            return if (ipv4.isNotEmpty()) ipv4 else all
-        }
     }
 }

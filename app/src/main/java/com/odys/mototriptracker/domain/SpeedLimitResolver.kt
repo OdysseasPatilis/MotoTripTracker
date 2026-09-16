@@ -9,11 +9,6 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 import javax.inject.Singleton
-import kotlin.math.asin
-import kotlin.math.cos
-import kotlin.math.pow
-import kotlin.math.sin
-import kotlin.math.sqrt
 import kotlin.math.truncate
 
 @Singleton
@@ -188,7 +183,7 @@ class SpeedLimitResolver @Inject constructor(
         val lastLng = lastQueryLng
         if (lastLat == null || lastLng == null) return true
 
-        val movedEnough = haversineMeters(lastLat, lastLng, latitude, longitude) >= MIN_MOVE_METERS
+        val movedEnough = Geo.distanceMeters(lastLat, lastLng, latitude, longitude) >= MIN_MOVE_METERS
         val waitedEnough = now - lastQueryTimeMs >= MIN_INTERVAL_MS
         return movedEnough || waitedEnough
     }
@@ -199,19 +194,6 @@ class SpeedLimitResolver @Inject constructor(
         return "${latCell}_${lngCell}"
     }
 
-    private fun haversineMeters(
-        lat1: Double,
-        lon1: Double,
-        lat2: Double,
-        lon2: Double
-    ): Double {
-        val earthRadiusM = 6_371_000.0
-        val dLat = Math.toRadians(lat2 - lat1)
-        val dLon = Math.toRadians(lon2 - lon1)
-        val a = sin(dLat / 2).pow(2) +
-            cos(Math.toRadians(lat1)) * cos(Math.toRadians(lat2)) * sin(dLon / 2).pow(2)
-        return earthRadiusM * 2 * asin(sqrt(a))
-    }
 
     companion object {
         private const val MIN_MOVE_METERS = 35.0

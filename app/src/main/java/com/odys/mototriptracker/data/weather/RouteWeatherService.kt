@@ -1,5 +1,6 @@
 package com.odys.mototriptracker.data.weather
 
+import com.odys.mototriptracker.domain.Geo
 import com.odys.mototriptracker.domain.RouteCoordinate
 import com.odys.mototriptracker.util.AppLogger
 import kotlinx.coroutines.CoroutineScope
@@ -21,10 +22,6 @@ import java.util.TimeZone
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import javax.inject.Singleton
-import kotlin.math.atan2
-import kotlin.math.cos
-import kotlin.math.sin
-import kotlin.math.sqrt
 
 data class RouteWeatherSegment(
     val label: String,
@@ -194,8 +191,10 @@ class RouteWeatherService @Inject constructor() {
         val target = count.coerceIn(2, coordinates.size)
         val cumulative = mutableListOf(0.0)
         for (i in 0 until coordinates.lastIndex) {
-            cumulative += cumulative.last() + haversine(
-                coordinates[i], coordinates[i + 1]
+            val a = coordinates[i]
+            val b = coordinates[i + 1]
+            cumulative += cumulative.last() + Geo.distanceMeters(
+                a.latitude, a.longitude, b.latitude, b.longitude,
             )
         }
         val total = cumulative.last()
@@ -230,16 +229,5 @@ class RouteWeatherService @Inject constructor() {
             String.format(Locale.US, "%.3f,%.3f", it.latitude, it.longitude)
         }
         return "$rounded-${travelTime.toInt()}"
-    }
-
-    private fun haversine(a: RouteCoordinate, b: RouteCoordinate): Double {
-        val earthRadius = 6_371_000.0
-        val dLat = Math.toRadians(b.latitude - a.latitude)
-        val dLon = Math.toRadians(b.longitude - a.longitude)
-        val lat1 = Math.toRadians(a.latitude)
-        val lat2 = Math.toRadians(b.latitude)
-        val h = sin(dLat / 2) * sin(dLat / 2) +
-            cos(lat1) * cos(lat2) * sin(dLon / 2) * sin(dLon / 2)
-        return earthRadius * 2 * atan2(sqrt(h), sqrt(1 - h))
     }
 }

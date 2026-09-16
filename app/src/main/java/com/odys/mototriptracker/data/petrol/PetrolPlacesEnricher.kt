@@ -12,6 +12,7 @@ import com.google.android.libraries.places.api.net.FetchPlaceRequest
 import com.google.android.libraries.places.api.net.IsOpenRequest
 import com.google.android.libraries.places.api.net.PlacesClient
 import com.google.android.libraries.places.api.net.SearchNearbyRequest
+import com.odys.mototriptracker.domain.Geo
 import com.odys.mototriptracker.util.AppLogger
 import com.odys.mototriptracker.util.MapsApiKeyProvider
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -27,10 +28,6 @@ import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.coroutines.resume
-import kotlin.math.atan2
-import kotlin.math.cos
-import kotlin.math.sin
-import kotlin.math.sqrt
 
 data class GooglePetrolPlace(
     val placeId: String,
@@ -336,7 +333,7 @@ class PetrolPlacesEnricher @Inject constructor(
         maxMeters: Double = MATCH_RADIUS_METERS
     ): GooglePetrolPlace? {
         return candidates
-            .map { it to haversineMeters(latitude, longitude, it.latitude, it.longitude) }
+            .map { it to Geo.distanceMeters(latitude, longitude, it.latitude, it.longitude) }
             .filter { it.second <= maxMeters }
             .minByOrNull { it.second }
             ?.first
@@ -352,15 +349,5 @@ class PetrolPlacesEnricher @Inject constructor(
     companion object {
         const val MATCH_RADIUS_METERS = 90.0
         private const val MAX_OPEN_LOOKUPS = 12
-
-        private fun haversineMeters(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Double {
-            val earth = 6_371_000.0
-            val dLat = Math.toRadians(lat2 - lat1)
-            val dLon = Math.toRadians(lon2 - lon1)
-            val a = sin(dLat / 2) * sin(dLat / 2) +
-                cos(Math.toRadians(lat1)) * cos(Math.toRadians(lat2)) *
-                sin(dLon / 2) * sin(dLon / 2)
-            return earth * 2 * atan2(sqrt(a), sqrt(1 - a))
-        }
     }
 }

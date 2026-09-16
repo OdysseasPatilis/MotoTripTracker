@@ -1,10 +1,5 @@
 package com.odys.mototriptracker.domain
 
-import kotlin.math.asin
-import kotlin.math.atan2
-import kotlin.math.cos
-import kotlin.math.sin
-
 /**
  * Pure camera framing for ride-follow: look-ahead center + cruise / turn-approach distance.
  * Mirrors iOS `RideFollowCameraPolicy`.
@@ -36,8 +31,6 @@ object RideFollowCameraPolicy {
     private const val RIDING_TILT_DEGREES = 55f
     private const val IDLE_ZOOM = 14.5f
     private const val IDLE_TILT_DEGREES = 0f
-
-    private const val EARTH_RADIUS_METERS = 6_371_000.0
 
     data class LatLngDegrees(val latitude: Double, val longitude: Double)
 
@@ -162,21 +155,7 @@ object RideFollowCameraPolicy {
         courseDegrees: Double,
         meters: Double,
     ): LatLngDegrees {
-        if (meters <= 0) return LatLngDegrees(latitude, longitude)
-        val bearing = Math.toRadians(courseDegrees)
-        val lat1 = Math.toRadians(latitude)
-        val lon1 = Math.toRadians(longitude)
-        val angular = meters / EARTH_RADIUS_METERS
-
-        val lat2 = asin(sin(lat1) * cos(angular) + cos(lat1) * sin(angular) * cos(bearing))
-        val lon2 = lon1 + atan2(
-            sin(bearing) * sin(angular) * cos(lat1),
-            cos(angular) - sin(lat1) * sin(lat2),
-        )
-
-        return LatLngDegrees(
-            latitude = Math.toDegrees(lat2),
-            longitude = Math.toDegrees(lon2),
-        )
+        val (lat, lng) = Geo.destination(latitude, longitude, courseDegrees, meters)
+        return LatLngDegrees(lat, lng)
     }
 }

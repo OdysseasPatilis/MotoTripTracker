@@ -1,25 +1,16 @@
 package com.odys.mototriptracker.data.petrol
 
+import com.odys.mototriptracker.data.network.OverpassClient
+import com.odys.mototriptracker.domain.Geo
 import com.odys.mototriptracker.util.AppLogger
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import okhttp3.Dns
-import okhttp3.FormBody
-import okhttp3.OkHttpClient
-import okhttp3.Request
 import org.json.JSONObject
-import java.net.Inet4Address
-import java.net.InetAddress
 import java.util.UUID
-import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import javax.inject.Singleton
-import kotlin.math.atan2
-import kotlin.math.cos
 import kotlin.math.min
 import kotlin.math.pow
-import kotlin.math.sin
-import kotlin.math.sqrt
 
 data class PetrolStationRecommendation(
     val id: String = UUID.randomUUID().toString(),
@@ -67,13 +58,9 @@ data class PetrolSearchResult(
 
 @Singleton
 class PetrolStationFinder @Inject constructor(
-    private val placesEnricher: PetrolPlacesEnricher
+    private val placesEnricher: PetrolPlacesEnricher,
+    private val overpassClient: OverpassClient,
 ) {
-    private val httpClient = OkHttpClient.Builder()
-        .dns(Ipv4PreferringDns)
-        .connectTimeout(10, TimeUnit.SECONDS)
-        .readTimeout(25, TimeUnit.SECONDS)
-        .build()
 
     suspend fun search(
         latitude: Double,
@@ -89,7 +76,7 @@ class PetrolStationFinder @Inject constructor(
         )
 
         val distances = fetch.stations.map { station ->
-            haversineMeters(latitude, longitude, station.latitude, station.longitude)
+            Geo.distanceMeters(latitude, longitude, station.latitude, station.longitude)
         }
         val statuses = fetch.stations.map { OpeningHoursEvaluator.status(it.openingHours) }
         val countableDistances = distances.zip(statuses).mapNotNull { (distance, status) ->
@@ -205,7 +192,7 @@ class PetrolStationFinder @Inject constructor(
 
         if (ranked.isEmpty() && googlePlaces.isNotEmpty()) {
             ranked = googlePlaces.map { place ->
-                val distance = haversineMeters(latitude, longitude, place.latitude, place.longitude)
+                val distance = Geo.distanceMeters(latitude, longitude, place.latitude, place.longitude)
                 val recommendation = PetrolStationRecommendation(
                     name = place.name,
                     brand = null,
@@ -314,8 +301,8 @@ class PetrolStationFinder @Inject constructor(
             score += if (station.isHighwayAccessible) -800 else 350
             val course = courseDegrees
             if (course != null && course >= 0f) {
-                val bearing = bearingDegrees(originLat, originLng, station.latitude, station.longitude)
-                val delta = angularDifference(bearing, course.toDouble())
+                val bearing = Geo.bearingDegrees(originLat, originLng, station.latitude, station.longitude)
+                val delta = Geo.headingDeltaDegrees(bearing, course.toDouble())
                 score += when {
                     delta <= 55 -> -250
                     delta >= 120 -> 200
@@ -340,29 +327,9 @@ class PetrolStationFinder @Inject constructor(
             out geom;
         """.trimIndent()
 
-        for (endpoint in OVERPASS_ENDPOINTS) {
-            val body = FormBody.Builder().add("data", query).build()
-            val request = Request.Builder()
-                .url(endpoint)
-                .post(body)
-                .header("User-Agent", USER_AGENT)
-                .header("Accept", "application/json")
-                .build()
-            val result = runCatching {
-                httpClient.newCall(request).execute().use { response ->
-                    if (!response.isSuccessful) {
-                        AppLogger.w(AppLogger.Category.UI, "Petrol Overpass HTTP ${response.code} from $endpoint")
-                        return@runCatching null
-                    }
-                    parseOsmResponse(response.body?.string().orEmpty())
-                }
-            }.getOrElse {
-                AppLogger.w(AppLogger.Category.UI, "Petrol Overpass $endpoint failed", it)
-                null
-            }
-            if (result != null) return result
-        }
-        return OsmFetchResult(emptyList(), emptyList())
+        val payload = overpassClient.post(query, USER_AGENT)
+            ?: return OsmFetchResult(emptyList(), emptyList())
+        return parseOsmResponse(payload)
     }
 
     private fun parseOsmResponse(payload: String): OsmFetchResult {
@@ -442,26 +409,11 @@ class PetrolStationFinder @Inject constructor(
         val motorwaySegments: List<MotorwaySegment>
     )
 
-    private object Ipv4PreferringDns : Dns {
-        override fun lookup(hostname: String): List<InetAddress> {
-            val all = Dns.SYSTEM.lookup(hostname)
-            val ipv4 = all.filterIsInstance<Inet4Address>()
-            return if (ipv4.isNotEmpty()) ipv4 else all
-        }
-    }
-
     companion object {
         private const val MAX_FETCH_RADIUS_METERS = 50_000
         private const val MOTORWAY_PROBE_METERS = 1_200
         private const val HIGHWAY_PROXIMITY_METERS = 400.0
         private const val USER_AGENT = "MotoTripTracker/1.0 (Android; petrol search)"
-
-        private val OVERPASS_ENDPOINTS = listOf(
-            "https://lz4.overpass-api.de/api/interpreter",
-            "https://z.overpass-api.de/api/interpreter",
-            "https://overpass.kumi.systems/api/interpreter",
-            "https://overpass-api.de/api/interpreter"
-        )
 
         private val TRUTHY = setOf("yes", "true", "1", "ok")
 
@@ -517,37 +469,13 @@ class PetrolStationFinder @Inject constructor(
             alat: Double, alng: Double,
             blat: Double, blng: Double
         ): Double {
-            val segLen = haversineMeters(alat, alng, blat, blng)
-            if (segLen <= 0) return haversineMeters(plat, plng, alat, alng)
+            val segLen = Geo.distanceMeters(alat, alng, blat, blng)
+            if (segLen <= 0) return Geo.distanceMeters(plat, plng, alat, alng)
             val dx = blat - alat
             val dy = blng - alng
             val t = (((plat - alat) * dx + (plng - alng) * dy) / (dx.pow(2) + dy.pow(2)))
                 .coerceIn(0.0, 1.0)
-            return haversineMeters(plat, plng, alat + t * dx, alng + t * dy)
-        }
-
-        private fun haversineMeters(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Double {
-            val earth = 6_371_000.0
-            val dLat = Math.toRadians(lat2 - lat1)
-            val dLon = Math.toRadians(lon2 - lon1)
-            val a = sin(dLat / 2).pow(2) +
-                cos(Math.toRadians(lat1)) * cos(Math.toRadians(lat2)) * sin(dLon / 2).pow(2)
-            return earth * 2 * atan2(sqrt(a), sqrt(1 - a))
-        }
-
-        private fun bearingDegrees(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Double {
-            val φ1 = Math.toRadians(lat1)
-            val φ2 = Math.toRadians(lat2)
-            val Δλ = Math.toRadians(lon2 - lon1)
-            val y = sin(Δλ) * cos(φ2)
-            val x = cos(φ1) * sin(φ2) - sin(φ1) * cos(φ2) * cos(Δλ)
-            val deg = Math.toDegrees(atan2(y, x))
-            return if (deg >= 0) deg else deg + 360
-        }
-
-        private fun angularDifference(a: Double, b: Double): Double {
-            val diff = kotlin.math.abs(a - b) % 360
-            return if (diff > 180) 360 - diff else diff
+            return Geo.distanceMeters(plat, plng, alat + t * dx, alng + t * dy)
         }
     }
 }

@@ -6,12 +6,8 @@ import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
 import java.util.Locale
-import kotlin.math.asin
-import kotlin.math.cos
 import kotlin.math.min
 import kotlin.math.roundToInt
-import kotlin.math.sin
-import kotlin.math.sqrt
 
 data class RideMoment(
     val id: String,
@@ -376,26 +372,10 @@ object RideMomentsCalculator {
         for (i in 1 until points.size) {
             val a = points[i - 1]
             val b = points[i]
-            total += haversineMeters(a.latitude, a.longitude, b.latitude, b.longitude)
+            total += Geo.distanceMeters(a.latitude, a.longitude, b.latitude, b.longitude)
             if (b.id == to.id || kotlin.math.abs(b.timestamp - to.timestamp) < 10L) break
         }
         return total
-    }
-
-    private fun haversineMeters(
-        lat1: Double,
-        lon1: Double,
-        lat2: Double,
-        lon2: Double
-    ): Double {
-        val r = 6_371_000.0
-        val p1 = Math.toRadians(lat1)
-        val p2 = Math.toRadians(lat2)
-        val dLat = Math.toRadians(lat2 - lat1)
-        val dLon = Math.toRadians(lon2 - lon1)
-        val a = sin(dLat / 2) * sin(dLat / 2) +
-            cos(p1) * cos(p2) * sin(dLon / 2) * sin(dLon / 2)
-        return 2 * r * asin(min(1.0, sqrt(a)))
     }
 
     private fun elapsedLabel(seconds: Long): String = formatDuration(seconds)

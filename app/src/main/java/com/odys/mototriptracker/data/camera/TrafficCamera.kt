@@ -1,9 +1,7 @@
 package com.odys.mototriptracker.data.camera
 
 import com.odys.mototriptracker.data.navigation.NavigationState
-import kotlin.math.atan2
-import kotlin.math.cos
-import kotlin.math.sin
+import com.odys.mototriptracker.domain.Geo
 
 enum class TrafficCameraKind {
     Speed,
@@ -70,11 +68,8 @@ object TrafficCameraLogic {
     }
 
     /** Absolute smallest angle between two bearings in degrees [0, 180]. */
-    fun headingDeltaDegrees(a: Double, b: Double): Double {
-        var delta = kotlin.math.abs(a - b) % 360.0
-        if (delta > 180.0) delta = 360.0 - delta
-        return delta
-    }
+    fun headingDeltaDegrees(a: Double, b: Double): Double =
+        Geo.headingDeltaDegrees(a, b)
 
     fun isAhead(
         riderHeadingDegrees: Float,
@@ -94,15 +89,7 @@ object TrafficCameraLogic {
         fromLng: Double,
         toLat: Double,
         toLng: Double,
-    ): Double {
-        val lat1 = Math.toRadians(fromLat)
-        val lat2 = Math.toRadians(toLat)
-        val dLon = Math.toRadians(toLng - fromLng)
-        val y = sin(dLon) * cos(lat2)
-        val x = cos(lat1) * sin(lat2) - sin(lat1) * cos(lat2) * cos(dLon)
-        val bearing = Math.toDegrees(atan2(y, x))
-        return (bearing + 360.0) % 360.0
-    }
+    ): Double = Geo.bearingDegrees(fromLat, fromLng, toLat, toLng)
 
     /** Great-circle distance in meters (WGS84 sphere approximation). */
     fun distanceMeters(
@@ -110,16 +97,7 @@ object TrafficCameraLogic {
         fromLng: Double,
         toLat: Double,
         toLng: Double,
-    ): Double {
-        val earthRadius = 6_371_000.0
-        val dLat = Math.toRadians(toLat - fromLat)
-        val dLon = Math.toRadians(toLng - fromLng)
-        val a = sin(dLat / 2) * sin(dLat / 2) +
-            cos(Math.toRadians(fromLat)) * cos(Math.toRadians(toLat)) *
-            sin(dLon / 2) * sin(dLon / 2)
-        val c = 2 * atan2(kotlin.math.sqrt(a), kotlin.math.sqrt(1 - a))
-        return earthRadius * c
-    }
+    ): Double = Geo.distanceMeters(fromLat, fromLng, toLat, toLng)
 
     fun kindFromOsmTags(tags: Map<String, String>): TrafficCameraKind? {
         // Prefer explicit red-light signals when multiple tags are present.
