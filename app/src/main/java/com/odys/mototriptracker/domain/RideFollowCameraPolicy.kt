@@ -32,9 +32,23 @@ object RideFollowCameraPolicy {
     private const val TURN_ZOOM_CLOSEST_RATIO = 0.55
     private const val TURN_ZOOM_CLOSEST_FLOOR_METERS = 220.0
 
+    // Map camera framing (Android Maps zoom/tilt)
+    private const val RIDING_TILT_DEGREES = 55f
+    private const val IDLE_ZOOM = 14.5f
+    private const val IDLE_TILT_DEGREES = 0f
+
     private const val EARTH_RADIUS_METERS = 6_371_000.0
 
     data class LatLngDegrees(val latitude: Double, val longitude: Double)
+
+    /** Platform-agnostic follow / idle camera framing for the live map. */
+    data class CameraFraming(
+        val targetLatitude: Double,
+        val targetLongitude: Double,
+        val zoom: Float,
+        val bearingDegrees: Float,
+        val tiltDegrees: Float,
+    )
 
     /** Preserve today's riding pull-back curve. */
     fun cruiseDistanceMeters(speedKmh: Double): Double =
@@ -86,6 +100,60 @@ object RideFollowCameraPolicy {
         }
         val meters = lookAheadMeters(speedKmh, isNavigating)
         return coordinateAhead(riderLat, riderLng, courseDegrees.toDouble(), meters)
+    }
+
+    /** Maps camera distance (meters) to Google Maps zoom level. */
+    fun zoomFromDistanceMeters(distanceMeters: Double): Float = when {
+        distanceMeters <= 400 -> 17.5f
+        distanceMeters <= 700 -> 16.8f
+        distanceMeters <= 1000 -> 16.2f
+        distanceMeters <= 1400 -> 15.6f
+        else -> 15f
+    }
+
+    /**
+     * Single entry for live-map follow / recenter: riding uses look-ahead + turn zoom;
+     * idle centers on the rider with a flat overview.
+     */
+    fun followCameraFraming(
+        riderLat: Double,
+        riderLng: Double,
+        courseDegrees: Float,
+        speedKmh: Double,
+        isRiding: Boolean,
+        isNavigating: Boolean,
+        isRecalculating: Boolean,
+        distanceToNextManeuverMeters: Double?,
+    ): CameraFraming {
+        if (!isRiding) {
+            return CameraFraming(
+                targetLatitude = riderLat,
+                targetLongitude = riderLng,
+                zoom = IDLE_ZOOM,
+                bearingDegrees = 0f,
+                tiltDegrees = IDLE_TILT_DEGREES,
+            )
+        }
+        val center = centerCoordinate(
+            riderLat = riderLat,
+            riderLng = riderLng,
+            courseDegrees = courseDegrees,
+            speedKmh = speedKmh,
+            isNavigating = isNavigating,
+        )
+        val distance = cameraDistanceMeters(
+            speedKmh = speedKmh,
+            distanceToNextManeuver = if (isNavigating) distanceToNextManeuverMeters else null,
+            isNavigating = isNavigating,
+            isRecalculating = isRecalculating,
+        )
+        return CameraFraming(
+            targetLatitude = center.latitude,
+            targetLongitude = center.longitude,
+            zoom = zoomFromDistanceMeters(distance),
+            bearingDegrees = if (courseDegrees >= 0f) courseDegrees else 0f,
+            tiltDegrees = RIDING_TILT_DEGREES,
+        )
     }
 
     fun coordinateAhead(

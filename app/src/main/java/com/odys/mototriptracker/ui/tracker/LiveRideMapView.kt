@@ -184,34 +184,16 @@ fun LiveRideMapView(
         val lat = userLatitude ?: return@LaunchedEffect
         val lng = userLongitude ?: return@LaunchedEffect
         val speedKmh = (userSpeedMps.coerceAtLeast(0f)) * 3.6
-        val position = if (isRiding) {
-            val center = RideFollowCameraPolicy.centerCoordinate(
-                riderLat = lat,
-                riderLng = lng,
-                courseDegrees = userBearing,
-                speedKmh = speedKmh,
-                isNavigating = isNavigating,
-            )
-            val distance = RideFollowCameraPolicy.cameraDistanceMeters(
-                speedKmh = speedKmh,
-                distanceToNextManeuver = if (isNavigating) distanceToNextManeuverMeters else null,
-                isNavigating = isNavigating,
-                isRecalculating = isRecalculating,
-            )
-            CameraPosition.Builder()
-                .target(LatLng(center.latitude, center.longitude))
-                .zoom(zoomFromDistance(distance))
-                .bearing(if (userBearing >= 0f) userBearing else 0f)
-                .tilt(55f)
-                .build()
-        } else {
-            CameraPosition.Builder()
-                .target(LatLng(lat, lng))
-                .zoom(14.5f)
-                .bearing(0f)
-                .tilt(0f)
-                .build()
-        }
+        val position = followCameraPosition(
+            riderLat = lat,
+            riderLng = lng,
+            courseDegrees = userBearing,
+            speedKmh = speedKmh,
+            isRiding = isRiding,
+            isNavigating = isNavigating,
+            isRecalculating = isRecalculating,
+            distanceToNextManeuverMeters = distanceToNextManeuverMeters,
+        )
         skipNextIdle = true
         cameraPositionState.animate(CameraUpdateFactory.newCameraPosition(position), 450)
     }
@@ -377,34 +359,16 @@ fun LiveRideMapView(
                     val lng = userLongitude ?: return@IconButton
                     skipNextIdle = true
                     val speedKmh = (userSpeedMps.coerceAtLeast(0f)) * 3.6
-                    val camera = if (isRiding) {
-                        val center = RideFollowCameraPolicy.centerCoordinate(
-                            riderLat = lat,
-                            riderLng = lng,
-                            courseDegrees = userBearing,
-                            speedKmh = speedKmh,
-                            isNavigating = isNavigating,
-                        )
-                        val distance = RideFollowCameraPolicy.cameraDistanceMeters(
-                            speedKmh = speedKmh,
-                            distanceToNextManeuver = if (isNavigating) distanceToNextManeuverMeters else null,
-                            isNavigating = isNavigating,
-                            isRecalculating = isRecalculating,
-                        )
-                        CameraPosition.Builder()
-                            .target(LatLng(center.latitude, center.longitude))
-                            .zoom(zoomFromDistance(distance))
-                            .bearing(if (userBearing >= 0f) userBearing else 0f)
-                            .tilt(55f)
-                            .build()
-                    } else {
-                        CameraPosition.Builder()
-                            .target(LatLng(lat, lng))
-                            .zoom(14.5f)
-                            .bearing(0f)
-                            .tilt(0f)
-                            .build()
-                    }
+                    val camera = followCameraPosition(
+                        riderLat = lat,
+                        riderLng = lng,
+                        courseDegrees = userBearing,
+                        speedKmh = speedKmh,
+                        isRiding = isRiding,
+                        isNavigating = isNavigating,
+                        isRecalculating = isRecalculating,
+                        distanceToNextManeuverMeters = distanceToNextManeuverMeters,
+                    )
                     cameraPositionState.move(CameraUpdateFactory.newCameraPosition(camera))
                 },
                 modifier = Modifier
@@ -463,12 +427,30 @@ private fun cameraMarkerIcon(colorArgb: Int, kind: TrafficCameraKind): BitmapDes
     return BitmapDescriptorFactory.fromBitmap(bitmap)
 }
 
-private fun zoomFromDistance(distanceMeters: Double): Float {
-    return when {
-        distanceMeters <= 400 -> 17.5f
-        distanceMeters <= 700 -> 16.8f
-        distanceMeters <= 1000 -> 16.2f
-        distanceMeters <= 1400 -> 15.6f
-        else -> 15f
-    }
+private fun followCameraPosition(
+    riderLat: Double,
+    riderLng: Double,
+    courseDegrees: Float,
+    speedKmh: Double,
+    isRiding: Boolean,
+    isNavigating: Boolean,
+    isRecalculating: Boolean,
+    distanceToNextManeuverMeters: Double?,
+): CameraPosition {
+    val framing = RideFollowCameraPolicy.followCameraFraming(
+        riderLat = riderLat,
+        riderLng = riderLng,
+        courseDegrees = courseDegrees,
+        speedKmh = speedKmh,
+        isRiding = isRiding,
+        isNavigating = isNavigating,
+        isRecalculating = isRecalculating,
+        distanceToNextManeuverMeters = distanceToNextManeuverMeters,
+    )
+    return CameraPosition.Builder()
+        .target(LatLng(framing.targetLatitude, framing.targetLongitude))
+        .zoom(framing.zoom)
+        .bearing(framing.bearingDegrees)
+        .tilt(framing.tiltDegrees)
+        .build()
 }

@@ -80,4 +80,48 @@ class RideFollowCameraPolicyTest {
         assertTrue(abs(mid - 250.0) < 15.0)
         assertTrue(hwy in 350.0..400.0)
     }
+
+    @Test
+    fun followFraming_idleCentersOnRider() {
+        val framing = RideFollowCameraPolicy.followCameraFraming(
+            riderLat = 37.98,
+            riderLng = 23.72,
+            courseDegrees = 90f,
+            speedKmh = 80.0,
+            isRiding = false,
+            isNavigating = false,
+            isRecalculating = false,
+            distanceToNextManeuverMeters = null,
+        )
+        assertEquals(37.98, framing.targetLatitude, 0.0001)
+        assertEquals(23.72, framing.targetLongitude, 0.0001)
+        assertEquals(14.5f, framing.zoom, 0.01f)
+        assertEquals(0f, framing.bearingDegrees, 0.01f)
+        assertEquals(0f, framing.tiltDegrees, 0.01f)
+    }
+
+    @Test
+    fun followFraming_ridingLooksAheadAndTilts() {
+        val framing = RideFollowCameraPolicy.followCameraFraming(
+            riderLat = 37.98,
+            riderLng = 23.72,
+            courseDegrees = 0f,
+            speedKmh = 80.0,
+            isRiding = true,
+            isNavigating = true,
+            isRecalculating = false,
+            distanceToNextManeuverMeters = 80.0,
+        )
+        assertTrue(framing.targetLatitude > 37.98)
+        assertEquals(0f, framing.bearingDegrees, 0.01f)
+        assertEquals(55f, framing.tiltDegrees, 0.01f)
+        assertTrue(framing.zoom >= 15f)
+    }
+
+    @Test
+    fun zoomFromDistance_stepsDownAsDistanceGrows() {
+        assertEquals(17.5f, RideFollowCameraPolicy.zoomFromDistanceMeters(300.0), 0.01f)
+        assertEquals(16.8f, RideFollowCameraPolicy.zoomFromDistanceMeters(500.0), 0.01f)
+        assertEquals(15f, RideFollowCameraPolicy.zoomFromDistanceMeters(2000.0), 0.01f)
+    }
 }
