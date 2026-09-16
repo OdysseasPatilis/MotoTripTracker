@@ -108,9 +108,3 @@ data class NavigationState(
         fun formatDuration(seconds: Double): String = MotoTravelEstimator.formatMinutes(seconds)
     }
 }
-
-enum class PetrolSearchOutcome {
-    FOUND,
-    NONE_NEARBY,
-    ALL_CLOSED
-}
