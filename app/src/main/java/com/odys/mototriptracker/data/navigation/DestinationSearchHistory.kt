@@ -7,7 +7,6 @@ import org.json.JSONObject
 import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
-import kotlin.math.abs
 
 data class DestinationHistoryEntry(
     val id: String = UUID.randomUUID().toString(),
@@ -51,21 +50,14 @@ class DestinationSearchHistory @Inject constructor(
     }
 
     fun add(name: String, subtitle: String, latitude: Double, longitude: Double) {
-        val items = all().toMutableList()
-        items.removeAll {
-            abs(it.latitude - latitude) < DEDUPE_DEGREES &&
-                abs(it.longitude - longitude) < DEDUPE_DEGREES
-        }
-        items.add(
-            0,
-            DestinationHistoryEntry(
-                name = name,
-                subtitle = subtitle,
-                latitude = latitude,
-                longitude = longitude,
-            )
+        val next = DestinationSearchHistoryLogic.prepend(
+            existing = all(),
+            name = name,
+            subtitle = subtitle,
+            latitude = latitude,
+            longitude = longitude,
         )
-        save(items.take(MAX_ENTRIES))
+        save(next)
     }
 
     fun remove(id: String) {
@@ -92,7 +84,5 @@ class DestinationSearchHistory @Inject constructor(
         const val MAX_ENTRIES = 20
         private const val PREFS_NAME = "mototrip_nav"
         private const val KEY_HISTORY = "destination_history"
-        /** ~25 m — treat as the same place for dedupe. */
-        private const val DEDUPE_DEGREES = 0.00025
     }
 }

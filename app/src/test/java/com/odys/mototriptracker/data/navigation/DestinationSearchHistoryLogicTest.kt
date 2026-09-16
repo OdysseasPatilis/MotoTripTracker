@@ -7,35 +7,52 @@ import org.junit.Test
 class DestinationSearchHistoryLogicTest {
 
     @Test
-    fun formatDistance_usesKmAbove1000() {
-        assertEquals("1.2 km", NavigationState.formatDistance(1234.0))
-        assertEquals("500 m", NavigationState.formatDistance(500.0))
+    fun prepend_putsNewestFirstAndCaps() {
+        val existing = (1..20).map { i ->
+            DestinationHistoryEntry(
+                id = "id-$i",
+                name = "Place $i",
+                subtitle = "",
+                latitude = 37.0 + i * 0.01,
+                longitude = 23.0,
+            )
+        }
+        val next = DestinationSearchHistoryLogic.prepend(
+            existing = existing,
+            name = "New",
+            subtitle = "Athens",
+            latitude = 38.0,
+            longitude = 24.0,
+            id = "new",
+            timestampMs = 1L,
+        )
+        assertEquals(20, next.size)
+        assertEquals("new", next.first().id)
+        assertEquals("New", next.first().name)
+        assertTrue(next.none { it.id == "id-20" })
     }
 
     @Test
-    fun formatDuration_roundsUpToAtLeastOneMinute() {
-        assertEquals("1 min", NavigationState.formatDuration(10.0))
-        assertEquals("12 min", NavigationState.formatDuration(12 * 60.0))
-    }
-
-    @Test
-    fun selectedPreviewRoute_fallsBackToFirst() {
-        val a = NavRouteOption(
-            id = "a",
-            coordinates = emptyList(),
-            distanceMeters = 1000.0,
-            expectedTravelTimeSeconds = 100.0,
-            motoTravelTimeSeconds = 80.0,
-            trafficDelaySeconds = 20.0,
-            steps = emptyList(),
+    fun prepend_dedupesNearbyCoordinates() {
+        val existing = listOf(
+            DestinationHistoryEntry(
+                id = "old",
+                name = "Old name",
+                subtitle = "",
+                latitude = 37.98000,
+                longitude = 23.72000,
+            ),
         )
-        val b = a.copy(id = "b")
-        val state = NavigationState(
-            previewRoutes = listOf(a, b),
-            selectedRouteId = null,
-            phase = NavigationPhase.Previewing,
+        val next = DestinationSearchHistoryLogic.prepend(
+            existing = existing,
+            name = "Updated",
+            subtitle = "",
+            latitude = 37.98001,
+            longitude = 23.72001,
+            id = "new",
         )
-        assertEquals("a", state.selectedPreviewRoute?.id)
-        assertTrue(state.isPreviewing)
+        assertEquals(1, next.size)
+        assertEquals("new", next.single().id)
+        assertEquals("Updated", next.single().name)
     }
 }

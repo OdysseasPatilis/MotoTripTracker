@@ -80,7 +80,6 @@ import com.odys.mototriptracker.data.camera.TrafficCameraAlert
 import com.odys.mototriptracker.data.camera.TrafficCameraKind
 import com.odys.mototriptracker.data.camera.TrafficCameraPackDownloadStatus
 import com.odys.mototriptracker.data.navigation.PickedMapPlace
-import com.odys.mototriptracker.data.fuel.FuelService
 import androidx.compose.material.icons.filled.Business
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Phone
@@ -151,7 +150,6 @@ import androidx.compose.ui.graphics.toArgb
 fun RideTrackerScreen(
     uiState: RideTrackerUiState,
     isLocationEnabled: Boolean,
-    fuelService: FuelService,
     onStartRide: () -> Unit,
     onStopRide: () -> Unit,
     onViewHistory: () -> Unit,
@@ -161,6 +159,10 @@ fun RideTrackerScreen(
     onDismissDestinationSearch: () -> Unit,
     onShowFuelSettings: () -> Unit,
     onDismissFuelSettings: () -> Unit,
+    onToggleFuelBrand: (String) -> Unit,
+    onToggleFuelOctane: (Int) -> Unit,
+    onFillUpFuel: () -> Unit,
+    onSaveFuelSettings: (Double?, Double?, Double?) -> Unit,
     onShowRouteWeather: () -> Unit,
     onDismissRouteWeather: () -> Unit,
     onShowPetrolStations: () -> Unit,
@@ -236,12 +238,16 @@ fun RideTrackerScreen(
     }
     if (uiState.showFuelSettings) {
         FuelSettingsSheet(
-            fuelService = fuelService,
-            petrolPreferences = petrolPreferences,
             tankCapacity = uiState.tankCapacityLiters,
             fuelRemaining = uiState.fuelRemainingLiters,
             consumption = uiState.fuelConsumption,
-            onDismiss = onDismissFuelSettings
+            preferredBrands = uiState.preferredBrands,
+            preferredOctanes = uiState.preferredOctanes,
+            onToggleBrand = onToggleFuelBrand,
+            onToggleOctane = onToggleFuelOctane,
+            onFillUp = onFillUpFuel,
+            onSave = onSaveFuelSettings,
+            onDismiss = onDismissFuelSettings,
         )
     }
     if (uiState.showRouteWeather) {

@@ -400,7 +400,20 @@ class RideTrackerViewModel @Inject constructor(
     fun dismissTimingResult() = navigationService.dismissTimingResult()
     fun openNavigationInMaps() = navigationService.openInGoogleMaps()
     fun toggleNavigationVoice() = navigationService.toggleVoice()
-    fun fuelService(): FuelService = fuelService
+
+    fun toggleFuelBrand(brand: String) = petrolPreferences.toggleBrand(brand)
+    fun toggleFuelOctane(octane: Int) = petrolPreferences.toggleOctane(octane)
+    fun fillUpFuel() = fuelService.fillUp()
+    fun saveFuelSettings(
+        capacityLiters: Double?,
+        remainingLiters: Double?,
+        consumptionLPer100Km: Double?,
+    ) {
+        capacityLiters?.let(fuelService::setTankCapacityLiters)
+        remainingLiters?.let(fuelService::setFuelRemainingLiters)
+        consumptionLPer100Km?.let(fuelService::setConsumptionLPer100Km)
+    }
+
     fun petrolPreferences(): PetrolPreferences = petrolPreferences
 
     private fun refreshPetrolStations() {

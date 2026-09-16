@@ -39,7 +39,6 @@ fun RideTrackerRoute(
     RideTrackerScreen(
         uiState = uiState,
         isLocationEnabled = isLocationEnabled,
-        fuelService = viewModel.fuelService(),
         onStartRide = {
             val hasLocation = ContextCompat.checkSelfPermission(
                 context, Manifest.permission.ACCESS_FINE_LOCATION
@@ -55,6 +54,10 @@ fun RideTrackerRoute(
         onDismissDestinationSearch = viewModel::dismissDestinationSearch,
         onShowFuelSettings = viewModel::showFuelSettings,
         onDismissFuelSettings = viewModel::dismissFuelSettings,
+        onToggleFuelBrand = viewModel::toggleFuelBrand,
+        onToggleFuelOctane = viewModel::toggleFuelOctane,
+        onFillUpFuel = viewModel::fillUpFuel,
+        onSaveFuelSettings = viewModel::saveFuelSettings,
         onShowRouteWeather = viewModel::showRouteWeather,
         onDismissRouteWeather = viewModel::dismissRouteWeather,
         onShowPetrolStations = viewModel::showPetrolStations,
