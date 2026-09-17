@@ -497,29 +497,23 @@ class NavigationService @Inject constructor(
         }
 
         val toDestination = Geo.distanceMeters(latitude, longitude, destLat, destLng)
-        val nearDestination = toDestination <= ARRIVAL_THRESHOLD_METERS
-        val nearRouteEnd = _state.value.distanceRemainingMeters <= ARRIVAL_REMAINING_MAX_METERS
-        val steps = _state.value.steps
-        val onFinalStep = steps.isNotEmpty() && _state.value.currentStepIndex >= steps.lastIndex
-
-        if (nearDestination && (nearRouteEnd || onFinalStep)) {
-            if (arrivalCandidateSinceMs == null) {
-                arrivalCandidateSinceMs = System.currentTimeMillis()
-                AppLogger.d(
-                    AppLogger.Category.UI,
-                    "Arrival candidate dest=${toDestination.toInt()}m " +
-                        "remaining=${_state.value.distanceRemainingMeters.toInt()}m"
-                )
-            }
-            val since = arrivalCandidateSinceMs
-            if (since != null &&
-                System.currentTimeMillis() - since >= ARRIVAL_DWELL_MS
-            ) {
-                completeArrival()
-            }
-        } else {
-            arrivalCandidateSinceMs = null
+        val tick = NavigationProgressLogic.arrivalTick(
+            toDestinationMeters = toDestination,
+            distanceRemainingMeters = _state.value.distanceRemainingMeters,
+            currentStepIndex = _state.value.currentStepIndex,
+            stepCount = _state.value.steps.size,
+            candidateSinceMs = arrivalCandidateSinceMs,
+            nowMs = System.currentTimeMillis(),
+        )
+        if (tick.candidateSinceMs != null && arrivalCandidateSinceMs == null) {
+            AppLogger.d(
+                AppLogger.Category.UI,
+                "Arrival candidate dest=${toDestination.toInt()}m " +
+                    "remaining=${_state.value.distanceRemainingMeters.toInt()}m"
+            )
         }
+        arrivalCandidateSinceMs = tick.candidateSinceMs
+        if (tick.shouldComplete) completeArrival()
     }
 
     private fun completeArrival() {
@@ -553,37 +547,19 @@ class NavigationService @Inject constructor(
     }
 
     private fun recomputeRemaining(latitude: Double, longitude: Double) {
-        val route = _state.value.routeCoordinates
-        if (route.size < 2) return
-
-        var nearestIndex = 0
-        var nearestDistance = Double.MAX_VALUE
-        route.forEachIndexed { index, coord ->
-            val distance = Geo.distanceMeters(latitude, longitude, coord.latitude, coord.longitude)
-            if (distance < nearestDistance) {
-                nearestDistance = distance
-                nearestIndex = index
-            }
-        }
-        nearestRouteDistanceMeters = nearestDistance
-
-        var remaining = nearestDistance
-        for (index in nearestIndex until route.lastIndex) {
-            remaining += Geo.distanceMeters(
-                route[index].latitude, route[index].longitude,
-                route[index + 1].latitude, route[index + 1].longitude
-            )
-        }
-
-        val etaEpochMs = if (totalRouteDistanceMeters > 0 && totalTravelTimeSeconds > 0) {
-            val fraction = (remaining / totalRouteDistanceMeters).coerceIn(0.0, 1.0)
-            System.currentTimeMillis() + (totalTravelTimeSeconds * fraction * 1000).toLong()
-        } else {
-            _state.value.etaEpochMs
-        }
-
+        val nearest = NavigationProgressLogic.nearestOnRoute(
+            latitude, longitude, _state.value.routeCoordinates
+        ) ?: return
+        nearestRouteDistanceMeters = nearest.distanceMeters
+        val etaEpochMs = NavigationProgressLogic.etaEpochMs(
+            remainingMeters = nearest.remainingMeters,
+            totalRouteDistanceMeters = totalRouteDistanceMeters,
+            totalTravelTimeSeconds = totalTravelTimeSeconds,
+            nowMs = System.currentTimeMillis(),
+            fallbackEtaEpochMs = _state.value.etaEpochMs,
+        )
         _state.update {
-            it.copy(distanceRemainingMeters = remaining, etaEpochMs = etaEpochMs)
+            it.copy(distanceRemainingMeters = nearest.remainingMeters, etaEpochMs = etaEpochMs)
         }
     }
 
@@ -596,33 +572,23 @@ class NavigationService @Inject constructor(
 
         val current = steps.getOrNull(_state.value.currentStepIndex)
         if (current != null) {
-            val toEnd = Geo.distanceMeters(
-                latitude, longitude,
-                current.endLatitude, current.endLongitude
-            )
+            val toEnd = NavigationProgressLogic.distanceToStepEnd(latitude, longitude, current)
             _state.update { it.copy(distanceToNextManeuverMeters = toEnd) }
             maybeAnnounceApproach(current, toEnd)
         }
 
-        var index = _state.value.currentStepIndex
-        while (index < steps.size) {
-            val candidate = steps[index]
-            val distance = Geo.distanceMeters(
-                latitude, longitude,
-                candidate.endLatitude, candidate.endLongitude
-            )
-            if (distance <= STEP_ADVANCE_METERS && index < steps.lastIndex) {
-                index++
-                continue
-            }
-            break
-        }
+        val index = NavigationProgressLogic.advancedStepIndex(
+            latitude = latitude,
+            longitude = longitude,
+            steps = steps,
+            currentIndex = _state.value.currentStepIndex,
+        )
 
         if (index != _state.value.currentStepIndex) {
             approachedStepId = null
             val next = steps.getOrNull(index)
             val distanceToManeuver = next?.let {
-                Geo.distanceMeters(latitude, longitude, it.endLatitude, it.endLongitude)
+                NavigationProgressLogic.distanceToStepEnd(latitude, longitude, it)
             } ?: _state.value.distanceRemainingMeters
             _state.update {
                 it.copy(currentStepIndex = index, distanceToNextManeuverMeters = distanceToManeuver)
@@ -639,8 +605,11 @@ class NavigationService @Inject constructor(
     }
 
     private fun maybeAnnounceApproach(step: NavStep, distanceMeters: Double) {
-        if (distanceMeters > APPROACH_ANNOUNCE_METERS) return
-        if (approachedStepId == step.id) return
+        if (!NavigationProgressLogic.shouldAnnounceApproach(
+                distanceMeters,
+                alreadyApproached = approachedStepId == step.id,
+            )
+        ) return
         approachedStepId = step.id
         val distance = NavigationState.formatDistance(distanceMeters)
         voice.speak("In $distance, ${step.instruction}")
@@ -673,25 +642,22 @@ class NavigationService @Inject constructor(
         val state = _state.value
         if (!state.hasDestination || !state.hasRoute || state.isRouting || state.isRecalculating) return
 
-        if (nearestRouteDistanceMeters > OFF_ROUTE_THRESHOLD_METERS) {
+        if (NavigationProgressLogic.isOffRoute(nearestRouteDistanceMeters)) {
             _state.update { it.copy(isOffRoute = true) }
             val now = System.currentTimeMillis()
             if (now - lastRecalculateAtMs >= RECALCULATE_COOLDOWN_MS) {
+                lastRecalculateAtMs = now
                 computeRoute(isRecalculation = true)
             }
-        } else if (state.isOffRoute && nearestRouteDistanceMeters <= OFF_ROUTE_THRESHOLD_METERS / 2.0) {
+        } else if (state.isOffRoute &&
+            NavigationProgressLogic.shouldClearOffRoute(nearestRouteDistanceMeters)
+        ) {
             _state.update { it.copy(isOffRoute = false) }
         }
     }
 
     companion object {
-        private const val OFF_ROUTE_THRESHOLD_METERS = 80.0
-        private const val STEP_ADVANCE_METERS = 35.0
-        private const val APPROACH_ANNOUNCE_METERS = 250.0
         private const val RECALCULATE_COOLDOWN_MS = 12_000L
-        private const val ARRIVAL_THRESHOLD_METERS = 45.0
-        private const val ARRIVAL_REMAINING_MAX_METERS = 120.0
-        private const val ARRIVAL_DWELL_MS = 2_500L
         private const val SEARCH_DEBOUNCE_MS = 350L
     }
 }
