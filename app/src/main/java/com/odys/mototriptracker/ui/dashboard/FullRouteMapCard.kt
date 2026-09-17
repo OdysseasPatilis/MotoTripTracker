@@ -1,0 +1,384 @@
+package com.odys.mototriptracker.ui.dashboard
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Bolt
+import androidx.compose.material.icons.filled.LocalCafe
+import androidx.compose.material.icons.filled.Place
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.Terrain
+import androidx.compose.material3.Icon
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.graphics.vector.rememberVectorPainter
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.google.android.gms.maps.CameraUpdateFactory
+import com.google.android.gms.maps.model.BitmapDescriptorFactory
+import com.google.android.gms.maps.model.JointType
+import com.google.android.gms.maps.model.LatLng
+import com.google.android.gms.maps.model.LatLngBounds
+import com.google.android.gms.maps.model.MapStyleOptions
+import com.google.android.gms.maps.model.RoundCap
+import com.google.android.gms.maps.model.StyleSpan
+import com.google.maps.android.compose.CameraPositionState
+import com.google.maps.android.compose.GoogleMap
+import com.google.maps.android.compose.MapProperties
+import com.google.maps.android.compose.MapUiSettings
+import com.google.maps.android.compose.Marker
+import com.google.maps.android.compose.MarkerState
+import com.google.maps.android.compose.Polyline
+import com.odys.mototriptracker.ui.theme.LocalThemeStore
+import com.odys.mototriptracker.ui.theme.ThemeMode
+
+// ── Top bar ───────────────────────────────────────────────────────────────────
+@Composable
+internal fun RouteTopBar(
+    onBack: () -> Unit,
+    onShare: () -> Unit,
+    palette: com.odys.mototriptracker.ui.theme.AppPalette
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp, vertical = 14.dp)
+            .statusBarsPadding(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        IconCircleButton(onClick = onBack, palette = palette) {
+            Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = palette.textPrimary, modifier = Modifier.size(18.dp))
+        }
+        Text("Full route", color = palette.textPrimary, fontSize = 17.sp, fontWeight = FontWeight.Medium)
+        IconCircleButton(shape = RoundedCornerShape(8.dp), onClick = onShare, palette = palette) {
+            Icon(Icons.Default.Share, "Share", tint = palette.textPrimary, modifier = Modifier.size(16.dp))
+        }
+    }
+}
+
+@Composable
+internal fun IconCircleButton(
+    shape: androidx.compose.ui.graphics.Shape = CircleShape,
+    onClick: () -> Unit,
+    palette: com.odys.mototriptracker.ui.theme.AppPalette,
+    content: @Composable BoxScope.() -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .size(36.dp)
+            .clip(shape)
+            .background(palette.bgCard)
+            .clickable { onClick() },
+        contentAlignment = Alignment.Center,
+        content = content
+    )
+}
+
+// ── Map card ──────────────────────────────────────────────────────────────────
+@Composable
+internal fun RouteMapCard(
+    ridePoints: List<RidePoint>,
+    waypoints: List<Waypoint>,
+    activeLayer: MapLayer,
+    onLayerChange: (MapLayer) -> Unit,
+    onMapTouch: (Boolean) -> Unit,
+    cameraState: CameraPositionState,
+    palette: com.odys.mototriptracker.ui.theme.AppPalette,
+    isReplayActive: Boolean = false,
+    replayTrail: List<LatLng> = emptyList(),
+    replayRemaining: List<LatLng> = emptyList(),
+    replayMarker: LatLng? = null
+) {
+    val bounds = remember(ridePoints) {
+        // THE FIX: If the list is empty (still loading), return null safely
+        if (ridePoints.isEmpty()) {
+            null
+        } else {
+            // Otherwise, build the bounds
+            val builder = LatLngBounds.builder()
+            ridePoints.forEach { builder.include(it.latLng) }
+            builder.build()
+        }
+    }
+
+
+// Make sure the LaunchedEffect also expects the null safely
+    LaunchedEffect(bounds, isReplayActive) {
+        if (bounds != null && !isReplayActive) {
+            cameraState.move(CameraUpdateFactory.newLatLngBounds(bounds, 80))
+        }
+    }
+
+
+    val baseElev = remember(ridePoints) { ridePoints.firstOrNull()?.elevationM ?: 0f }
+    val segments by remember(ridePoints, activeLayer) {
+        derivedStateOf { buildColoredSegments(ridePoints, activeLayer, baseElev) }
+    }
+    val mapLatLngs = remember(ridePoints) { ridePoints.map { it.latLng } }
+    val colorSpans = remember(ridePoints, activeLayer) {
+        if (ridePoints.size < 2) return@remember emptyList<StyleSpan>()
+
+        val spans = mutableListOf<StyleSpan>()
+        for (i in 0 until ridePoints.size - 1) {
+            val point = ridePoints[i]
+
+            // Pick the color based on the active toggle
+            val color = if (activeLayer == MapLayer.Speed) {
+                speedColor(point.speedKmh)
+            } else {
+                elevColor(point.elevationM, baseElev)
+            }
+
+            // Convert the Compose Color to an Android ARGB Int for Google Maps
+            spans.add(StyleSpan(color.toArgb()))
+        }
+        spans
+    }
+
+    val density = LocalDensity.current
+    val startPainter = rememberVectorPainter(Icons.Default.PlayArrow)
+    val endPainter = rememberVectorPainter(Icons.Default.Place)
+    val speedPainter = rememberVectorPainter(Icons.Default.Bolt)
+    val summitPainter = rememberVectorPainter(Icons.Default.Terrain)
+    val restPainter = rememberVectorPainter(Icons.Default.LocalCafe)
+
+    val startBitmap = remember(density) {
+        createIconBadgeBitmap(startPainter, FullRouteColors.Mint, density, sizeDp = 40f)
+    }
+    val endBitmap = remember(density) {
+        createIconBadgeBitmap(endPainter, FullRouteColors.Blue, density, sizeDp = 40f)
+    }
+    val speedBitmap = remember(density) {
+        createIconBadgeBitmap(speedPainter, FullRouteColors.RouteCoral, density, sizeDp = 36f)
+    }
+    val summitBitmap = remember(density) {
+        createIconBadgeBitmap(summitPainter, Color(0xFFD988FF), density, sizeDp = 36f)
+    }
+    val restBitmap = remember(density) {
+        createIconBadgeBitmap(restPainter, FullRouteColors.RouteTeal, density, sizeDp = 36f)
+    }
+    val trafficBitmap = remember { createHollowDotBitmap(FullRouteColors.RouteAmber.toArgb()) }
+    val briefStopBitmap = remember { createHollowDotBitmap(FullRouteColors.Yellow.toArgb()) }
+    val stopSignBitmap = remember { createHollowDotBitmap(FullRouteColors.RouteCoral.toArgb()) }
+    val unknownBitmap = remember { createHollowDotBitmap(android.graphics.Color.GRAY) }
+    val riderBitmap = remember { createRiderMarkerBitmap(FullRouteColors.Mint.toArgb()) }
+    val replayMarkerState = remember { MarkerState() }
+    val themeStore = LocalThemeStore.current
+    val themeMode by themeStore.mode.collectAsStateWithLifecycle()
+    val mapStyle = remember(themeMode) {
+        if (themeMode == ThemeMode.DARK) {
+            MapStyleOptions(DARK_MAP_STYLE_JSON)
+        } else {
+            null
+        }
+    }
+    LaunchedEffect(replayMarker) {
+        replayMarker?.let { replayMarkerState.position = it }
+    }
+    Box(
+        modifier = Modifier
+            .padding(horizontal = 20.dp)
+            .fillMaxWidth()
+            .height(340.dp)
+            .clip(RoundedCornerShape(20.dp))
+            // This tells the parent scroll view "Hey, if the user touches here, let the Map handle it!"
+            .pointerInput(Unit) {
+                awaitPointerEventScope {
+                    while (true) {
+                        // "Initial" pass means we see the touch BEFORE Google Maps sees it
+                        val event = awaitPointerEvent(PointerEventPass.Initial)
+
+                        // Check if ANY finger is currently touching the screen
+                        val isTouched = event.changes.any { it.pressed }
+
+                        // Update the parent scroll state
+                        onMapTouch(isTouched)
+                    }
+                }
+            }
+    ) {
+        // ── Real Google Map ────────────────────────────────────────────────
+        GoogleMap(
+            modifier = Modifier.fillMaxSize(),
+            cameraPositionState = cameraState,
+            properties = MapProperties(
+                mapStyleOptions = mapStyle
+            ),
+            uiSettings = MapUiSettings(
+                zoomControlsEnabled = false,
+                myLocationButtonEnabled = false,
+                mapToolbarEnabled = false,
+                compassEnabled = false,
+                scrollGesturesEnabled = true,
+                zoomGesturesEnabled = true
+            )
+        ) {
+            // Coloured route polylines — hidden during replay so the trail draws progressively
+            if (!isReplayActive && mapLatLngs.size >= 2) {
+                Polyline(
+                    points = mapLatLngs,
+                    spans = colorSpans,
+                    width = 14f,
+                    jointType = JointType.ROUND,
+                    startCap = RoundCap(),
+                    endCap = RoundCap(),
+                    zIndex = 1f
+                )
+            }
+
+            if (isReplayActive) {
+                if (replayRemaining.size >= 2) {
+                    Polyline(
+                        points = replayRemaining,
+                        color = palette.textSecondary.copy(alpha = 0.35f),
+                        width = 10f,
+                        startCap = RoundCap(),
+                        endCap = RoundCap(),
+                        zIndex = 2f
+                    )
+                }
+                if (replayTrail.size >= 2) {
+                    Polyline(
+                        points = replayTrail,
+                        color = FullRouteColors.Mint,
+                        width = 18f,
+                        startCap = RoundCap(),
+                        endCap = RoundCap(),
+                        zIndex = 4f
+                    )
+                }
+            }
+            if (replayMarker != null) {
+                Marker(
+                    state = replayMarkerState,
+                    icon = BitmapDescriptorFactory.fromBitmap(riderBitmap),
+                    anchor = Offset(0.5f, 0.5f),
+                    title = "Rider",
+                    zIndex = 5f,
+                    flat = true
+                )
+            }
+
+            waypoints.forEach { wp ->
+                val (bitmap, zIdx) = when (wp.type) {
+                    WaypointType.Start -> Pair(startBitmap, 3f)
+                    WaypointType.End -> Pair(endBitmap, 3f)
+                    WaypointType.TopSpeed -> Pair(speedBitmap, 2.5f)
+                    WaypointType.Summit -> Pair(summitBitmap, 2.5f)
+                    WaypointType.RestStop -> Pair(restBitmap, 2f)
+                    WaypointType.TrafficLight -> Pair(trafficBitmap, 1.5f)
+                    WaypointType.BriefStop -> Pair(briefStopBitmap, 1.5f)
+                    WaypointType.StopSign -> Pair(stopSignBitmap, 1.5f)
+                    WaypointType.Unknown -> Pair(unknownBitmap, 1f)
+                }
+
+                Marker(
+                    state = MarkerState(wp.position),
+                    icon = BitmapDescriptorFactory.fromBitmap(bitmap),
+                    anchor = Offset(0.5f, 0.5f),
+                    title = wp.label,
+                    snippet = wp.detail,
+                    zIndex = zIdx
+                )
+            }
+        }
+
+        // ── Layer toggle (overlaid) ────────────────────────────────────────
+        Column(
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .padding(10.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            LayerToggleButton("Speed", activeLayer == MapLayer.Speed, palette) { onLayerChange(MapLayer.Speed) }
+            LayerToggleButton("Elevation", activeLayer == MapLayer.Elevation, palette) { onLayerChange(MapLayer.Elevation) }
+        }
+
+        // ── Legend bar (overlaid) ──────────────────────────────────────────
+        Row(
+            modifier = Modifier
+                .align(Alignment.BottomStart)
+                .padding(10.dp)
+                .clip(RoundedCornerShape(8.dp))
+                .background(FullRouteColors.Overlay)
+                .padding(horizontal = 10.dp, vertical = 5.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            val (c1, c2, c3, label) = if (activeLayer == MapLayer.Speed)
+                listOf(FullRouteColors.RouteAmber, FullRouteColors.RouteTeal, FullRouteColors.RouteCoral, "Slow · Cruise · Fast")
+            else
+                listOf(FullRouteColors.RouteBlue, FullRouteColors.RouteAmber, FullRouteColors.RouteCoral, "Flat · Climb · Steep")
+            LegendSegment(c1 as Color); LegendSegment(c2 as Color); LegendSegment(c3 as Color)
+            Spacer(Modifier.width(4.dp))
+            Text(label as String, color = palette.textMuted, fontSize = 9.sp)
+        }
+    }
+}
+
+@Composable
+internal fun LayerToggleButton(
+    label: String,
+    isActive: Boolean,
+    palette: com.odys.mototriptracker.ui.theme.AppPalette,
+    onClick: () -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .clip(RoundedCornerShape(7.dp))
+            .background(if (isActive) palette.layerActive else palette.bgCard)
+            .clickable { onClick() }
+            .padding(horizontal = 10.dp, vertical = 5.dp)
+    ) {
+        Text(
+            text = label,
+            color = if (isActive) palette.textPrimary else palette.textMuted,
+            fontSize = 11.sp,
+            fontWeight = if (isActive) FontWeight.Medium else FontWeight.Normal
+        )
+    }
+}
+
+@Composable
+internal fun LegendSegment(color: Color) {
+    Box(
+        modifier = Modifier
+            .size(width = 14.dp, height = 5.dp)
+            .clip(RoundedCornerShape(2.dp))
+            .background(color)
+    )
+}
+
