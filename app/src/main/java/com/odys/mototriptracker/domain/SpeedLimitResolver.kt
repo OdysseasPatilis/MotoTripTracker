@@ -9,7 +9,6 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 import javax.inject.Singleton
-import kotlin.math.truncate
 
 @Singleton
 class SpeedLimitResolver @Inject constructor(
@@ -69,7 +68,7 @@ class SpeedLimitResolver @Inject constructor(
                         "Region pack ${pack.id} → $kmh km/h"
                     )
                 }
-                if (limitLooksPlausible(kmh, speedMps)) {
+                if (SpeedLimitLogic.limitLooksPlausible(kmh, speedMps)) {
                     lastQueryLat = latitude
                     lastQueryLng = longitude
                     lastQueryTimeMs = System.currentTimeMillis()
@@ -90,12 +89,19 @@ class SpeedLimitResolver @Inject constructor(
             // Miss or implausible → Overpass below.
         }
 
-        if (!shouldQuery(latitude, longitude)) return
+        if (!SpeedLimitLogic.shouldQuery(
+                latitude,
+                longitude,
+                lastQueryLat,
+                lastQueryLng,
+                lastQueryTimeMs,
+            )
+        ) return
 
-        val cacheKey = gridKey(latitude, longitude)
+        val cacheKey = SpeedLimitLogic.gridKey(latitude, longitude)
         if (cacheKey in cache) {
             val cached = cache[cacheKey]
-            if (cached != null && limitLooksPlausible(cached, speedMps)) {
+            if (cached != null && SpeedLimitLogic.limitLooksPlausible(cached, speedMps)) {
                 tripManager.updateRoadSpeedLimit(cached)
                 lastQueryLat = latitude
                 lastQueryLng = longitude
@@ -110,7 +116,7 @@ class SpeedLimitResolver @Inject constructor(
 
         // Soft offline fallback: nearest neighbouring cell with a known limit.
         nearestCachedLimit(latitude, longitude)
-            ?.takeIf { limitLooksPlausible(it, speedMps) }
+            ?.takeIf { SpeedLimitLogic.limitLooksPlausible(it, speedMps) }
             ?.let { nearby ->
                 tripManager.updateRoadSpeedLimit(nearby)
                 AppLogger.d(
@@ -152,21 +158,9 @@ class SpeedLimitResolver @Inject constructor(
         }
     }
 
-    /** True when GPS speed is not clearly above the posted limit (pack/cache may be a side street). */
-    private fun limitLooksPlausible(kmh: Int, speedMps: Float): Boolean {
-        if (speedMps < 0f) return true
-        return speedMps * 3.6f <= kmh + 25f
-    }
-
     private fun nearestCachedLimit(latitude: Double, longitude: Double): Int? {
-        val latCell = truncate(latitude * GRID_SCALE).toLong()
-        val lngCell = truncate(longitude * GRID_SCALE).toLong()
-        for (dLat in -1..1) {
-            for (dLng in -1..1) {
-                if (dLat == 0 && dLng == 0) continue
-                val key = "${latCell + dLat}_${lngCell + dLng}"
-                cache[key]?.let { return it }
-            }
+        for (key in SpeedLimitLogic.neighbourGridKeys(latitude, longitude)) {
+            cache[key]?.let { return it }
         }
         return null
     }
@@ -175,29 +169,5 @@ class SpeedLimitResolver @Inject constructor(
         if (!dirty) return
         cacheStore.save(cache)
         dirty = false
-    }
-
-    private fun shouldQuery(latitude: Double, longitude: Double): Boolean {
-        val now = System.currentTimeMillis()
-        val lastLat = lastQueryLat
-        val lastLng = lastQueryLng
-        if (lastLat == null || lastLng == null) return true
-
-        val movedEnough = Geo.distanceMeters(lastLat, lastLng, latitude, longitude) >= MIN_MOVE_METERS
-        val waitedEnough = now - lastQueryTimeMs >= MIN_INTERVAL_MS
-        return movedEnough || waitedEnough
-    }
-
-    private fun gridKey(latitude: Double, longitude: Double): String {
-        val latCell = truncate(latitude * GRID_SCALE).toLong()
-        val lngCell = truncate(longitude * GRID_SCALE).toLong()
-        return "${latCell}_${lngCell}"
-    }
-
-
-    companion object {
-        private const val MIN_MOVE_METERS = 35.0
-        private const val MIN_INTERVAL_MS = 15_000L
-        private const val GRID_SCALE = 500.0
     }
 }
