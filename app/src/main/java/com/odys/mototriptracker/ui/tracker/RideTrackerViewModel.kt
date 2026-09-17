@@ -9,11 +9,9 @@ import com.odys.mototriptracker.data.navigation.DestinationHistoryEntry
 import com.odys.mototriptracker.data.navigation.DestinationSearchHistory
 import com.odys.mototriptracker.data.navigation.NavigationService
 import com.odys.mototriptracker.data.navigation.NavigationSearchResult
-import com.odys.mototriptracker.data.navigation.PickedMapPlace
 import com.odys.mototriptracker.data.petrol.GooglePetrolDetails
 import com.odys.mototriptracker.data.petrol.PetrolPreferences
 import com.odys.mototriptracker.data.petrol.PetrolSearchPlan
-import com.odys.mototriptracker.data.petrol.PetrolStationFinder
 import com.odys.mototriptracker.data.petrol.PetrolStationRecommendation
 import com.odys.mototriptracker.data.petrol.RankedPetrolStation
 import com.odys.mototriptracker.data.weather.RouteWeatherService
@@ -48,7 +46,8 @@ class RideTrackerViewModel @Inject constructor(
     private val routeWeatherService: RouteWeatherService,
     private val fuelService: FuelService,
     private val petrolPreferences: PetrolPreferences,
-    private val petrolStationFinder: PetrolStationFinder,
+    private val petrolSearch: PetrolSearchCoordinator,
+    private val mapPlace: MapPlaceCoordinator,
     private val locationRepository: LocationRepository,
     private val startRideUseCase: StartRideUseCase,
     private val stopRideUseCase: StopRideUseCase,
@@ -61,19 +60,8 @@ class RideTrackerViewModel @Inject constructor(
     private val showDestinationSearch = MutableStateFlow(false)
     private val showFuelSettings = MutableStateFlow(false)
     private val showRouteWeather = MutableStateFlow(false)
-    private val showPetrolStations = MutableStateFlow(false)
-    private val petrolStations = MutableStateFlow<List<RankedPetrolStation>>(emptyList())
-    private val petrolPlan = MutableStateFlow<PetrolSearchPlan?>(null)
-    private val petrolLoading = MutableStateFlow(false)
-    private val petrolDetails = MutableStateFlow<GooglePetrolDetails?>(null)
-    private val petrolDetailsLoading = MutableStateFlow(false)
     private val discardBanner = MutableStateFlow<String?>(null)
-    private val petrolMessage = MutableStateFlow<String?>(null)
-    private val selectedMapPlace = MutableStateFlow<PickedMapPlace?>(null)
     private var dashboardLocationJob: Job? = null
-    private var petrolSearchJob: Job? = null
-    private var mapPlaceJob: Job? = null
-    private var mapPlaceGeneration = 0
 
     private val rideInputs = combine(
         observeRideSession(),
@@ -103,24 +91,24 @@ class RideTrackerViewModel @Inject constructor(
         showDestinationSearch,
         showFuelSettings,
         showRouteWeather,
-        showPetrolStations
+        petrolSearch.showSheet
     ) { search, fuel, weather, petrol ->
         SheetFlags(search, fuel, weather, petrol)
     }
 
     private val petrolUiCore = combine(
-        petrolStations,
-        petrolPlan,
-        petrolLoading
+        petrolSearch.stations,
+        petrolSearch.plan,
+        petrolSearch.loading
     ) { stations, plan, loading ->
         Triple(stations, plan, loading)
     }
 
     private val petrolUiExtras = combine(
-        petrolDetails,
-        petrolDetailsLoading,
+        petrolSearch.details,
+        petrolSearch.detailsLoading,
         discardBanner,
-        petrolMessage
+        petrolSearch.message
     ) { details, detailsLoading, banner, message ->
         PetrolExtras(details, detailsLoading, banner, message)
     }
@@ -153,8 +141,8 @@ class RideTrackerViewModel @Inject constructor(
         coreInputs,
         overlayInputs,
         cameraInputs,
-        selectedMapPlace,
-    ) { core, overlay, cameras, mapPlace ->
+        mapPlace.selected,
+    ) { core, overlay, cameras, pickedPlace ->
         val liveAccuracy = core.ride.lastLocation?.takeIf { it.hasAccuracy() && it.accuracy >= 0f }?.accuracy
             ?: core.dashAccuracy
             ?: core.ride.session.stats.gpsAccuracyMeters
@@ -194,7 +182,7 @@ class RideTrackerViewModel @Inject constructor(
             nearbyTrafficCameras = cameras.first,
             trafficCameraAlert = cameras.second,
             trafficCameraDownloadStatus = cameras.third,
-            selectedMapPlace = mapPlace,
+            selectedMapPlace = pickedPlace,
         )
     }.stateIn(
         scope = viewModelScope,
@@ -230,7 +218,6 @@ class RideTrackerViewModel @Inject constructor(
                     if (location.hasAccuracy()) dashboardGpsAccuracy.value = location.accuracy
                     val session = tripManager.sessionState.value
                     if (!session.isActive) {
-                        // Idle map icons (alerts stay ride-only).
                         trafficCameraService.refresh(location, alertsEnabled = false)
                     }
                 }
@@ -277,51 +264,35 @@ class RideTrackerViewModel @Inject constructor(
     fun dismissRouteWeather() { showRouteWeather.value = false }
 
     fun showPetrolStations() {
-        showPetrolStations.value = true
-        refreshPetrolStations()
+        petrolSearch.show(
+            scope = viewModelScope,
+            speedKmh = { uiState.value.stats.speed.toDouble() },
+            fallbackLatLng = {
+                val s = uiState.value
+                val lat = s.lastLatitude ?: return@show null
+                val lng = s.lastLongitude ?: return@show null
+                lat to lng
+            },
+        )
     }
 
-    fun dismissPetrolStations() {
-        showPetrolStations.value = false
-        petrolSearchJob?.cancel()
-        petrolLoading.value = false
-        petrolDetails.value = null
-        petrolDetailsLoading.value = false
-    }
+    fun dismissPetrolStations() = petrolSearch.dismiss()
 
     fun selectPetrolStation(station: PetrolStationRecommendation) {
-        navigationService.setDestination(
-            latitude = station.latitude,
-            longitude = station.longitude,
-            name = station.name,
-            subtitle = "Petrol station",
-        )
-        showPetrolStations.value = false
-        petrolDetails.value = null
-        petrolMessage.value = "Previewing route to ${station.name}"
-        viewModelScope.launch {
-            delay(2_500)
-            petrolMessage.value = null
-        }
-    }
-
-    fun loadPetrolDetails(station: PetrolStationRecommendation) {
-        viewModelScope.launch {
-            petrolDetailsLoading.value = true
-            petrolDetails.value = null
-            petrolDetails.value = petrolStationFinder.fetchGoogleDetails(
-                placeId = station.googlePlaceId,
-                latitude = station.latitude,
-                longitude = station.longitude
+        petrolSearch.selectStation(viewModelScope, station) {
+            navigationService.setDestination(
+                latitude = it.latitude,
+                longitude = it.longitude,
+                name = it.name,
+                subtitle = "Petrol station",
             )
-            petrolDetailsLoading.value = false
         }
     }
 
-    fun clearPetrolDetails() {
-        petrolDetails.value = null
-        petrolDetailsLoading.value = false
-    }
+    fun loadPetrolDetails(station: PetrolStationRecommendation) =
+        petrolSearch.loadDetails(viewModelScope, station)
+
+    fun clearPetrolDetails() = petrolSearch.clearDetails()
 
     fun onNavigationQueryChange(query: String) = navigationService.updateSearchQuery(query)
     fun selectNavigationResult(result: NavigationSearchResult) {
@@ -352,46 +323,11 @@ class RideTrackerViewModel @Inject constructor(
     }
 
     fun onMapPoiClick(placeId: String, name: String, latitude: Double, longitude: Double) {
-        mapPlaceGeneration += 1
-        val generation = mapPlaceGeneration
-        selectedMapPlace.value = PickedMapPlace(
-            name = name.ifBlank { "Selected place" },
-            latitude = latitude,
-            longitude = longitude,
-            placeId = placeId,
-            isResolving = true,
-        )
-        mapPlaceJob?.cancel()
-        mapPlaceJob = viewModelScope.launch {
-            val resolved = navigationService.resolveMapPlace(
-                placeId = placeId,
-                fallbackName = name,
-                latitude = latitude,
-                longitude = longitude,
-            )
-            if (generation != mapPlaceGeneration) return@launch
-            selectedMapPlace.value = resolved.copy(isResolving = false)
-        }
+        mapPlace.onPoiClick(viewModelScope, placeId, name, latitude, longitude)
     }
 
-    fun dismissMapPlace() {
-        mapPlaceGeneration += 1
-        mapPlaceJob?.cancel()
-        mapPlaceJob = null
-        selectedMapPlace.value = null
-    }
-
-    fun goToSelectedMapPlace() {
-        val place = selectedMapPlace.value ?: return
-        if (place.isResolving) return
-        dismissMapPlace()
-        navigationService.setDestination(
-            latitude = place.latitude,
-            longitude = place.longitude,
-            name = place.name,
-            subtitle = place.address,
-        )
-    }
+    fun dismissMapPlace() = mapPlace.dismiss()
+    fun goToSelectedMapPlace() = mapPlace.goToSelected()
 
     fun clearNavigation() = navigationService.clear()
     fun confirmStartNavigation() = navigationService.confirmStartNavigation()
@@ -415,47 +351,6 @@ class RideTrackerViewModel @Inject constructor(
     }
 
     fun petrolPreferences(): PetrolPreferences = petrolPreferences
-
-    private fun refreshPetrolStations() {
-        petrolSearchJob?.cancel()
-        petrolSearchJob = viewModelScope.launch {
-            petrolLoading.value = true
-            petrolStations.value = emptyList()
-            petrolPlan.value = null
-            val location = locationRepository.lastLocation.value
-                ?: uiState.value.lastLatitude?.let { lat ->
-                    uiState.value.lastLongitude?.let { lng ->
-                        android.location.Location("manual").apply {
-                            latitude = lat
-                            longitude = lng
-                        }
-                    }
-                }
-            if (location == null) {
-                petrolLoading.value = false
-                petrolMessage.value = "Waiting for GPS…"
-                return@launch
-            }
-            val speedKmh = uiState.value.stats.speed.toDouble().takeIf { it > 0 }
-                ?: (location.speed * 3.6)
-            val course = location.bearing.takeIf { location.hasBearing() && it >= 0f }
-            val result = petrolStationFinder.search(
-                latitude = location.latitude,
-                longitude = location.longitude,
-                preferences = petrolPreferences,
-                speedKmh = speedKmh,
-                courseDegrees = course
-            )
-            petrolPlan.value = result.plan
-            petrolStations.value = result.stations
-            petrolLoading.value = false
-            if (result.stations.isEmpty()) {
-                petrolMessage.value = "No petrol stations found nearby"
-                delay(2_500)
-                petrolMessage.value = null
-            }
-        }
-    }
 
     private data class RideInputs(
         val session: RideSessionState,

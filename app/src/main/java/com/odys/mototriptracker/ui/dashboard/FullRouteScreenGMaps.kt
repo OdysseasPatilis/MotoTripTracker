@@ -17,14 +17,9 @@ package com.odys.mototriptracker.ui.dashboard
 // res/raw/dark_map_style.json — create with the JSON at the bottom of this file.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import android.R.attr.onClick
-import android.graphics.Bitmap
-import android.graphics.Canvas as AndroidCanvas
-import android.graphics.Paint
 import android.view.MotionEvent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -44,20 +39,9 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Canvas as ComposeCanvas
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.ColorFilter
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.drawscope.CanvasDrawScope
-import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.drawscope.translate
-import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.graphics.toArgb
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
@@ -65,8 +49,6 @@ import androidx.compose.ui.input.pointer.pointerInteropFilter
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.Density
-import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.google.android.gms.maps.CameraUpdateFactory
@@ -82,140 +64,12 @@ import com.odys.mototriptracker.ui.route.RouteReplayPanel
 import com.odys.mototriptracker.ui.theme.LocalAppPalette
 import com.odys.mototriptracker.ui.theme.LocalThemeStore
 import com.odys.mototriptracker.ui.theme.ThemeMode
-import androidx.core.graphics.createBitmap
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import androidx.compose.runtime.snapshotFlow
-import java.util.Locale
-
-// ── Colours ───────────────────────────────────────────────────────────────────
-private val BgDark = Color(0xFF0E0E14)
-private val SurfaceDark = Color(0xFF1A1A26)
-private val CardDark = Color(0xFF1C1C2A)
-private val PurpleActive = Color(0xFF5B5FEF)
-private val Mint = Color(0xFF5EFFC8)
-private val Blue = Color(0xFF5B9EF7)
-private val Yellow = Color(0xFFFACC15)
-private val RouteAmber = Color(0xFFEF9F27)
-private val RouteTeal = Color(0xFF1D9E75)
-private val RouteCoral = Color(0xFFD85A30)
-private val RouteBlue = Color(0xFF378ADD)
-private val TextHint = Color(0x40FFFFFF)
-private val Overlay = Color(0xB20E0E14)
-
-// ── Enums & models ────────────────────────────────────────────────────────────
-enum class MapLayer { Speed, Elevation }
-enum class WaypointType {
-    Start,
-    End,
-    StopSign,
-    TrafficLight,
-    BriefStop,
-    RestStop,
-    TopSpeed,
-    Summit,
-    Unknown
-}
-data class Waypoint(
-    val label: String,
-    val detail: String,
-    val time: String,
-    val type: WaypointType,
-    val position: LatLng
-)
-
-/** Shared icon + colour used by the waypoint list and map markers. */
-private data class WaypointStyle(val icon: ImageVector?, val color: Color)
-
-private fun waypointStyle(type: WaypointType): WaypointStyle = when (type) {
-    WaypointType.Start -> WaypointStyle(Icons.Default.PlayArrow, Mint)
-    WaypointType.End -> WaypointStyle(Icons.Default.Place, Blue)
-    WaypointType.TopSpeed -> WaypointStyle(Icons.Default.Bolt, RouteCoral)
-    WaypointType.Summit -> WaypointStyle(Icons.Default.Terrain, Color(0xFFD988FF))
-    WaypointType.RestStop -> WaypointStyle(Icons.Default.LocalCafe, RouteTeal)
-    WaypointType.TrafficLight -> WaypointStyle(null, RouteAmber)
-    WaypointType.BriefStop -> WaypointStyle(null, Yellow)
-    WaypointType.StopSign -> WaypointStyle(null, RouteCoral)
-    WaypointType.Unknown -> WaypointStyle(null, Color.Gray)
-}
-
-/**
- * One GPS point in the ride with telemetry.
- * Replace with your real data model (Room entity, proto, etc.)
- */
-
-data class RidePoint(
-    val latLng: LatLng,
-    val speedKmh: Float,
-    val elevationM: Float
-)
-
-private fun speedColor(kmh: Float): Color = when {
-    kmh < 40f -> RouteAmber
-    kmh < 130f -> RouteTeal
-    else -> RouteCoral
-}
-
-private fun elevColor(elevM: Float, baseElevM: Float): Color {
-    val gain = elevM - baseElevM
-    return when {
-        gain < 10f -> RouteBlue
-        gain < 50f -> RouteAmber
-        else -> RouteCoral
-    }
-}
-
-/**
- * Splits a list of RidePoints into contiguous segments that share the same
- * colour for the given layer. Adjacent segments overlap by one point so the
- * polylines connect without gaps.
- */
-
-private fun buildColoredSegments(
-    points: List<RidePoint>,
-    layer: MapLayer,
-    baseElev: Float
-): List<Pair<List<LatLng>, Color>> {
-    if (points.size < 2) return emptyList()
-    val segments = mutableListOf<Pair<List<LatLng>, Color>>()
-    var segStart = 0
-    var currentColor = if (layer == MapLayer.Speed)
-        speedColor(points[0].speedKmh)
-    else
-        elevColor(points[0].elevationM, baseElev)
-
-    for (i in 1..points.lastIndex) {
-        val nextColor = if (layer == MapLayer.Speed)
-            speedColor(points[i].speedKmh)
-        else
-            elevColor(points[i].elevationM, baseElev)
-
-        val isLast = i == points.lastIndex
-        if (nextColor != currentColor || isLast) {
-            val endIdx = if (isLast) i else i
-            segments += points.subList(segStart, endIdx + 1).map { it.latLng } to currentColor
-            segStart = i
-            currentColor = nextColor
-        }
-    }
-    return segments
-}
-
-private fun remainingReplayCoordinates(
-    points: List<RoutePointEntity>,
-    frame: RouteReplayFrame
-): List<RouteCoordinate> {
-    val remainingStart = minOf(frame.segmentIndex + 1, points.size - 1)
-    if (remainingStart >= points.size - 1) return emptyList()
-    val coords = points.subList(remainingStart, points.size).map {
-        RouteCoordinate(it.latitude, it.longitude)
-    }.toMutableList()
-    coords.add(0, RouteCoordinate(frame.latitude, frame.longitude))
-    return coords
-}
 
 // ── Screen ────────────────────────────────────────────────────────────────────
 @Composable
@@ -442,25 +296,25 @@ private fun RouteMapCard(
     val restPainter = rememberVectorPainter(Icons.Default.LocalCafe)
 
     val startBitmap = remember(density) {
-        createIconBadgeBitmap(startPainter, Mint, density, sizeDp = 40f)
+        createIconBadgeBitmap(startPainter, FullRouteColors.Mint, density, sizeDp = 40f)
     }
     val endBitmap = remember(density) {
-        createIconBadgeBitmap(endPainter, Blue, density, sizeDp = 40f)
+        createIconBadgeBitmap(endPainter, FullRouteColors.Blue, density, sizeDp = 40f)
     }
     val speedBitmap = remember(density) {
-        createIconBadgeBitmap(speedPainter, RouteCoral, density, sizeDp = 36f)
+        createIconBadgeBitmap(speedPainter, FullRouteColors.RouteCoral, density, sizeDp = 36f)
     }
     val summitBitmap = remember(density) {
         createIconBadgeBitmap(summitPainter, Color(0xFFD988FF), density, sizeDp = 36f)
     }
     val restBitmap = remember(density) {
-        createIconBadgeBitmap(restPainter, RouteTeal, density, sizeDp = 36f)
+        createIconBadgeBitmap(restPainter, FullRouteColors.RouteTeal, density, sizeDp = 36f)
     }
-    val trafficBitmap = remember { createHollowDotBitmap(RouteAmber.toArgb()) }
-    val briefStopBitmap = remember { createHollowDotBitmap(Yellow.toArgb()) }
-    val stopSignBitmap = remember { createHollowDotBitmap(RouteCoral.toArgb()) }
+    val trafficBitmap = remember { createHollowDotBitmap(FullRouteColors.RouteAmber.toArgb()) }
+    val briefStopBitmap = remember { createHollowDotBitmap(FullRouteColors.Yellow.toArgb()) }
+    val stopSignBitmap = remember { createHollowDotBitmap(FullRouteColors.RouteCoral.toArgb()) }
     val unknownBitmap = remember { createHollowDotBitmap(android.graphics.Color.GRAY) }
-    val riderBitmap = remember { createRiderMarkerBitmap(Mint.toArgb()) }
+    val riderBitmap = remember { createRiderMarkerBitmap(FullRouteColors.Mint.toArgb()) }
     val replayMarkerState = remember { MarkerState() }
     val themeStore = LocalThemeStore.current
     val themeMode by themeStore.mode.collectAsStateWithLifecycle()
@@ -539,7 +393,7 @@ private fun RouteMapCard(
                 if (replayTrail.size >= 2) {
                     Polyline(
                         points = replayTrail,
-                        color = Mint,
+                        color = FullRouteColors.Mint,
                         width = 18f,
                         startCap = RoundCap(),
                         endCap = RoundCap(),
@@ -599,15 +453,15 @@ private fun RouteMapCard(
                 .align(Alignment.BottomStart)
                 .padding(10.dp)
                 .clip(RoundedCornerShape(8.dp))
-                .background(Overlay)
+                .background(FullRouteColors.Overlay)
                 .padding(horizontal = 10.dp, vertical = 5.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(4.dp)
         ) {
             val (c1, c2, c3, label) = if (activeLayer == MapLayer.Speed)
-                listOf(RouteAmber, RouteTeal, RouteCoral, "Slow · Cruise · Fast")
+                listOf(FullRouteColors.RouteAmber, FullRouteColors.RouteTeal, FullRouteColors.RouteCoral, "Slow · Cruise · Fast")
             else
-                listOf(RouteBlue, RouteAmber, RouteCoral, "Flat · Climb · Steep")
+                listOf(FullRouteColors.RouteBlue, FullRouteColors.RouteAmber, FullRouteColors.RouteCoral, "Flat · Climb · Steep")
             LegendSegment(c1 as Color); LegendSegment(c2 as Color); LegendSegment(c3 as Color)
             Spacer(Modifier.width(4.dp))
             Text(label as String, color = palette.textMuted, fontSize = 9.sp)
@@ -646,340 +500,6 @@ private fun LegendSegment(color: Color) {
             .clip(RoundedCornerShape(2.dp))
             .background(color)
     )
-}
-
-// ── Waypoints ─────────────────────────────────────────────────────────────────
-@Composable
-private fun WaypointsPanel(
-    summary: TripEntity,
-    waypoints: List<Waypoint>,
-    usedPolylineFallback: Boolean,
-    palette: com.odys.mototriptracker.ui.theme.AppPalette,
-    onWaypointClick: (LatLng) -> Unit
-) {
-    Column(modifier = Modifier.padding(horizontal = 20.dp)) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text("Route waypoints", color = palette.textPrimary, fontSize = 15.sp, fontWeight = FontWeight.Medium)
-            Text(formatTimestampToDate(summary.startTime), color = palette.textSecondary, fontSize = 12.sp)
-        }
-        Spacer(Modifier.height(12.dp))
-        if (waypoints.isEmpty()) {
-            Text(
-                text = if (usedPolylineFallback) {
-                    "Trail rebuilt from the summary polyline. Waypoints weren’t available for this ride."
-                } else {
-                    "No waypoints recorded for this ride."
-                },
-                color = palette.textSecondary,
-                fontSize = 13.sp
-            )
-        } else {
-            waypoints.forEachIndexed { i, wp ->
-                WaypointRow(
-                    wp,
-                    showLine = i < waypoints.lastIndex,
-                    palette = palette,
-                    onClick = { onWaypointClick(wp.position) }
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun WaypointRow(
-    wp: Waypoint,
-    showLine: Boolean,
-    palette: com.odys.mototriptracker.ui.theme.AppPalette,
-    onClick: () -> Unit
-) {
-    val style = waypointStyle(wp.type)
-    val icon = style.icon
-    val dotColor = style.color
-
-    Row(modifier = Modifier
-        .fillMaxWidth()
-        .clickable { onClick() }
-        .padding(vertical = 4.dp),
-        verticalAlignment = Alignment.Top) {
-        // --- TIMELINE GRAPHIC COLUMN ---
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.width(24.dp)
-        ) {
-            Spacer(Modifier.height(4.dp))
-
-            // Draw an Icon if we have one, otherwise fallback to the classic ring dot
-            if (icon != null) {
-                Box(
-                    modifier = Modifier
-                        .size(18.dp)
-                        .clip(CircleShape)
-                        .background(dotColor.copy(alpha = 0.2f)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = icon,
-                        contentDescription = wp.label,
-                        tint = dotColor,
-                        modifier = Modifier.size(12.dp)
-                    )
-                }
-            } else {
-                // The classic hollow dot for standard stops
-                Box(
-                    modifier = Modifier
-                        .size(12.dp)
-                        .drawWithCache {
-                            onDrawBehind {
-                                drawCircle(palette.bgDeep)
-                                drawCircle(dotColor, style = Stroke(2f))
-                                drawCircle(dotColor, radius = 3f)
-                            }
-                        }
-                )
-            }
-
-            // Connecting Line
-            if (showLine) {
-                Box(
-                    modifier = Modifier
-                        .width(1.5.dp)
-                        .height(38.dp) // Made slightly taller to fit the address subtext comfortably
-                        .background(Color(0x1FFFFFFF))
-                )
-            }
-        }
-
-        Spacer(Modifier.width(10.dp))
-
-        // --- TEXT COLUMN ---
-        Column(modifier = Modifier.weight(1f)) {
-            Text(wp.label, color = palette.textPrimary, fontSize = 13.sp, fontWeight = FontWeight.Medium)
-            // The detail text will now automatically display the actual Geocoded Street Name!
-            Text(wp.detail, color = palette.textSecondary, fontSize = 11.sp, maxLines = 1)
-            if (showLine) Spacer(Modifier.height(20.dp))
-        }
-
-        // --- TIME COLUMN ---
-        Text(wp.time, color = palette.textMuted, fontSize = 12.sp)
-    }
-}
-
-// ── Profile chart (elevation or speed) ───────────────────────────────────────
-@Composable
-private fun ProfileChart(
-    summary: TripEntity,
-    ridePoints: List<RidePoint>,
-    activeLayer: MapLayer,
-    palette: com.odys.mototriptracker.ui.theme.AppPalette
-) {
-    val values = remember(ridePoints, activeLayer) {
-        ridePoints.map { if (activeLayer == MapLayer.Elevation) it.elevationM else it.speedKmh }
-    }
-    val lineColor = if (activeLayer == MapLayer.Elevation) Blue else RouteTeal
-    val fillColor = if (activeLayer == MapLayer.Elevation) Color(0x1F5B9EF7) else Color(0x1F1D9E75)
-    val peakVal = values.maxOrNull() ?: 0f
-    val peakLabel = if (activeLayer == MapLayer.Elevation) "+${peakVal.toInt()} m peak"
-    else "${peakVal.toInt()} km/h peak"
-    val peakColor = if (activeLayer == MapLayer.Elevation) Blue else RouteCoral
-
-    Column(modifier = Modifier.padding(horizontal = 20.dp)) {
-        Text(
-            text = if (activeLayer == MapLayer.Elevation) "ELEVATION PROFILE" else "SPEED PROFILE",
-            color = palette.textSecondary, fontSize = 10.sp, letterSpacing = 1.sp
-        )
-        Spacer(Modifier.height(8.dp))
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(80.dp)
-                .clip(RoundedCornerShape(12.dp))
-                .background(palette.bgPanel)
-                .drawWithCache {
-                    val w = size.width
-                    val h = size.height
-                    val pad = 12f
-                    val minV = values.minOrNull() ?: 0f
-                    val maxV = values.maxOrNull() ?: 1f
-                    val range = (maxV - minV).coerceAtLeast(1f)
-                    val step = if (values.size > 1) (w - pad * 2) / (values.size - 1) else 0f
-                    fun yFor(v: Float) = pad + (1f - (v - minV) / range) * (h - pad * 2)
-
-                    val line = Path().apply {
-                        values.forEachIndexed { i, v ->
-                            if (i == 0) moveTo(pad, yFor(v)) else lineTo(pad + i * step, yFor(v))
-                        }
-                    }
-                    val fill = Path().apply {
-                        addPath(line)
-                        lineTo(pad + (values.size - 1) * step, h - pad)
-                        lineTo(pad, h - pad)
-                        close()
-                    }
-                    onDrawBehind {
-                        drawPath(fill, fillColor)
-                        drawPath(line, lineColor, style = Stroke(2f, cap = StrokeCap.Round))
-                    }
-                }
-        )
-        Spacer(Modifier.height(4.dp))
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text("0 km", color = palette.textSecondary, fontSize = 9.sp)
-            Text(peakLabel, color = peakColor, fontSize = 9.sp)
-            Text("${String.format(Locale.US, "%.1f ", summary.distanceMeters / 1000f)} km", color = palette.textSecondary, fontSize = 9.sp)
-        }
-    }
-}
-
-// ── Legend pills ──────────────────────────────────────────────────────────────
-@Composable
-private fun LegendPills(
-    activeLayer: MapLayer,
-    palette: com.odys.mototriptracker.ui.theme.AppPalette
-) {
-    val pills = if (activeLayer == MapLayer.Speed) listOf(
-        Triple(RouteAmber, "Slow",   "0–40 km/h"),
-        Triple(RouteTeal,  "Cruise", "40–130 km/h"),
-        Triple(RouteCoral, "Fast",   "130+ km/h"),
-    ) else listOf(
-        Triple(RouteBlue,  "Flat",  "0–10 m"),
-        Triple(RouteAmber, "Climb", "10–50 m"),
-        Triple(RouteCoral, "Steep", "50 m+"),
-    )
-    Row(
-        modifier = Modifier
-            .padding(horizontal = 20.dp)
-            .fillMaxWidth()
-            .horizontalScroll(rememberScrollState()),
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        pills.forEach { (color, label, range) ->
-            Row(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(20.dp))
-                    .background(palette.bgPanel)
-                    .padding(horizontal = 10.dp, vertical = 6.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(5.dp)
-            ) {
-                Box(modifier = Modifier
-                    .size(7.dp)
-                    .clip(CircleShape)
-                    .background(color))
-                // Add maxLines = 1 to prevent wrapping
-                Text(label, color = palette.textMuted, fontSize = 11.sp, maxLines = 1)
-                Text(range, color = palette.textPrimary, fontSize = 11.sp, fontWeight = FontWeight.Medium, maxLines = 1)
-            }
-        }
-    }
-}
-
-// ── Marker bitmaps (match waypoint list chips / hollow dots) ──────────────────
-private fun createIconBadgeBitmap(
-    painter: Painter,
-    tint: Color,
-    density: Density,
-    sizeDp: Float = 40f
-): Bitmap {
-    val px = with(density) { sizeDp.dp.roundToPx().coerceAtLeast(1) }
-    val bmp = createBitmap(px, px)
-    val androidCanvas = AndroidCanvas(bmp)
-    val composeCanvas = ComposeCanvas(androidCanvas)
-    val drawSize = Size(px.toFloat(), px.toFloat())
-
-    CanvasDrawScope().draw(
-        density = density,
-        layoutDirection = LayoutDirection.Ltr,
-        canvas = composeCanvas,
-        size = drawSize
-    ) {
-        val radius = size.minDimension / 2f
-        drawCircle(color = tint.copy(alpha = 0.22f), radius = radius)
-        drawCircle(
-            color = tint.copy(alpha = 0.5f),
-            radius = radius - 1.5f,
-            style = Stroke(width = 2.5f)
-        )
-        val iconSize = size.minDimension * 0.55f
-        val inset = (size.minDimension - iconSize) / 2f
-        translate(inset, inset) {
-            with(painter) {
-                draw(
-                    size = Size(iconSize, iconSize),
-                    colorFilter = ColorFilter.tint(tint)
-                )
-            }
-        }
-    }
-    return bmp
-}
-
-/** Hollow ring + core — matches the list timeline dots for stops. */
-private fun createHollowDotBitmap(colorArgb: Int, sizePx: Int = 54): Bitmap {
-    val bmp = createBitmap(sizePx, sizePx)
-    val canvas = AndroidCanvas(bmp)
-    val cx = sizePx / 2f
-    val cy = sizePx / 2f
-    val r = sizePx * 0.32f
-
-    val fill = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = android.graphics.Color.argb(255, 14, 14, 20)
-        style = Paint.Style.FILL
-    }
-    canvas.drawCircle(cx, cy, r, fill)
-
-    val ring = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = colorArgb
-        style = Paint.Style.STROKE
-        strokeWidth = sizePx * 0.09f
-    }
-    canvas.drawCircle(cx, cy, r - ring.strokeWidth / 2f, ring)
-
-    val core = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = colorArgb
-        style = Paint.Style.FILL
-    }
-    canvas.drawCircle(cx, cy, sizePx * 0.1f, core)
-    return bmp
-}
-
-/** Soft glow ring + solid core — matches iOS replay rider annotation. */
-private fun createRiderMarkerBitmap(colorArgb: Int): Bitmap {
-    val px = 84
-    val bmp = createBitmap(px, px)
-    val canvas = AndroidCanvas(bmp)
-    val cx = px / 2f
-    val cy = px / 2f
-
-    val glow = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = android.graphics.Color.argb(
-            70,
-            android.graphics.Color.red(colorArgb),
-            android.graphics.Color.green(colorArgb),
-            android.graphics.Color.blue(colorArgb)
-        )
-        style = Paint.Style.FILL
-    }
-    canvas.drawCircle(cx, cy, px * 0.42f, glow)
-
-    val fill = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = colorArgb
-        style = Paint.Style.FILL
-    }
-    canvas.drawCircle(cx, cy, px * 0.22f, fill)
-
-    val border = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = android.graphics.Color.argb(255, 14, 14, 20)
-        style = Paint.Style.STROKE
-        strokeWidth = px * 0.06f
-    }
-    canvas.drawCircle(cx, cy, px * 0.22f, border)
-    return bmp
 }
 
 // ── Preview ───────────────────────────────────────────────────────────────────
