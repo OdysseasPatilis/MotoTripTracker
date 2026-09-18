@@ -2,28 +2,20 @@ package com.odys.mototriptracker.ui.tracker
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.odys.mototriptracker.data.fuel.FuelService
-import com.odys.mototriptracker.data.location.LocationRepository
-import com.odys.mototriptracker.data.camera.TrafficCameraService
+import com.odys.mototriptracker.application.RideTrackerFacade
 import com.odys.mototriptracker.data.navigation.DestinationHistoryEntry
-import com.odys.mototriptracker.data.navigation.DestinationSearchHistory
-import com.odys.mototriptracker.data.navigation.NavigationService
 import com.odys.mototriptracker.data.navigation.NavigationSearchResult
+import com.odys.mototriptracker.data.navigation.NavigationState
 import com.odys.mototriptracker.data.petrol.GooglePetrolDetails
 import com.odys.mototriptracker.data.petrol.PetrolPreferences
 import com.odys.mototriptracker.data.petrol.PetrolSearchPlan
 import com.odys.mototriptracker.data.petrol.PetrolStationRecommendation
 import com.odys.mototriptracker.data.petrol.RankedPetrolStation
-import com.odys.mototriptracker.data.weather.RouteWeatherService
+import com.odys.mototriptracker.data.weather.RouteWeatherState
 import com.odys.mototriptracker.domain.GpsQuality
 import com.odys.mototriptracker.domain.RideSessionState
 import com.odys.mototriptracker.domain.RouteCoordinate
-import com.odys.mototriptracker.domain.TripManager
 import com.odys.mototriptracker.domain.usecase.ObserveRideSessionUseCase
-import com.odys.mototriptracker.domain.usecase.PauseRideUseCase
-import com.odys.mototriptracker.domain.usecase.ResumeRideUseCase
-import com.odys.mototriptracker.domain.usecase.StartRideUseCase
-import com.odys.mototriptracker.domain.usecase.StopRideUseCase
 import com.odys.mototriptracker.util.AppLogger
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
@@ -39,20 +31,9 @@ import javax.inject.Inject
 @HiltViewModel
 class RideTrackerViewModel @Inject constructor(
     observeRideSessionUseCase: ObserveRideSessionUseCase,
-    private val tripManager: TripManager,
-    private val navigationService: NavigationService,
-    private val destinationHistory: DestinationSearchHistory,
-    private val trafficCameraService: TrafficCameraService,
-    private val routeWeatherService: RouteWeatherService,
-    private val fuelService: FuelService,
-    private val petrolPreferences: PetrolPreferences,
+    private val facade: RideTrackerFacade,
     private val petrolSearch: PetrolSearchCoordinator,
     private val mapPlace: MapPlaceCoordinator,
-    private val locationRepository: LocationRepository,
-    private val startRideUseCase: StartRideUseCase,
-    private val stopRideUseCase: StopRideUseCase,
-    private val pauseRideUseCase: PauseRideUseCase,
-    private val resumeRideUseCase: ResumeRideUseCase
 ) : ViewModel() {
     private val observeRideSession = observeRideSessionUseCase
 
@@ -65,20 +46,20 @@ class RideTrackerViewModel @Inject constructor(
 
     private val rideInputs = combine(
         observeRideSession(),
-        tripManager.routeCoordinates,
-        navigationService.state,
-        routeWeatherService.state,
-        locationRepository.lastLocation
+        facade.routeCoordinates,
+        facade.navigation,
+        facade.weather,
+        facade.lastLocation,
     ) { session, routeCoordinates, navigation, weather, lastLocation ->
         RideInputs(session, routeCoordinates, navigation, weather, lastLocation)
     }
 
     private val fuelInputs = combine(
-        fuelService.tankCapacityLiters,
-        fuelService.fuelRemainingLiters,
-        fuelService.consumptionLPer100Km,
-        petrolPreferences.preferredBrands,
-        petrolPreferences.preferredOctanes
+        facade.tankCapacityLiters,
+        facade.fuelRemainingLiters,
+        facade.consumptionLPer100Km,
+        facade.preferredBrands,
+        facade.preferredOctanes,
     ) { tank, remaining, consumption, brands, octanes ->
         FuelPrefs(tank, remaining, consumption, brands, octanes)
     }
@@ -91,7 +72,7 @@ class RideTrackerViewModel @Inject constructor(
         showDestinationSearch,
         showFuelSettings,
         showRouteWeather,
-        petrolSearch.showSheet
+        petrolSearch.showSheet,
     ) { search, fuel, weather, petrol ->
         SheetFlags(search, fuel, weather, petrol)
     }
@@ -99,7 +80,7 @@ class RideTrackerViewModel @Inject constructor(
     private val petrolUiCore = combine(
         petrolSearch.stations,
         petrolSearch.plan,
-        petrolSearch.loading
+        petrolSearch.loading,
     ) { stations, plan, loading ->
         Triple(stations, plan, loading)
     }
@@ -108,7 +89,7 @@ class RideTrackerViewModel @Inject constructor(
         petrolSearch.details,
         petrolSearch.detailsLoading,
         discardBanner,
-        petrolSearch.message
+        petrolSearch.message,
     ) { details, detailsLoading, banner, message ->
         PetrolExtras(details, detailsLoading, banner, message)
     }
@@ -121,7 +102,7 @@ class RideTrackerViewModel @Inject constructor(
             details = extras.details,
             detailsLoading = extras.detailsLoading,
             banner = extras.banner,
-            message = extras.message
+            message = extras.message,
         )
     }
 
@@ -130,9 +111,9 @@ class RideTrackerViewModel @Inject constructor(
     }
 
     private val cameraInputs = combine(
-        trafficCameraService.mapCameras,
-        trafficCameraService.activeAlert,
-        trafficCameraService.downloadStatus,
+        facade.mapCameras,
+        facade.trafficCameraAlert,
+        facade.trafficCameraDownloadStatus,
     ) { mapCams, alert, download ->
         Triple(mapCams, alert, download)
     }
@@ -150,7 +131,7 @@ class RideTrackerViewModel @Inject constructor(
         RideTrackerUiState(
             stats = core.ride.session.stats.copy(
                 gpsAccuracyMeters = liveAccuracy,
-                gpsQuality = GpsQuality.fromAccuracyMeters(liveAccuracy)
+                gpsQuality = GpsQuality.fromAccuracyMeters(liveAccuracy),
             ),
             isTracking = core.ride.session.isActive,
             isPaused = core.ride.session.isPaused,
@@ -171,8 +152,8 @@ class RideTrackerViewModel @Inject constructor(
             tankCapacityLiters = core.fuel.tank,
             fuelRemainingLiters = core.fuel.remaining,
             fuelConsumption = core.fuel.consumption,
-            fuelRangeSummary = fuelService.rangeSummary,
-            isLowFuel = fuelService.isLowFuel,
+            fuelRangeSummary = facade.fuelRangeSummary,
+            isLowFuel = facade.isLowFuel,
             preferredBrands = core.fuel.brands,
             preferredOctanes = core.fuel.octanes,
             lastLatitude = core.ride.lastLocation?.latitude,
@@ -187,24 +168,20 @@ class RideTrackerViewModel @Inject constructor(
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5_000),
-        initialValue = RideTrackerUiState()
+        initialValue = RideTrackerUiState(),
     )
 
     init {
-        navigationService.onRouteApplied = { coordinates, travelTime ->
-            routeWeatherService.refreshForRoute(coordinates, travelTime)
-        }
-        navigationService.onRouteCleared = routeWeatherService::clear
         startDashboardGps()
         viewModelScope.launch {
-            locationRepository.lastLocation.collect { location ->
-                location?.let { navigationService.updateOrigin(it.latitude, it.longitude) }
+            facade.lastLocation.collect { location ->
+                location?.let { facade.updateNavigationOrigin(it.latitude, it.longitude) }
             }
         }
         viewModelScope.launch {
-            observeRideSessionUseCase().collect { session ->
+            observeRideSession().collect { session ->
                 if (session.isActive) {
-                    fuelService.updateConsumedDistance(session.stats.distanceKm.toDouble())
+                    facade.updateFuelConsumedDistance(session.stats.distanceKm.toDouble())
                 }
             }
         }
@@ -214,11 +191,11 @@ class RideTrackerViewModel @Inject constructor(
         if (dashboardLocationJob?.isActive == true) return
         dashboardLocationJob = viewModelScope.launch {
             try {
-                locationRepository.getLocationFlow().collect { location ->
+                facade.locationUpdates.collect { location ->
                     if (location.hasAccuracy()) dashboardGpsAccuracy.value = location.accuracy
-                    val session = tripManager.sessionState.value
+                    val session = observeRideSession().value
                     if (!session.isActive) {
-                        trafficCameraService.refresh(location, alertsEnabled = false)
+                        facade.refreshTrafficCameras(location, alertsEnabled = false)
                     }
                 }
             } catch (e: Exception) {
@@ -229,18 +206,12 @@ class RideTrackerViewModel @Inject constructor(
 
     fun startRide() {
         if (uiState.value.isTracking) return
-        fuelService.resetRideConsumption()
-        trafficCameraService.reset()
-        startRideUseCase()
+        facade.startRide()
     }
 
     fun stopRide() {
         if (!uiState.value.isTracking) return
-        val result = stopRideUseCase()
-        trafficCameraService.reset()
-        locationRepository.lastLocation.value?.let { location ->
-            trafficCameraService.refresh(location, alertsEnabled = false)
-        }
+        val result = facade.stopRide()
         if (!result.saved) {
             discardBanner.value = "Ride too short — not saved"
             viewModelScope.launch {
@@ -253,7 +224,7 @@ class RideTrackerViewModel @Inject constructor(
     fun togglePause() {
         val state = uiState.value
         if (!state.isTracking) return
-        if (state.isPaused) resumeRideUseCase() else pauseRideUseCase()
+        if (state.isPaused) facade.resumeRide() else facade.pauseRide()
     }
 
     fun showDestinationSearch() { showDestinationSearch.value = true }
@@ -280,7 +251,7 @@ class RideTrackerViewModel @Inject constructor(
 
     fun selectPetrolStation(station: PetrolStationRecommendation) {
         petrolSearch.selectStation(viewModelScope, station) {
-            navigationService.setDestination(
+            facade.setDestination(
                 latitude = it.latitude,
                 longitude = it.longitude,
                 name = it.name,
@@ -294,17 +265,20 @@ class RideTrackerViewModel @Inject constructor(
 
     fun clearPetrolDetails() = petrolSearch.clearDetails()
 
-    fun onNavigationQueryChange(query: String) = navigationService.updateSearchQuery(query)
+    fun onNavigationQueryChange(query: String) = facade.updateSearchQuery(query)
+
     fun selectNavigationResult(result: NavigationSearchResult) {
-        navigationService.selectSearchResult(result)
+        facade.selectSearchResult(result)
         showDestinationSearch.value = false
     }
+
     fun selectHistoryDestination(entry: DestinationHistoryEntry) {
-        navigationService.selectHistoryEntry(entry)
+        facade.selectHistoryEntry(entry)
         showDestinationSearch.value = false
     }
-    fun removeHistoryDestination(id: String) = destinationHistory.remove(id)
-    fun destinationHistoryEntries(): List<DestinationHistoryEntry> = destinationHistory.all()
+
+    fun removeHistoryDestination(id: String) = facade.removeHistoryDestination(id)
+    fun destinationHistoryEntries(): List<DestinationHistoryEntry> = facade.destinationHistoryEntries()
 
     fun updateVisibleMapRegion(
         centerLat: Double,
@@ -313,13 +287,7 @@ class RideTrackerViewModel @Inject constructor(
         lngDelta: Double,
         fetchRemote: Boolean,
     ) {
-        trafficCameraService.updateVisibleMapRegion(
-            centerLatitude = centerLat,
-            centerLongitude = centerLng,
-            latitudeDelta = latDelta,
-            longitudeDelta = lngDelta,
-            fetchRemote = fetchRemote,
-        )
+        facade.updateVisibleMapRegion(centerLat, centerLng, latDelta, lngDelta, fetchRemote)
     }
 
     fun onMapPoiClick(placeId: String, name: String, latitude: Double, longitude: Double) {
@@ -329,35 +297,34 @@ class RideTrackerViewModel @Inject constructor(
     fun dismissMapPlace() = mapPlace.dismiss()
     fun goToSelectedMapPlace() = mapPlace.goToSelected()
 
-    fun clearNavigation() = navigationService.clear()
-    fun confirmStartNavigation() = navigationService.confirmStartNavigation()
-    fun cancelNavigationPreview() = navigationService.cancelPreview()
-    fun selectPreviewRoute(id: String) = navigationService.selectPreviewRoute(id)
-    fun dismissTimingResult() = navigationService.dismissTimingResult()
-    fun openNavigationInMaps() = navigationService.openInGoogleMaps()
-    fun toggleNavigationVoice() = navigationService.toggleVoice()
+    fun clearNavigation() = facade.clearNavigation()
+    fun confirmStartNavigation() = facade.confirmStartNavigation()
+    fun cancelNavigationPreview() = facade.cancelNavigationPreview()
+    fun selectPreviewRoute(id: String) = facade.selectPreviewRoute(id)
+    fun dismissTimingResult() = facade.dismissTimingResult()
+    fun openNavigationInMaps() = facade.openNavigationInMaps()
+    fun toggleNavigationVoice() = facade.toggleNavigationVoice()
 
-    fun toggleFuelBrand(brand: String) = petrolPreferences.toggleBrand(brand)
-    fun toggleFuelOctane(octane: Int) = petrolPreferences.toggleOctane(octane)
-    fun fillUpFuel() = fuelService.fillUp()
+    fun toggleFuelBrand(brand: String) = facade.toggleFuelBrand(brand)
+    fun toggleFuelOctane(octane: Int) = facade.toggleFuelOctane(octane)
+    fun fillUpFuel() = facade.fillUpFuel()
+
     fun saveFuelSettings(
         capacityLiters: Double?,
         remainingLiters: Double?,
         consumptionLPer100Km: Double?,
     ) {
-        capacityLiters?.let(fuelService::setTankCapacityLiters)
-        remainingLiters?.let(fuelService::setFuelRemainingLiters)
-        consumptionLPer100Km?.let(fuelService::setConsumptionLPer100Km)
+        facade.saveFuelSettings(capacityLiters, remainingLiters, consumptionLPer100Km)
     }
 
-    fun petrolPreferences(): PetrolPreferences = petrolPreferences
+    fun petrolPreferences(): PetrolPreferences = facade.petrolPreferences()
 
     private data class RideInputs(
         val session: RideSessionState,
         val routeCoordinates: List<RouteCoordinate>,
-        val navigation: com.odys.mototriptracker.data.navigation.NavigationState,
-        val weather: com.odys.mototriptracker.data.weather.RouteWeatherState,
-        val lastLocation: android.location.Location?
+        val navigation: NavigationState,
+        val weather: RouteWeatherState,
+        val lastLocation: android.location.Location?,
     )
 
     private data class FuelPrefs(
@@ -365,27 +332,27 @@ class RideTrackerViewModel @Inject constructor(
         val remaining: Double,
         val consumption: Double,
         val brands: List<String>,
-        val octanes: Set<Int>
+        val octanes: Set<Int>,
     )
 
     private data class CoreInputs(
         val ride: RideInputs,
         val fuel: FuelPrefs,
-        val dashAccuracy: Float?
+        val dashAccuracy: Float?,
     )
 
     private data class SheetFlags(
         val showSearch: Boolean,
         val showFuel: Boolean,
         val showWeather: Boolean,
-        val showPetrol: Boolean
+        val showPetrol: Boolean,
     )
 
     private data class PetrolExtras(
         val details: GooglePetrolDetails?,
         val detailsLoading: Boolean,
         val banner: String?,
-        val message: String?
+        val message: String?,
     )
 
     private data class PetrolUi(
@@ -395,11 +362,11 @@ class RideTrackerViewModel @Inject constructor(
         val details: GooglePetrolDetails?,
         val detailsLoading: Boolean,
         val banner: String?,
-        val message: String?
+        val message: String?,
     )
 
     private data class OverlayInputs(
         val sheets: SheetFlags,
-        val petrol: PetrolUi
+        val petrol: PetrolUi,
     )
 }
