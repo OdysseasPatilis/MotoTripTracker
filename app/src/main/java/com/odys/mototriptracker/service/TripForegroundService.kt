@@ -15,6 +15,7 @@ import androidx.lifecycle.LifecycleService
 import androidx.lifecycle.lifecycleScope
 import com.odys.mototriptracker.R
 import com.odys.mototriptracker.data.location.LocationRepository
+import com.odys.mototriptracker.data.location.toGpsSample
 import com.odys.mototriptracker.domain.SpeedLimitResolver
 import com.odys.mototriptracker.domain.TripManager
 import com.odys.mototriptracker.util.AppLogger
@@ -106,7 +107,7 @@ class TripForegroundService : LifecycleService() {
             try {
                 locationRepository.getLocationFlow().collect { location ->
                     lastFixAtMs = System.currentTimeMillis()
-                    tripManager.onLocationUpdate(location)
+                    tripManager.onLocationUpdate(location.toGpsSample())
                     speedLimitResolver.onLocationUpdate(
                         latitude = location.latitude,
                         longitude = location.longitude,

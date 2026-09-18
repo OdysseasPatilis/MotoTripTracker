@@ -1,6 +1,5 @@
 package com.odys.mototriptracker.domain
 
-import android.location.Location
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -12,24 +11,21 @@ class SpeedFilter @Inject constructor() {
     // Ignore speeds under 3 km/h (0.83 m/s) to prevent GPS drift when stopped
     private val MIN_SPEED_MPS = 0.83f
 
-    fun isValid(location: Location): Boolean {
-        // 1. Throw away locations with terrible accuracy
-        if (!location.hasAccuracy() || location.accuracy > maxAccuracyMeters) {
-            return false
-        }
-        return true
+    fun isValid(sample: GpsSample): Boolean {
+        val accuracy = sample.accuracyMeters ?: return false
+        return accuracy <= maxAccuracyMeters
     }
 
     companion object {
         const val MAX_ACCURACY_METERS = 35f
     }
 
-    fun getProcessedSpeed(location: Location): Float {
-        if (!location.hasSpeed()) return 0f
+    fun getProcessedSpeed(sample: GpsSample): Float {
+        if (!sample.hasSpeed) return 0f
 
-        val speedMps = location.speed
+        val speedMps = sample.speedMps
 
-        // 2. Kill ghost speeds (GPS drift while parked)
+        // Kill ghost speeds (GPS drift while parked)
         return if (speedMps < MIN_SPEED_MPS) 0f else speedMps
     }
 }

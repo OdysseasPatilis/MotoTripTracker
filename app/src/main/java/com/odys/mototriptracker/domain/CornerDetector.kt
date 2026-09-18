@@ -1,6 +1,5 @@
 package com.odys.mototriptracker.domain
 
-import android.location.Location
 import kotlin.math.abs
 
 /**
@@ -29,15 +28,6 @@ class CornerDetector {
         maxEstimatedLateralG = 0f
     }
 
-    fun onLocation(location: Location, speedMps: Float): Boolean =
-        onSample(
-            latitude = location.latitude,
-            longitude = location.longitude,
-            bearingDeg = location.bearing.takeIf { location.hasBearing() },
-            speedMps = speedMps,
-        )
-
-    /** Pure entry point for unit tests (no Android Location required). */
     fun onSample(
         latitude: Double,
         longitude: Double,

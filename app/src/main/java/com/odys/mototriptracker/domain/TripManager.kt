@@ -1,6 +1,5 @@
 package com.odys.mototriptracker.domain
 
-import android.location.Location
 import com.odys.mototriptracker.util.AppLogger
 import com.odys.mototriptracker.util.LogThrottle
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -27,7 +26,7 @@ class TripManager @Inject constructor(
     private val _routeCoordinates = MutableStateFlow<List<RouteCoordinate>>(emptyList())
     val routeCoordinates: StateFlow<List<RouteCoordinate>> = _routeCoordinates.asStateFlow()
 
-    private var lastLocation: Location? = null
+    private var lastLocation: GpsSample? = null
     private var isTracking = false
     private var isPaused = false
     private var pausedAtMs = 0L
@@ -143,10 +142,10 @@ class TripManager @Inject constructor(
         publishSession()
     }
 
-    fun onLocationUpdate(location: Location) {
+    fun onLocationUpdate(location: GpsSample) {
         if (!isTracking) return
 
-        val accuracy = if (location.hasAccuracy()) location.accuracy else null
+        val accuracy = location.accuracyMeters
         val gpsQuality = GpsQuality.fromAccuracyMeters(accuracy)
 
         // Keep the GPS signal indicator live while paused (iOS parity).
@@ -163,7 +162,7 @@ class TripManager @Inject constructor(
             _tripStats.update { current ->
                 var moving = current.movingTime
                 var stopped = current.stoppedTime
-                stopDetector.updateTimes(location.time, isMoving = lastWasMoving) { movingDeltaMs, stoppedDeltaMs ->
+                stopDetector.updateTimes(location.timeMs, isMoving = lastWasMoving) { movingDeltaMs, stoppedDeltaMs ->
                     moving += movingDeltaMs / 1000L
                     stopped += stoppedDeltaMs / 1000L
                 }
@@ -178,15 +177,15 @@ class TripManager @Inject constructor(
             if (LogThrottle.shouldLog("trip.invalidGPS", 15_000L)) {
                 AppLogger.d(
                     AppLogger.Category.TRIP,
-                    "GPS rejected accuracy=${location.accuracy}m " +
-                        "speed=${location.speed}m/s @ ${AppLogger.coordinate(location.latitude, location.longitude)}"
+                    "GPS rejected accuracy=${location.accuracyMeters}m " +
+                        "speed=${location.speedMps}m/s @ ${AppLogger.coordinate(location.latitude, location.longitude)}"
                 )
             }
             return
         }
 
         val currentSpeedMps = speedFilter.getProcessedSpeed(location)
-        val currentTime = location.time
+        val currentTime = location.timeMs
         val isMoving = currentSpeedMps > MOVING_SPEED_MPS
         lastWasMoving = isMoving
         val rawSpeedKmh = currentSpeedMps * 3.6f
@@ -204,12 +203,17 @@ class TripManager @Inject constructor(
         }
 
         if (isMoving) {
-            cornerDetector.onLocation(location, currentSpeedMps)
+            cornerDetector.onSample(
+                latitude = location.latitude,
+                longitude = location.longitude,
+                bearingDeg = location.bearingDeg,
+                speedMps = currentSpeedMps,
+            )
         }
 
         var elevationDelta = 0.0
         val prev = lastLocation
-        if (prev != null && location.hasAltitude()) {
+        if (prev != null && location.hasAltitude) {
             elevationDelta = elevationSmoother.calculateGain(location.altitude)
         }
 
@@ -224,8 +228,11 @@ class TripManager @Inject constructor(
 
             // Never grow distance when the time gap was discarded — that produces absurd avg speeds.
             val distanceDelta = if (isMoving && timeAccepted && prev != null) {
-                val step = prev.distanceTo(location).toDouble()
-                val timeDeltaSec = (currentTime - prev.time).coerceAtLeast(0L) / 1000.0
+                val step = Geo.distanceMeters(
+                    prev.latitude, prev.longitude,
+                    location.latitude, location.longitude,
+                )
+                val timeDeltaSec = (currentTime - prev.timeMs).coerceAtLeast(0L) / 1000.0
                 RideDistanceFilter.distanceDelta(
                     geographicMeters = step,
                     speedMps = currentSpeedMps.toDouble(),
@@ -236,7 +243,10 @@ class TripManager @Inject constructor(
             }
 
             if (prev != null && isMoving && timeAccepted) {
-                val step = prev.distanceTo(location)
+                val step = Geo.distanceMeters(
+                    prev.latitude, prev.longitude,
+                    location.latitude, location.longitude,
+                ).toFloat()
                 if (step > 0f && distanceDelta == 0f) {
                     AppLogger.w(
                         AppLogger.Category.TRIP,
