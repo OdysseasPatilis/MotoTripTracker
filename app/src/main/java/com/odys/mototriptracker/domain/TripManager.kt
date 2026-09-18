@@ -1,7 +1,6 @@
 package com.odys.mototriptracker.domain
 
 import android.location.Location
-import com.odys.mototriptracker.data.trip.TripRepository
 import com.odys.mototriptracker.util.AppLogger
 import com.odys.mototriptracker.util.LogThrottle
 import kotlinx.coroutines.flow.MutableStateFlow

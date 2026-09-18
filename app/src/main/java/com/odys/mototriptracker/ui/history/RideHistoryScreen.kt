@@ -28,7 +28,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.odys.mototriptracker.data.trip.TripEntity
+import com.odys.mototriptracker.domain.model.Trip
 import com.odys.mototriptracker.ui.components.ScreenTopBar
 import com.odys.mototriptracker.ui.history.RideHistoryFilters
 import com.odys.mototriptracker.ui.history.RideHistoryTab
@@ -39,12 +39,12 @@ import com.odys.mototriptracker.ui.theme.LocalAppPalette
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun RideHistoryScreen(
-    rides: List<TripEntity>,
+    rides: List<Trip>,
     selectedTab: RideHistoryTab,
     searchQuery: String,
     filters: RideHistoryFilters,
     onBack: () -> Unit,
-    onRideClick: (TripEntity) -> Unit,
+    onRideClick: (Trip) -> Unit,
     onToggleFavorite: (Long) -> Unit = {},
     onSelectTab: (RideHistoryTab) -> Unit = {},
     onSearchQueryChange: (String) -> Unit = {},

@@ -1,7 +1,7 @@
 package com.odys.mototriptracker.domain
 
-import com.odys.mototriptracker.data.checkpoint.RoutePointEntity
-import com.odys.mototriptracker.data.trip.TripEntity
+import com.odys.mototriptracker.domain.model.RoutePoint
+import com.odys.mototriptracker.domain.model.Trip
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
@@ -37,7 +37,7 @@ object RideMomentsCalculator {
     private const val CRUISE_WINDOW_MS = 45_000L
     private const val MIN_CRUISE_KMH = 35.0
 
-    fun calculate(trip: TripEntity, points: List<RoutePointEntity>): RideMoments {
+    fun calculate(trip: Trip, points: List<RoutePoint>): RideMoments {
         val sorted = points.sortedBy { it.timestamp }
         val startMs = sorted.firstOrNull()?.timestamp
             ?: return RideMoments(moments = ambientMoments(trip, sorted))
@@ -61,7 +61,7 @@ object RideMomentsCalculator {
     }
 
     private fun topSpeedHighlight(
-        points: List<RoutePointEntity>,
+        points: List<RoutePoint>,
         rideStartMs: Long
     ): RideMoment? {
         val best = points.maxByOrNull { it.speedMps } ?: return null
@@ -79,7 +79,7 @@ object RideMomentsCalculator {
     }
 
     private fun hardestPull(
-        points: List<RoutePointEntity>,
+        points: List<RoutePoint>,
         rideStartMs: Long
     ): RideMoment? {
         if (points.size < 3) return null
@@ -110,7 +110,7 @@ object RideMomentsCalculator {
     }
 
     private fun peakClimb(
-        points: List<RoutePointEntity>,
+        points: List<RoutePoint>,
         rideStartMs: Long
     ): RideMoment? {
         val segment = bestAltitudeSegment(points, ascending = true) ?: return null
@@ -126,7 +126,7 @@ object RideMomentsCalculator {
     }
 
     private fun peakDescent(
-        points: List<RoutePointEntity>,
+        points: List<RoutePoint>,
         rideStartMs: Long
     ): RideMoment? {
         val segment = bestAltitudeSegment(points, ascending = false) ?: return null
@@ -142,7 +142,7 @@ object RideMomentsCalculator {
     }
 
     private fun summitHighlight(
-        points: List<RoutePointEntity>,
+        points: List<RoutePoint>,
         rideStartMs: Long
     ): RideMoment? {
         val top = points.maxByOrNull { it.altitude } ?: return null
@@ -160,7 +160,7 @@ object RideMomentsCalculator {
     }
 
     private fun longestStop(
-        points: List<RoutePointEntity>,
+        points: List<RoutePoint>,
         rideStartMs: Long
     ): RideMoment? {
         val stop = longestStopSegment(points) ?: return null
@@ -182,7 +182,7 @@ object RideMomentsCalculator {
     }
 
     private fun sustainedCruise(
-        points: List<RoutePointEntity>,
+        points: List<RoutePoint>,
         rideStartMs: Long
     ): RideMoment? {
         if (points.size < 8) return null
@@ -218,7 +218,7 @@ object RideMomentsCalculator {
         )
     }
 
-    private fun twistiesHighlight(trip: TripEntity): RideMoment? {
+    private fun twistiesHighlight(trip: Trip): RideMoment? {
         val score = TwistinessCalculator.score(trip)
         val distanceKm = trip.distanceMeters / 1000.0
         if (score < 25 || trip.cornerCount < 3 || distanceKm < 1.0) return null
@@ -238,7 +238,7 @@ object RideMomentsCalculator {
         )
     }
 
-    private fun flowHighlight(trip: TripEntity): RideMoment? {
+    private fun flowHighlight(trip: Trip): RideMoment? {
         val total = trip.movingTime + trip.stoppedTime
         if (total < 300L) return null
         val movingRatio = trip.movingTime.toDouble() / total.toDouble()
@@ -264,8 +264,8 @@ object RideMomentsCalculator {
     }
 
     private fun ambientMoments(
-        trip: TripEntity,
-        points: List<RoutePointEntity>
+        trip: Trip,
+        points: List<RoutePoint>
     ): List<RideMoment> {
         val hour = Calendar.getInstance().apply { timeInMillis = trip.startTime }
             .get(Calendar.HOUR_OF_DAY)
@@ -306,7 +306,7 @@ object RideMomentsCalculator {
     private data class StopSegment(val durationSec: Long, val startTimeMs: Long)
 
     private fun bestAltitudeSegment(
-        points: List<RoutePointEntity>,
+        points: List<RoutePoint>,
         ascending: Boolean
     ): AltitudeSegment? {
         if (points.size < 3) return null
@@ -332,7 +332,7 @@ object RideMomentsCalculator {
         return if (peak > 0) AltitudeSegment(peak, peakEnd) else null
     }
 
-    private fun longestStopSegment(points: List<RoutePointEntity>): StopSegment? {
+    private fun longestStopSegment(points: List<RoutePoint>): StopSegment? {
         if (points.size < 2) return null
         var bestDuration = 0L
         var bestStart = points[0].timestamp
@@ -364,8 +364,8 @@ object RideMomentsCalculator {
     }
 
     private fun distanceAlongRoute(
-        to: RoutePointEntity,
-        points: List<RoutePointEntity>
+        to: RoutePoint,
+        points: List<RoutePoint>
     ): Double {
         if (points.size < 2) return 0.0
         var total = 0.0

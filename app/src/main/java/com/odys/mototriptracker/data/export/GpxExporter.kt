@@ -1,14 +1,15 @@
 package com.odys.mototriptracker.data.export
 
-import com.odys.mototriptracker.data.checkpoint.RoutePointEntity
-import com.odys.mototriptracker.data.trip.TripEntity
+import com.odys.mototriptracker.domain.model.RoutePoint
+import com.odys.mototriptracker.domain.model.Trip
+import com.odys.mototriptracker.domain.model.displayTitle
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
 
 object GpxExporter {
 
-    fun build(trip: TripEntity, points: List<RoutePointEntity>): String {
+    fun build(trip: Trip, points: List<RoutePoint>): String {
         val sorted = points.sortedBy { it.timestamp }
         val name = trip.displayTitle()
         val timeFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US).apply {
@@ -50,10 +51,3 @@ object GpxExporter {
             .replace("\"", "&quot;")
             .replace("'", "&apos;")
 }
-
-fun TripEntity.displayTitle(): String =
-    title?.takeIf { it.isNotBlank() }
-        ?: run {
-            val formatter = SimpleDateFormat("MMM dd, yyyy - HH:mm", Locale.getDefault())
-            "Ride ${formatter.format(startTime)}"
-        }

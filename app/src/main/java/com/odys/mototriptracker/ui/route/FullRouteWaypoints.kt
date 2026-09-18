@@ -26,14 +26,14 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.google.android.gms.maps.model.LatLng
-import com.odys.mototriptracker.data.trip.TripEntity
+import com.odys.mototriptracker.domain.model.Trip
 import com.odys.mototriptracker.ui.theme.AppPalette
 import com.odys.mototriptracker.ui.components.formatTimestampToDate
 
 // ── Waypoints ─────────────────────────────────────────────────────────────────
 @Composable
 internal fun WaypointsPanel(
-    summary: TripEntity,
+    summary: Trip,
     waypoints: List<Waypoint>,
     usedPolylineFallback: Boolean,
     palette: com.odys.mototriptracker.ui.theme.AppPalette,

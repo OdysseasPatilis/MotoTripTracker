@@ -1,6 +1,6 @@
 package com.odys.mototriptracker.domain
 
-import com.odys.mototriptracker.data.trip.TripEntity
+import com.odys.mototriptracker.domain.model.Trip
 import kotlin.math.min
 import kotlin.math.roundToInt
 
@@ -22,7 +22,7 @@ object TwistinessCalculator {
         return min(100.0, densityScore * 0.72 + lateralScore * 0.28)
     }
 
-    fun score(trip: TripEntity): Double {
+    fun score(trip: Trip): Double {
         if (trip.twistinessScore > 0f) return trip.twistinessScore.toDouble()
         return score(
             cornerCount = trip.cornerCount,

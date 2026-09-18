@@ -1,16 +1,16 @@
 package com.odys.mototriptracker.domain.usecase
 
-import com.odys.mototriptracker.data.backend.TripCloudUploader
+import com.odys.mototriptracker.domain.TripCloudUpload
 import javax.inject.Inject
 
 class UploadTripToCloudUseCase @Inject constructor(
-    private val tripCloudUploader: TripCloudUploader,
+    private val tripCloudUpload: TripCloudUpload,
 ) {
     operator fun invoke(localTripId: Long) {
-        tripCloudUploader.enqueueUpload(localTripId)
+        tripCloudUpload.enqueueUpload(localTripId)
     }
 
     suspend fun uploadNow(localTripId: Long): Result<Unit> = runCatching {
-        tripCloudUploader.uploadNow(localTripId)
+        tripCloudUpload.uploadNow(localTripId)
     }
 }

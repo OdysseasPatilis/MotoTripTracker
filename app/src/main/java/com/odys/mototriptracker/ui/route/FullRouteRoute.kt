@@ -43,7 +43,7 @@ fun FullRouteRoute(
             FullRouteScreenGMaps(
                 summary = uiState.trip!!,
                 ridePoints = uiState.ridePoints,
-                routePointEntities = uiState.routePointEntities,
+                routePoints = uiState.routePoints,
                 waypoints = uiState.waypoints,
                 usedPolylineFallback = uiState.usedPolylineFallback,
                 onBack = onBack

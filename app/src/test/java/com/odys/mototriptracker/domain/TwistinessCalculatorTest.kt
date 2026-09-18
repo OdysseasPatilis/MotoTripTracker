@@ -1,6 +1,6 @@
 package com.odys.mototriptracker.domain
 
-import com.odys.mototriptracker.data.checkpoint.RoutePointEntity
+import com.odys.mototriptracker.domain.model.RoutePoint
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -24,8 +24,8 @@ class RouteReplayEngineTest {
     @Test
     fun interpolatesBetweenPoints() {
         val points = listOf(
-            RoutePointEntity(latitude = 0.0, longitude = 0.0, timestamp = 0L, speedMps = 0f),
-            RoutePointEntity(latitude = 0.0, longitude = 0.001, timestamp = 10_000L, speedMps = 10f)
+            RoutePoint(latitude = 0.0, longitude = 0.0, timestamp = 0L, speedMps = 0f),
+            RoutePoint(latitude = 0.0, longitude = 0.001, timestamp = 10_000L, speedMps = 10f)
         )
         val engine = RouteReplayEngine(points)
         val mid = engine.frame(5.0)!!

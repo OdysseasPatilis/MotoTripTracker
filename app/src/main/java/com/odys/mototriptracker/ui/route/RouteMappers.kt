@@ -1,18 +1,18 @@
 package com.odys.mototriptracker.ui.route
 
 import com.google.android.gms.maps.model.LatLng
-import com.odys.mototriptracker.data.checkpoint.RoutePointEntity
+import com.odys.mototriptracker.domain.model.RoutePoint
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-fun RoutePointEntity.toRidePoint(): RidePoint = RidePoint(
+fun RoutePoint.toRidePoint(): RidePoint = RidePoint(
     latLng = LatLng(latitude, longitude),
     speedKmh = speedMps * 3.6f,
     elevationM = altitude.toFloat()
 )
 
-fun RoutePointEntity.toWaypoint(timeFormatter: SimpleDateFormat = defaultTimeFormatter()): Waypoint {
+fun RoutePoint.toWaypoint(timeFormatter: SimpleDateFormat = defaultTimeFormatter()): Waypoint {
     val type = if (!waypointType.isNullOrEmpty()) {
         when (waypointType) {
             "START" -> WaypointType.Start

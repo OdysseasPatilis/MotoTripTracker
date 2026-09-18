@@ -1,6 +1,6 @@
 package com.odys.mototriptracker.domain.usecase
 
-import com.odys.mototriptracker.data.trip.TripRepository
+import com.odys.mototriptracker.domain.TripRepository
 import javax.inject.Inject
 
 class DeleteTripUseCase @Inject constructor(

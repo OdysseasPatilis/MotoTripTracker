@@ -28,14 +28,14 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.odys.mototriptracker.data.trip.TripEntity
+import com.odys.mototriptracker.domain.model.Trip
 import com.odys.mototriptracker.ui.theme.AppPalette
 import java.util.Locale
 
 // ── Profile chart (elevation or speed) ───────────────────────────────────────
 @Composable
 internal fun ProfileChart(
-    summary: TripEntity,
+    summary: Trip,
     ridePoints: List<RidePoint>,
     activeLayer: MapLayer,
     palette: com.odys.mototriptracker.ui.theme.AppPalette

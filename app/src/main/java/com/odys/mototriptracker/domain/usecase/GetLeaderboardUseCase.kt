@@ -1,9 +1,9 @@
 package com.odys.mototriptracker.domain.usecase
 
-import com.odys.mototriptracker.data.export.displayTitle
+import com.odys.mototriptracker.domain.TripRepository
 import com.odys.mototriptracker.domain.TwistinessCalculator
-import com.odys.mototriptracker.data.trip.TripEntity
-import com.odys.mototriptracker.data.trip.TripRepository
+import com.odys.mototriptracker.domain.model.Trip
+import com.odys.mototriptracker.domain.model.displayTitle
 import java.util.Locale
 import javax.inject.Inject
 
@@ -32,7 +32,7 @@ class GetLeaderboardUseCase @Inject constructor(
             LeaderboardCategory.SPEED -> trips
                 .filter { it.maxSpeed > 0f }
                 .sortedWith(
-                    compareByDescending<TripEntity> { it.maxSpeed }
+                    compareByDescending<Trip> { it.maxSpeed }
                         .thenByDescending { it.startTime }
                 )
                 .mapIndexed { index, trip ->
@@ -46,7 +46,7 @@ class GetLeaderboardUseCase @Inject constructor(
             LeaderboardCategory.DISTANCE -> trips
                 .filter { it.distanceMeters > 0f }
                 .sortedWith(
-                    compareByDescending<TripEntity> { it.distanceMeters }
+                    compareByDescending<Trip> { it.distanceMeters }
                         .thenByDescending { it.startTime }
                 )
                 .mapIndexed { index, trip ->
@@ -61,7 +61,7 @@ class GetLeaderboardUseCase @Inject constructor(
             LeaderboardCategory.TURNS -> trips
                 .filter { it.cornerCount > 0 }
                 .sortedWith(
-                    compareByDescending<TripEntity> { it.cornerCount }
+                    compareByDescending<Trip> { it.cornerCount }
                         .thenByDescending { it.startTime }
                 )
                 .mapIndexed { index, trip ->
@@ -79,7 +79,7 @@ class GetLeaderboardUseCase @Inject constructor(
                 }
                 .filter { (_, score) -> score > 0 }
                 .sortedWith(
-                    compareByDescending<Pair<TripEntity, Double>> { it.second }
+                    compareByDescending<Pair<Trip, Double>> { it.second }
                         .thenByDescending { it.first.startTime }
                 )
                 .mapIndexed { index, (trip, score) ->
@@ -93,7 +93,7 @@ class GetLeaderboardUseCase @Inject constructor(
         return ranked
     }
 
-    private fun TripEntity.toEntry(
+    private fun Trip.toEntry(
         rank: Int,
         valueLabel: String,
         rawValue: Float

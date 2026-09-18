@@ -1,8 +1,9 @@
 package com.odys.mototriptracker.data.backend
 
-import com.odys.mototriptracker.data.checkpoint.RoutePointEntity
-import com.odys.mototriptracker.data.trip.TripEntity
-import com.odys.mototriptracker.data.trip.TripRepository
+import com.odys.mototriptracker.domain.TripCloudUpload
+import com.odys.mototriptracker.domain.TripRepository
+import com.odys.mototriptracker.domain.model.RoutePoint
+import com.odys.mototriptracker.domain.model.Trip
 import com.odys.mototriptracker.util.AppLogger
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -26,7 +27,7 @@ class TripCloudUploader @Inject constructor(
     private val tripRepository: TripRepository,
     private val userIdStore: BackendUserIdStore,
     private val backendSettings: BackendSettingsStore,
-) {
+) : TripCloudUpload {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val client = OkHttpClient.Builder()
         .connectTimeout(15, TimeUnit.SECONDS)
@@ -34,7 +35,7 @@ class TripCloudUploader @Inject constructor(
         .writeTimeout(60, TimeUnit.SECONDS)
         .build()
 
-    fun enqueueUpload(localTripId: Long) {
+    override fun enqueueUpload(localTripId: Long) {
         if (!backendSettings.isEnabled) {
             AppLogger.d(AppLogger.Category.APP, "Cloud upload skipped — backend URL not set")
             return
@@ -45,7 +46,7 @@ class TripCloudUploader @Inject constructor(
     }
 
     /** Blocking upload for manual retry from the summary screen. */
-    suspend fun uploadNow(localTripId: Long) {
+    override suspend fun uploadNow(localTripId: Long) {
         if (!backendSettings.isEnabled) {
             error("Backend URL not configured")
         }
@@ -83,8 +84,8 @@ class TripCloudUploader @Inject constructor(
     }
 
     private fun buildPayload(
-        trip: TripEntity,
-        points: List<RoutePointEntity>,
+        trip: Trip,
+        points: List<RoutePoint>,
         userId: String,
     ): JSONObject {
         val routePoints = JSONArray()

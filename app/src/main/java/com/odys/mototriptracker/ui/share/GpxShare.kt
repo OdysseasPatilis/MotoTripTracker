@@ -3,16 +3,16 @@ package com.odys.mototriptracker.ui.share
 import android.content.Context
 import android.content.Intent
 import androidx.core.content.FileProvider
-import com.odys.mototriptracker.data.checkpoint.RoutePointEntity
+import com.odys.mototriptracker.domain.model.RoutePoint
 import com.odys.mototriptracker.data.export.GpxExporter
-import com.odys.mototriptracker.data.export.displayTitle
-import com.odys.mototriptracker.data.trip.TripEntity
+import com.odys.mototriptracker.domain.model.displayTitle
+import com.odys.mototriptracker.domain.model.Trip
 import com.odys.mototriptracker.util.AppLogger
 import java.io.File
 
 object GpxShare {
 
-    fun share(context: Context, trip: TripEntity, points: List<RoutePointEntity>) {
+    fun share(context: Context, trip: Trip, points: List<RoutePoint>) {
         try {
             val gpx = GpxExporter.build(trip, points)
             val cacheDir = File(context.cacheDir, "share").apply { mkdirs() }

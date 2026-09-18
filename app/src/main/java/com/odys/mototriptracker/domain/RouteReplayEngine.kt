@@ -1,6 +1,6 @@
 package com.odys.mototriptracker.domain
 
-import com.odys.mototriptracker.data.checkpoint.RoutePointEntity
+import com.odys.mototriptracker.domain.model.RoutePoint
 
 data class RouteReplayFrame(
     val latitude: Double,
@@ -13,7 +13,7 @@ data class RouteReplayFrame(
 
 /** Time-based route replay from persisted route points (timestamps in ms). */
 class RouteReplayEngine(
-    private val points: List<RoutePointEntity>
+    private val points: List<RoutePoint>
 ) {
     val isValid: Boolean get() = points.size >= 2
 

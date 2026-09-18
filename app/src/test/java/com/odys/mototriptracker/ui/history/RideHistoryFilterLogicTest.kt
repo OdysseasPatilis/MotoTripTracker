@@ -1,6 +1,6 @@
 package com.odys.mototriptracker.ui.history
 
-import com.odys.mototriptracker.data.trip.TripEntity
+import com.odys.mototriptracker.domain.model.Trip
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -13,7 +13,7 @@ class RideHistoryFilterLogicTest {
         startTime: Long,
         favorite: Boolean = false,
         title: String = "Ride $id",
-    ) = TripEntity(
+    ) = Trip(
         id = id,
         startTime = startTime,
         endTime = startTime + 3_600_000,

@@ -40,8 +40,8 @@ import com.google.android.gms.maps.CameraUpdateFactory
 import com.google.android.gms.maps.model.LatLng
 import com.google.android.gms.maps.model.LatLngBounds
 import com.google.maps.android.compose.rememberCameraPositionState
-import com.odys.mototriptracker.data.checkpoint.RoutePointEntity
-import com.odys.mototriptracker.data.trip.TripEntity
+import com.odys.mototriptracker.domain.model.RoutePoint
+import com.odys.mototriptracker.domain.model.Trip
 import com.odys.mototriptracker.domain.RouteReplayEngine
 import com.odys.mototriptracker.ui.route.RouteReplayPanel
 import com.odys.mototriptracker.ui.theme.LocalAppPalette
@@ -52,9 +52,9 @@ import kotlinx.coroutines.launch
 // ── Screen ────────────────────────────────────────────────────────────────────
 @Composable
 fun FullRouteScreenGMaps(
-    summary: TripEntity,
+    summary: Trip,
     ridePoints: List<RidePoint>,
-    routePointEntities: List<RoutePointEntity> = emptyList(),
+    routePoints: List<RoutePoint> = emptyList(),
     waypoints: List<Waypoint>,
     usedPolylineFallback: Boolean = false,
     onBack: () -> Unit = {},
@@ -68,13 +68,13 @@ fun FullRouteScreenGMaps(
     val coroutineScope = rememberCoroutineScope()
     var replayElapsed by remember { mutableDoubleStateOf(0.0) }
     var isReplayPlaying by remember { mutableStateOf(false) }
-    val replayEngine = remember(routePointEntities) { RouteReplayEngine(routePointEntities) }
-    val replayFrame = remember(replayElapsed, routePointEntities) { replayEngine.frame(replayElapsed) }
+    val replayEngine = remember(routePoints) { RouteReplayEngine(routePoints) }
+    val replayFrame = remember(replayElapsed, routePoints) { replayEngine.frame(replayElapsed) }
     val replayTrail = remember(replayFrame) {
         replayFrame?.let { replayEngine.trailCoordinates(it) }.orEmpty()
     }
-    val replayRemaining = remember(replayFrame, routePointEntities) {
-        replayFrame?.let { remainingReplayCoordinates(routePointEntities, it) }.orEmpty()
+    val replayRemaining = remember(replayFrame, routePoints) {
+        replayFrame?.let { remainingReplayCoordinates(routePoints, it) }.orEmpty()
     }
     val isReplayActive = isReplayPlaying || replayElapsed > 0.0
     val replayMarkerLatLng = replayFrame?.let { LatLng(it.latitude, it.longitude) }
@@ -132,7 +132,7 @@ fun FullRouteScreenGMaps(
         )
         Spacer(Modifier.height(8.dp))
         RouteReplayPanel(
-            points = routePointEntities,
+            points = routePoints,
             palette = palette,
             onReplayPosition = { replayElapsed = it },
             onReplayPlayingChanged = { isReplayPlaying = it },

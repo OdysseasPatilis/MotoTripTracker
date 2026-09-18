@@ -1,7 +1,7 @@
 package com.odys.mototriptracker.ui.history
 
-import com.odys.mototriptracker.data.export.displayTitle
-import com.odys.mototriptracker.data.trip.TripEntity
+import com.odys.mototriptracker.domain.model.displayTitle
+import com.odys.mototriptracker.domain.model.Trip
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
@@ -11,12 +11,12 @@ import java.util.Locale
 object RideHistoryFilterLogic {
 
     fun filterRides(
-        rides: List<TripEntity>,
+        rides: List<Trip>,
         tab: RideHistoryTab,
         query: String,
         filters: RideHistoryFilters,
         now: Calendar = Calendar.getInstance(),
-    ): List<TripEntity> {
+    ): List<Trip> {
         val scoped = when (tab) {
             RideHistoryTab.ALL -> rides
             RideHistoryTab.FAVORITES -> rides.filter { it.isFavorite }
@@ -28,7 +28,7 @@ object RideHistoryFilterLogic {
     }
 
     fun matchesDateFilter(
-        ride: TripEntity,
+        ride: Trip,
         filters: RideHistoryFilters,
         now: Calendar = Calendar.getInstance(),
     ): Boolean {
@@ -37,7 +37,7 @@ object RideHistoryFilterLogic {
         return time in range.first..range.second
     }
 
-    fun matchesQuery(ride: TripEntity, query: String): Boolean {
+    fun matchesQuery(ride: Trip, query: String): Boolean {
         val title = ride.displayTitle().lowercase(Locale.getDefault())
         val start = formatSearchDate(ride.startTime)
         val end = formatSearchDate(ride.endTime)

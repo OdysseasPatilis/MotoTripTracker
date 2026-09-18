@@ -34,7 +34,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.odys.mototriptracker.data.checkpoint.RoutePointEntity
+import com.odys.mototriptracker.domain.model.RoutePoint
 import com.odys.mototriptracker.domain.RouteReplayEngine
 import com.odys.mototriptracker.ui.theme.AppPalette
 import kotlinx.coroutines.delay
@@ -42,7 +42,7 @@ import java.util.Locale
 
 @Composable
 fun RouteReplayPanel(
-    points: List<RoutePointEntity>,
+    points: List<RoutePoint>,
     palette: AppPalette,
     onReplayPosition: (Double) -> Unit,
     modifier: Modifier = Modifier,

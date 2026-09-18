@@ -11,7 +11,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import com.odys.mototriptracker.data.trip.TripEntity
+import com.odys.mototriptracker.domain.model.Trip
 import com.odys.mototriptracker.domain.RideMoments
 import com.odys.mototriptracker.ui.summary.CloudUploadStatus
 import com.odys.mototriptracker.ui.theme.LocalAppPalette
@@ -19,7 +19,7 @@ import java.util.Locale
 
 @Composable
 fun RideSummaryScreenUpdate(
-    summary: TripEntity,
+    summary: Trip,
     moments: RideMoments = RideMoments(emptyList()),
     backendUrl: String = "",
     uploadStatus: CloudUploadStatus = CloudUploadStatus.Idle,

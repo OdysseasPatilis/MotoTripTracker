@@ -1,6 +1,6 @@
 package com.odys.mototriptracker.ui.history
 
-import com.odys.mototriptracker.data.trip.TripEntity
+import com.odys.mototriptracker.domain.model.Trip
 
 enum class RideHistoryTab {
     ALL,
@@ -28,8 +28,8 @@ data class RideHistoryFilters(
 }
 
 data class RideHistoryUiState(
-    val allRides: List<TripEntity> = emptyList(),
-    val visibleRides: List<TripEntity> = emptyList(),
+    val allRides: List<Trip> = emptyList(),
+    val visibleRides: List<Trip> = emptyList(),
     val selectedTab: RideHistoryTab = RideHistoryTab.ALL,
     val searchQuery: String = "",
     val filters: RideHistoryFilters = RideHistoryFilters(),

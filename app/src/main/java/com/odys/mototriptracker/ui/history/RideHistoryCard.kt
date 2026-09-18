@@ -29,8 +29,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.odys.mototriptracker.data.export.displayTitle
-import com.odys.mototriptracker.data.trip.TripEntity
+import com.odys.mototriptracker.domain.model.displayTitle
+import com.odys.mototriptracker.domain.model.Trip
 import com.odys.mototriptracker.ui.theme.AppPalette
 import com.odys.mototriptracker.ui.theme.LocalAppPalette
 import java.text.SimpleDateFormat
@@ -41,7 +41,7 @@ import com.odys.mototriptracker.ui.components.formatSecondsToTime
 
 internal sealed class HistoryListItem {
     data class DayHeader(val label: String, val key: String) : HistoryListItem()
-    data class Ride(val trip: TripEntity) : HistoryListItem()
+    data class Ride(val trip: Trip) : HistoryListItem()
 }
 
 @Composable
@@ -74,7 +74,7 @@ internal fun DayDivider(
 
 @Composable
 fun RideHistoryCard(
-    ride: TripEntity,
+    ride: Trip,
     onClick: () -> Unit,
     onToggleFavorite: () -> Unit = {},
     palette: AppPalette = LocalAppPalette.current
@@ -156,7 +156,7 @@ fun RideHistoryCard(
     }
 }
 
-internal fun buildHistoryListItems(rides: List<TripEntity>): List<HistoryListItem> {
+internal fun buildHistoryListItems(rides: List<Trip>): List<HistoryListItem> {
     if (rides.isEmpty()) return emptyList()
 
     val items = mutableListOf<HistoryListItem>()

@@ -9,7 +9,7 @@ import androidx.compose.material.icons.filled.Terrain
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import com.google.android.gms.maps.model.LatLng
-import com.odys.mototriptracker.data.checkpoint.RoutePointEntity
+import com.odys.mototriptracker.domain.model.RoutePoint
 import com.odys.mototriptracker.domain.RouteCoordinate
 import com.odys.mototriptracker.domain.RouteReplayFrame
 
@@ -129,7 +129,7 @@ internal fun buildColoredSegments(
 }
 
 internal fun remainingReplayCoordinates(
-    points: List<RoutePointEntity>,
+    points: List<RoutePoint>,
     frame: RouteReplayFrame
 ): List<RouteCoordinate> {
     val remainingStart = minOf(frame.segmentIndex + 1, points.size - 1)

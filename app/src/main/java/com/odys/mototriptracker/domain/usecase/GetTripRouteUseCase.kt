@@ -1,26 +1,25 @@
 package com.odys.mototriptracker.domain.usecase
 
-import android.content.Context
-import com.odys.mototriptracker.data.checkpoint.RoutePointEntity
-import com.odys.mototriptracker.data.trip.RoutePolylineFallback
-import com.odys.mototriptracker.data.trip.TripEntity
-import com.odys.mototriptracker.data.trip.TripRepository
-import com.odys.mototriptracker.data.waypoint.WaypointReverseGeocoder
+import com.odys.mototriptracker.domain.RoutePolylineReconstructor
+import com.odys.mototriptracker.domain.TripRepository
+import com.odys.mototriptracker.domain.WaypointRoadNameResolver
+import com.odys.mototriptracker.domain.model.RoutePoint
+import com.odys.mototriptracker.domain.model.Trip
 import com.odys.mototriptracker.util.AppLogger
-import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 
 data class TripRouteDetails(
-    val trip: TripEntity,
-    val routePoints: List<RoutePointEntity>,
-    val waypoints: List<RoutePointEntity>,
-    /** True when the trail was rebuilt from [TripEntity.encodedRoutePolyline]. */
+    val trip: Trip,
+    val routePoints: List<RoutePoint>,
+    val waypoints: List<RoutePoint>,
+    /** True when the trail was rebuilt from [Trip.encodedRoutePolyline]. */
     val usedPolylineFallback: Boolean = false,
 )
 
 class GetTripRouteUseCase @Inject constructor(
     private val tripRepository: TripRepository,
-    @param:ApplicationContext private val context: Context,
+    private val polylineReconstructor: RoutePolylineReconstructor,
+    private val roadNameResolver: WaypointRoadNameResolver,
 ) {
     operator fun invoke(tripId: Long): TripRouteDetails? {
         val trip = tripRepository.getTrip(tripId) ?: return null
@@ -30,7 +29,7 @@ class GetTripRouteUseCase @Inject constructor(
         // Summary can show a route from the encoded polyline even when the
         // ObjectBox point query returns nothing (seen after long background rides).
         if (points.size < 2) {
-            val reconstructed = RoutePolylineFallback.reconstructPoints(
+            val reconstructed = polylineReconstructor.reconstructPoints(
                 encoded = trip.encodedRoutePolyline,
                 startTimeMs = trip.startTime,
                 endTimeMs = trip.endTime,
@@ -40,7 +39,7 @@ class GetTripRouteUseCase @Inject constructor(
                 usedFallback = true
                 AppLogger.w(
                     AppLogger.Category.PERSISTENCE,
-                    "FullRoute fallback to encoded polyline id=$tripId verts=${reconstructed.size}"
+                    "FullRoute fallback to encoded polyline id=$tripId verts=${reconstructed.size}",
                 )
             }
         }
@@ -64,32 +63,34 @@ class GetTripRouteUseCase @Inject constructor(
      * thread or Google Geocoding was denied. Refresh Departure / Arrival labels.
      */
     private fun enrichStartEndRoadNames(
-        waypoints: List<RoutePointEntity>,
-    ): List<RoutePointEntity> {
-        val updated = mutableListOf<RoutePointEntity>()
-        for (waypoint in waypoints) {
+        waypoints: List<RoutePoint>,
+    ): List<RoutePoint> {
+        val updated = mutableListOf<RoutePoint>()
+        val enriched = waypoints.map { waypoint ->
             val type = waypoint.waypointType
-            if (type != "START" && type != "END") continue
+            if (type != "START" && type != "END") return@map waypoint
             val subtitle = waypoint.waypointSubtitle
-            if (subtitle.isNotBlank() && !WaypointReverseGeocoder.looksLikeCoordinates(subtitle)) {
-                continue
+            if (subtitle.isNotBlank() && !roadNameResolver.looksLikeCoordinates(subtitle)) {
+                return@map waypoint
             }
-            val road = WaypointReverseGeocoder.resolveRoadName(
-                context,
+            val road = roadNameResolver.resolveRoadName(
                 waypoint.latitude,
                 waypoint.longitude,
             )
-            if (road.isBlank() || WaypointReverseGeocoder.looksLikeCoordinates(road)) continue
-            waypoint.waypointSubtitle = road
-            updated.add(waypoint)
+            if (road.isBlank() || roadNameResolver.looksLikeCoordinates(road)) {
+                return@map waypoint
+            }
+            val refreshed = waypoint.copy(waypointSubtitle = road)
+            updated.add(refreshed)
             AppLogger.i(
                 AppLogger.Category.WAYPOINT,
-                "Enriched ${type} waypoint id=${waypoint.id} → $road"
+                "Enriched ${type} waypoint id=${waypoint.id} → $road",
             )
+            refreshed
         }
         if (updated.isNotEmpty()) {
             tripRepository.updateWaypointSubtitles(updated)
         }
-        return waypoints
+        return enriched
     }
 }

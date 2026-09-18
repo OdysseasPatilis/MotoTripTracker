@@ -15,9 +15,9 @@ import androidx.core.graphics.createBitmap
 import androidx.core.graphics.withSave
 import com.google.android.gms.maps.model.LatLng
 import com.google.maps.android.PolyUtil
-import com.odys.mototriptracker.data.checkpoint.RoutePointEntity
-import com.odys.mototriptracker.data.export.displayTitle
-import com.odys.mototriptracker.data.trip.TripEntity
+import com.odys.mototriptracker.domain.model.RoutePoint
+import com.odys.mototriptracker.domain.model.displayTitle
+import com.odys.mototriptracker.domain.model.Trip
 import com.odys.mototriptracker.domain.RideMoment
 import com.odys.mototriptracker.domain.RideMoments
 import com.odys.mototriptracker.domain.TwistinessCalculator
@@ -40,9 +40,9 @@ object RideShareCard {
 
     fun share(
         context: Context,
-        trip: TripEntity,
+        trip: Trip,
         moments: RideMoments,
-        points: List<RoutePointEntity> = emptyList()
+        points: List<RoutePoint> = emptyList()
     ) {
         try {
             val bitmap = render(trip, moments, points)
@@ -71,15 +71,15 @@ object RideShareCard {
         }
     }
 
-    private fun buildShareText(trip: TripEntity): String {
+    private fun buildShareText(trip: Trip): String {
         val km = trip.distanceMeters / 1000f
         return "MotoTripTracker ride — ${String.format(Locale.US, "%.1f", km)} km · ${formatTimestampToDate(trip.startTime)}"
     }
 
     fun render(
-        trip: TripEntity,
+        trip: Trip,
         moments: RideMoments,
-        points: List<RoutePointEntity> = emptyList()
+        points: List<RoutePoint> = emptyList()
     ): Bitmap {
         val bitmap = createBitmap(WIDTH, HEIGHT)
         val canvas = Canvas(bitmap)
@@ -166,8 +166,8 @@ object RideShareCard {
     private fun drawRouteMap(
         canvas: Canvas,
         rect: RectF,
-        trip: TripEntity,
-        points: List<RoutePointEntity>
+        trip: Trip,
+        points: List<RoutePoint>
     ) {
         val coords = routeCoordinates(trip, points)
         val mapBg = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFF1C1C22.toInt() }
@@ -279,8 +279,8 @@ object RideShareCard {
     }
 
     private fun routeCoordinates(
-        trip: TripEntity,
-        points: List<RoutePointEntity>
+        trip: Trip,
+        points: List<RoutePoint>
     ): List<LatLng> {
         val encoded = trip.encodedRoutePolyline
         if (!encoded.isNullOrBlank()) {
@@ -326,7 +326,7 @@ object RideShareCard {
         }
     }
 
-    private fun drawStatsStrip(canvas: Canvas, rect: RectF, trip: TripEntity) {
+    private fun drawStatsStrip(canvas: Canvas, rect: RectF, trip: Trip) {
         val bg = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0x0FFFFFFF }
         canvas.drawRoundRect(rect, 20f, 20f, bg)
 

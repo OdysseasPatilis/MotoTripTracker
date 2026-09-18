@@ -34,8 +34,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.odys.mototriptracker.data.export.displayTitle
-import com.odys.mototriptracker.data.trip.TripEntity
+import com.odys.mototriptracker.domain.model.displayTitle
+import com.odys.mototriptracker.domain.model.Trip
 import com.odys.mototriptracker.ui.theme.AppPalette
 import com.odys.mototriptracker.ui.components.formatTimestampToDate
 
@@ -142,7 +142,7 @@ internal fun TopIconButton(
 
 // ── Date card ─────────────────────────────────────────────────────────────────
 @Composable
-internal fun DateCard(summary: TripEntity) {
+internal fun DateCard(summary: Trip) {
     Box(
         modifier = Modifier
             .padding(horizontal = 20.dp)

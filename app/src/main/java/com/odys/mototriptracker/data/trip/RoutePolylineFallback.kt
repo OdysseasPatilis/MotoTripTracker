@@ -2,10 +2,10 @@ package com.odys.mototriptracker.data.trip
 
 import com.google.android.gms.maps.model.LatLng
 import com.google.maps.android.PolyUtil
-import com.odys.mototriptracker.data.checkpoint.RoutePointEntity
+import com.odys.mototriptracker.domain.model.RoutePoint
 
 /**
- * Rebuilds display/replay points from [TripEntity.encodedRoutePolyline] when the
+ * Rebuilds display/replay points from [Trip.encodedRoutePolyline] when the
  * ObjectBox point query returns fewer than 2 rows — mirrors iOS FullRoute fallback
  * (seen after long background rides).
  */
@@ -15,7 +15,7 @@ object RoutePolylineFallback {
         encoded: String?,
         startTimeMs: Long,
         endTimeMs: Long,
-    ): List<RoutePointEntity> {
+    ): List<RoutePoint> {
         if (encoded.isNullOrBlank()) return emptyList()
         val decoded = runCatching { PolyUtil.decode(encoded) }.getOrNull().orEmpty()
         if (decoded.size < 2) return emptyList()
@@ -27,7 +27,7 @@ object RoutePolylineFallback {
         decoded: List<LatLng>,
         startTimeMs: Long,
         endTimeMs: Long,
-    ): List<RoutePointEntity> {
+    ): List<RoutePoint> {
         if (decoded.size < 2) return emptyList()
         val start = startTimeMs
         val end = if (endTimeMs > start) endTimeMs else start + (decoded.size - 1) * 1000L
@@ -38,7 +38,7 @@ object RoutePolylineFallback {
             } else {
                 start + span * index / (decoded.size - 1)
             }
-            RoutePointEntity(
+            RoutePoint(
                 latitude = latLng.latitude,
                 longitude = latLng.longitude,
                 altitude = 0.0,

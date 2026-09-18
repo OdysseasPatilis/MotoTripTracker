@@ -56,7 +56,7 @@ private val RouteCoral = Color(0xFFD85A30)
 @Composable
 fun MapPreviewCard(
     distance: String,
-    encodedPolyline: String?, // NEW: Pass the string from TripEntity
+    encodedPolyline: String?, // NEW: Pass the string from Trip
     onClick: () -> Unit
 ) {
     // 1. Decode the string back into GPS points (Only runs when the string changes)

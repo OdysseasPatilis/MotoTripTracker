@@ -18,7 +18,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.odys.mototriptracker.data.trip.TripEntity
+import com.odys.mototriptracker.domain.model.Trip
 import com.odys.mototriptracker.domain.TwistinessCalculator
 import com.odys.mototriptracker.ui.theme.AppPalette
 import java.util.Locale
@@ -26,7 +26,7 @@ import com.odys.mototriptracker.ui.components.formatSecondsToTime
 
 @Composable
 internal fun StatsGrid(
-    summary: TripEntity,
+    summary: Trip,
     palette: AppPalette
 ) {
     val totalTime = summary.movingTime + summary.stoppedTime

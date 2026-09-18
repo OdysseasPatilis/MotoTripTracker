@@ -23,7 +23,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.odys.mototriptracker.data.export.displayTitle
+import com.odys.mototriptracker.domain.model.displayTitle
 import com.odys.mototriptracker.ui.summary.RideSummaryScreenUpdate
 import com.odys.mototriptracker.ui.share.GpxShare
 import com.odys.mototriptracker.ui.share.RideShareCard
