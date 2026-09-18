@@ -10,7 +10,6 @@ import com.google.android.gms.location.LocationRequest
 import com.google.android.gms.location.LocationResult
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
-import com.odys.mototriptracker.domain.RideTimer
 import com.odys.mototriptracker.util.AppLogger
 import com.odys.mototriptracker.util.LogThrottle
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -30,8 +29,6 @@ class LocationRepository @Inject constructor(
 
     private val fusedLocation = LocationServices.getFusedLocationProviderClient(context)
 
-    val riderTimer = RideTimer()
-
     private val _lastLocation = MutableStateFlow<Location?>(null)
     /** Latest fix for dashboard GPS UI (idle / paused / tracking). */
     val lastLocation: StateFlow<Location?> = _lastLocation.asStateFlow()
@@ -39,7 +36,6 @@ class LocationRepository @Inject constructor(
     @SuppressLint("MissingPermission") // Handled in the Service / UI permission layer
     fun getLocationFlow(): Flow<Location> = callbackFlow {
 
-        riderTimer.start()
         AppLogger.i(AppLogger.Category.LOCATION, "requestLocationUpdates interval=1000ms (screen-off hardened)")
 
         // Dedicated looper so location delivery isn't starved when the main thread sleeps.

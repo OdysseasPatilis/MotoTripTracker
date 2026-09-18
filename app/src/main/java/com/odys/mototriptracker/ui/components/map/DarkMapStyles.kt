@@ -1,4 +1,4 @@
-package com.odys.mototriptracker.ui.dashboard
+package com.odys.mototriptracker.ui.components.map
 
 val DARK_MAP_STYLE_JSON = """
 [

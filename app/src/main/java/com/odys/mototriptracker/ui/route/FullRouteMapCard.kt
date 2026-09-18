@@ -1,4 +1,4 @@
-package com.odys.mototriptracker.ui.dashboard
+package com.odys.mototriptracker.ui.route
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -63,6 +63,7 @@ import com.google.maps.android.compose.MarkerState
 import com.google.maps.android.compose.Polyline
 import com.odys.mototriptracker.ui.theme.LocalThemeStore
 import com.odys.mototriptracker.ui.theme.ThemeMode
+import com.odys.mototriptracker.ui.components.map.DARK_MAP_STYLE_JSON
 
 // ── Top bar ───────────────────────────────────────────────────────────────────
 @Composable

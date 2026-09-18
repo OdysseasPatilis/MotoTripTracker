@@ -21,7 +21,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.odys.mototriptracker.ui.dashboard.RideTrackerScreen
+import com.odys.mototriptracker.ui.tracker.RideTrackerScreen
 import com.odys.mototriptracker.util.AppLogger
 
 @Composable

@@ -1,4 +1,4 @@
-package com.odys.mototriptracker.ui.dashboard
+package com.odys.mototriptracker.ui.tracker
 
 import android.app.Activity
 import android.content.BroadcastReceiver

@@ -4,8 +4,8 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.odys.mototriptracker.domain.usecase.GetTripRouteUseCase
-import com.odys.mototriptracker.ui.mapper.toRidePoint
-import com.odys.mototriptracker.ui.mapper.toWaypoint
+import com.odys.mototriptracker.ui.route.toRidePoint
+import com.odys.mototriptracker.ui.route.toWaypoint
 import com.odys.mototriptracker.ui.navigation.Routes
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers

@@ -1,4 +1,4 @@
-package com.odys.mototriptracker.ui.dashboard
+package com.odys.mototriptracker.ui.summary
 
 
 import androidx.compose.foundation.background
@@ -45,6 +45,7 @@ import com.google.maps.android.compose.Polyline
 import com.google.maps.android.compose.rememberCameraPositionState
 import com.odys.mototriptracker.ui.theme.LocalThemeStore
 import com.odys.mototriptracker.ui.theme.ThemeMode
+import com.odys.mototriptracker.ui.components.map.DARK_MAP_STYLE_JSON
 
 private val Mint = Color(0xFF5EFFC8)
 private val Blue = Color(0xFF5B9EF7)

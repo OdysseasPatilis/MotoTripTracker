@@ -12,7 +12,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.odys.mototriptracker.ui.dashboard.FullRouteScreenGMaps
+import com.odys.mototriptracker.ui.route.FullRouteScreenGMaps
 import com.odys.mototriptracker.ui.theme.LocalAppPalette
 
 @Composable

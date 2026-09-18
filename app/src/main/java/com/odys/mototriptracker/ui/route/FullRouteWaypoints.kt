@@ -1,4 +1,4 @@
-package com.odys.mototriptracker.ui.dashboard
+package com.odys.mototriptracker.ui.route
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -28,6 +28,7 @@ import androidx.compose.ui.unit.sp
 import com.google.android.gms.maps.model.LatLng
 import com.odys.mototriptracker.data.trip.TripEntity
 import com.odys.mototriptracker.ui.theme.AppPalette
+import com.odys.mototriptracker.ui.components.formatTimestampToDate
 
 // ── Waypoints ─────────────────────────────────────────────────────────────────
 @Composable

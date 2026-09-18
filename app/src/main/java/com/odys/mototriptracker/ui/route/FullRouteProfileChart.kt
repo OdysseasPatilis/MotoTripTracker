@@ -1,4 +1,4 @@
-package com.odys.mototriptracker.ui.dashboard
+package com.odys.mototriptracker.ui.route
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll

@@ -1,4 +1,4 @@
-package com.odys.mototriptracker.ui.dashboard
+package com.odys.mototriptracker.ui.route
 
 // ─────────────────────────────────────────────────────────────────────────────
 // build.gradle.kts (module level) — add:

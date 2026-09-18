@@ -1,10 +1,7 @@
-package com.odys.mototriptracker.ui.mapper
+package com.odys.mototriptracker.ui.route
 
 import com.google.android.gms.maps.model.LatLng
 import com.odys.mototriptracker.data.checkpoint.RoutePointEntity
-import com.odys.mototriptracker.ui.dashboard.RidePoint
-import com.odys.mototriptracker.ui.dashboard.Waypoint
-import com.odys.mototriptracker.ui.dashboard.WaypointType
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale

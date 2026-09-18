@@ -1,4 +1,4 @@
-package com.odys.mototriptracker.ui.dashboard
+package com.odys.mototriptracker.ui.tracker
 
 import android.app.Activity
 import android.view.WindowManager
@@ -144,6 +144,7 @@ import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import android.graphics.BlurMaskFilter
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
+import com.odys.mototriptracker.ui.components.formatSecondsToTime
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

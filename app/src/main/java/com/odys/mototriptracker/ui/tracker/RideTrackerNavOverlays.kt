@@ -1,6 +1,5 @@
-package com.odys.mototriptracker.ui.dashboard
+package com.odys.mototriptracker.ui.tracker
 
-import android.content.Intent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -17,19 +16,13 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.VolumeOff
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
-import androidx.compose.material.icons.filled.Business
-import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Flag
-import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Navigation
 import androidx.compose.material.icons.filled.NorthEast
 import androidx.compose.material.icons.filled.NorthWest
-import androidx.compose.material.icons.filled.Phone
-import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.Straight
 import androidx.compose.material.icons.filled.Sync
-import androidx.compose.material.icons.filled.Traffic
 import androidx.compose.material.icons.filled.TurnLeft
 import androidx.compose.material.icons.filled.TurnRight
 import androidx.compose.material.icons.filled.UTurnLeft
@@ -43,19 +36,14 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.core.net.toUri
-import com.odys.mototriptracker.data.camera.TrafficCameraAlert
-import com.odys.mototriptracker.data.camera.TrafficCameraKind
 import com.odys.mototriptracker.data.navigation.NavigationState
-import com.odys.mototriptracker.data.navigation.PickedMapPlace
 import com.odys.mototriptracker.ui.theme.AppPalette
 
 @Composable
@@ -192,207 +180,6 @@ internal fun RoutePreviewCard(
             }
         }
     }
-}
-
-@Composable
-internal fun MapPlaceGoCard(
-    place: PickedMapPlace,
-    palette: AppPalette,
-    onDismiss: () -> Unit,
-    onGo: () -> Unit,
-) {
-    val context = LocalContext.current
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(18.dp))
-            .background(palette.bgPanel.copy(alpha = 0.94f))
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        Row(
-            verticalAlignment = Alignment.Top,
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            Icon(
-                Icons.Filled.Place,
-                contentDescription = null,
-                tint = palette.neonBlue,
-                modifier = Modifier.size(28.dp)
-            )
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    place.name,
-                    color = palette.textPrimary,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 18.sp
-                )
-                place.category?.takeIf { it.isNotBlank() }?.let { category ->
-                    Text(
-                        category,
-                        color = palette.neonBlue,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        modifier = Modifier
-                            .padding(top = 4.dp)
-                            .clip(RoundedCornerShape(999.dp))
-                            .background(palette.neonBlue.copy(alpha = 0.14f))
-                            .padding(horizontal = 8.dp, vertical = 3.dp)
-                    )
-                }
-            }
-            IconButton(onClick = onDismiss, modifier = Modifier.size(28.dp)) {
-                Icon(
-                    Icons.Filled.Close,
-                    contentDescription = "Dismiss place",
-                    tint = palette.textSecondary,
-                    modifier = Modifier.size(18.dp)
-                )
-            }
-        }
-
-        if (place.address.isNotBlank()) {
-            MapPlaceDetailRow(
-                icon = Icons.Filled.Business,
-                text = place.address,
-                palette = palette,
-            )
-        }
-        place.phone?.takeIf { it.isNotBlank() }?.let { phone ->
-            MapPlaceDetailRow(
-                icon = Icons.Filled.Phone,
-                text = phone,
-                palette = palette,
-                onClick = {
-                    val digits = phone.filter { it.isDigit() || it == '+' }
-                    context.startActivity(Intent(Intent.ACTION_DIAL, "tel:$digits".toUri()))
-                },
-            )
-        }
-        place.websiteHost?.takeIf { it.isNotBlank() }?.let { host ->
-            MapPlaceDetailRow(
-                icon = Icons.Filled.Language,
-                text = host,
-                palette = palette,
-                onClick = {
-                    val url = place.websiteUrl ?: return@MapPlaceDetailRow
-                    context.startActivity(Intent(Intent.ACTION_VIEW, url.toUri()))
-                },
-            )
-        }
-
-        if (place.isResolving) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                CircularProgressIndicator(
-                    modifier = Modifier.size(16.dp),
-                    strokeWidth = 2.dp,
-                    color = palette.neonBlue
-                )
-                Text(
-                    "Loading place details…",
-                    color = palette.textSecondary,
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.SemiBold
-                )
-            }
-        }
-
-        Button(
-            onClick = onGo,
-            enabled = !place.isResolving,
-            modifier = Modifier.fillMaxWidth(),
-            colors = ButtonDefaults.buttonColors(containerColor = palette.neonGreen),
-            shape = RoundedCornerShape(12.dp)
-        ) {
-            Text("Go", color = palette.bgDeep, fontWeight = FontWeight.Bold)
-        }
-    }
-}
-
-@Composable
-internal fun MapPlaceDetailRow(
-    icon: ImageVector,
-    text: String,
-    palette: AppPalette,
-    onClick: (() -> Unit)? = null,
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier),
-        verticalAlignment = Alignment.Top,
-        horizontalArrangement = Arrangement.spacedBy(10.dp)
-    ) {
-        Icon(
-            icon,
-            contentDescription = null,
-            tint = palette.textSecondary,
-            modifier = Modifier.size(18.dp)
-        )
-        Text(
-            text,
-            color = palette.textPrimary,
-            fontSize = 13.sp,
-            modifier = Modifier.weight(1f)
-        )
-    }
-}
-
-@Composable
-internal fun TrafficCameraBanner(
-    alert: TrafficCameraAlert,
-    palette: AppPalette,
-    modifier: Modifier = Modifier,
-) {
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
-            .background(palette.bgPanel.copy(alpha = 0.92f))
-            .padding(horizontal = 12.dp, vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp)
-    ) {
-        Icon(
-            imageVector = if (alert.camera.kind == TrafficCameraKind.Speed) {
-                Icons.Filled.CameraAlt
-            } else {
-                Icons.Filled.Traffic
-            },
-            contentDescription = null,
-            tint = palette.routeAmber,
-            modifier = Modifier.size(18.dp)
-        )
-        Text(
-            text = alert.bannerText,
-            color = palette.textPrimary,
-            fontSize = 12.sp,
-            fontWeight = FontWeight.SemiBold,
-            modifier = Modifier.weight(1f)
-        )
-    }
-}
-
-@Composable
-internal fun TrafficCameraStatusBanner(
-    text: String,
-    palette: AppPalette,
-    modifier: Modifier = Modifier,
-) {
-    Text(
-        text = text,
-        color = palette.textPrimary,
-        fontSize = 12.sp,
-        fontWeight = FontWeight.SemiBold,
-        modifier = modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
-            .background(palette.bgPanel.copy(alpha = 0.92f))
-            .padding(horizontal = 12.dp, vertical = 8.dp),
-    )
 }
 
 @Composable

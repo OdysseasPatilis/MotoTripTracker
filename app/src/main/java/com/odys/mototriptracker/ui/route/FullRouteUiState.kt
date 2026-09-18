@@ -2,8 +2,7 @@ package com.odys.mototriptracker.ui.route
 
 import com.odys.mototriptracker.data.checkpoint.RoutePointEntity
 import com.odys.mototriptracker.data.trip.TripEntity
-import com.odys.mototriptracker.ui.dashboard.RidePoint
-import com.odys.mototriptracker.ui.dashboard.Waypoint
+import com.odys.mototriptracker.ui.route.Waypoint
 
 data class FullRouteUiState(
     val trip: TripEntity? = null,

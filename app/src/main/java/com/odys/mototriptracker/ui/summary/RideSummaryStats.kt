@@ -1,4 +1,4 @@
-package com.odys.mototriptracker.ui.dashboard
+package com.odys.mototriptracker.ui.summary
 
 
 import androidx.compose.foundation.background
@@ -22,6 +22,7 @@ import com.odys.mototriptracker.data.trip.TripEntity
 import com.odys.mototriptracker.domain.TwistinessCalculator
 import com.odys.mototriptracker.ui.theme.AppPalette
 import java.util.Locale
+import com.odys.mototriptracker.ui.components.formatSecondsToTime
 
 @Composable
 internal fun StatsGrid(

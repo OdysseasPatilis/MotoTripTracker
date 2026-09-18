@@ -9,7 +9,8 @@ import kotlin.math.abs
  */
 class CornerDetector {
     private var lastBearing: Float? = null
-    private var lastLocation: Location? = null
+    private var lastLat: Double? = null
+    private var lastLng: Double? = null
     private var accumulatedTurnDeg = 0f
     private var inCorner = false
 
@@ -20,28 +21,46 @@ class CornerDetector {
 
     fun reset() {
         lastBearing = null
-        lastLocation = null
+        lastLat = null
+        lastLng = null
         accumulatedTurnDeg = 0f
         inCorner = false
         cornerCount = 0
         maxEstimatedLateralG = 0f
     }
 
-    fun onLocation(location: Location, speedMps: Float): Boolean {
-        if (!location.hasBearing() || speedMps < MIN_SPEED_MPS) {
+    fun onLocation(location: Location, speedMps: Float): Boolean =
+        onSample(
+            latitude = location.latitude,
+            longitude = location.longitude,
+            bearingDeg = location.bearing.takeIf { location.hasBearing() },
+            speedMps = speedMps,
+        )
+
+    /** Pure entry point for unit tests (no Android Location required). */
+    fun onSample(
+        latitude: Double,
+        longitude: Double,
+        bearingDeg: Float?,
+        speedMps: Float,
+    ): Boolean {
+        if (bearingDeg == null || speedMps < MIN_SPEED_MPS) {
             finishCornerIfNeeded()
             lastBearing = null
-            lastLocation = location
+            lastLat = latitude
+            lastLng = longitude
             return false
         }
 
-        val bearing = location.bearing
+        val bearing = bearingDeg
         val prevBearing = lastBearing
-        val prev = lastLocation
+        val prevLat = lastLat
+        val prevLng = lastLng
         lastBearing = bearing
-        lastLocation = location
+        lastLat = latitude
+        lastLng = longitude
 
-        if (prevBearing == null || prev == null) return false
+        if (prevBearing == null || prevLat == null || prevLng == null) return false
 
         val delta = shortestAngleDeg(bearing - prevBearing)
         val absDelta = abs(delta)
@@ -59,7 +78,7 @@ class CornerDetector {
         accumulatedTurnDeg += delta
         inCorner = abs(accumulatedTurnDeg) >= CORNER_START_DEG
 
-        val distance = prev.distanceTo(location)
+        val distance = Geo.distanceMeters(prevLat, prevLng, latitude, longitude).toFloat()
         if (distance > 1f && absDelta > 0.5f) {
             val turnRad = Math.toRadians(absDelta.toDouble())
             val radius = distance / turnRad

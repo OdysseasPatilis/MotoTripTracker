@@ -1,4 +1,4 @@
-package com.odys.mototriptracker.ui.dashboard
+package com.odys.mototriptracker.ui.history
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -37,6 +37,7 @@ import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
 import java.util.Locale
+import com.odys.mototriptracker.ui.components.formatSecondsToTime
 
 internal sealed class HistoryListItem {
     data class DayHeader(val label: String, val key: String) : HistoryListItem()

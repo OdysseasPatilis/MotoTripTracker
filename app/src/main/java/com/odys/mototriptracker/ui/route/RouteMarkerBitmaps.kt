@@ -1,4 +1,4 @@
-package com.odys.mototriptracker.ui.dashboard
+package com.odys.mototriptracker.ui.route
 
 import android.graphics.Bitmap
 import android.graphics.Canvas as AndroidCanvas

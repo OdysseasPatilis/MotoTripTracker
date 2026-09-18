@@ -1,4 +1,4 @@
-package com.odys.mototriptracker.ui.dashboard
+package com.odys.mototriptracker.ui.summary
 
 
 import androidx.compose.foundation.background
@@ -37,6 +37,7 @@ import androidx.compose.ui.unit.sp
 import com.odys.mototriptracker.data.export.displayTitle
 import com.odys.mototriptracker.data.trip.TripEntity
 import com.odys.mototriptracker.ui.theme.AppPalette
+import com.odys.mototriptracker.ui.components.formatTimestampToDate
 
 private val Mint = Color(0xFF5EFFC8)
 

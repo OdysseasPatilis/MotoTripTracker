@@ -53,7 +53,7 @@ import com.odys.mototriptracker.data.camera.TrafficCameraKind
 import com.odys.mototriptracker.data.navigation.NavRouteOption
 import com.odys.mototriptracker.domain.RideFollowCameraPolicy
 import com.odys.mototriptracker.domain.RouteCoordinate
-import com.odys.mototriptracker.ui.dashboard.LIVE_DARK_MAP_STYLE_JSON
+import com.odys.mototriptracker.ui.components.map.LIVE_DARK_MAP_STYLE_JSON
 import com.odys.mototriptracker.ui.theme.AppPalette
 import com.odys.mototriptracker.ui.theme.LocalAppPalette
 import com.odys.mototriptracker.ui.theme.LocalThemeStore

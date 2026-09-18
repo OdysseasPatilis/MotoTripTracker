@@ -21,7 +21,7 @@ import com.odys.mototriptracker.data.trip.TripEntity
 import com.odys.mototriptracker.domain.RideMoment
 import com.odys.mototriptracker.domain.RideMoments
 import com.odys.mototriptracker.domain.TwistinessCalculator
-import com.odys.mototriptracker.ui.dashboard.formatTimestampToDate
+import com.odys.mototriptracker.ui.components.formatTimestampToDate
 import com.odys.mototriptracker.util.AppLogger
 import java.io.File
 import java.io.FileOutputStream
