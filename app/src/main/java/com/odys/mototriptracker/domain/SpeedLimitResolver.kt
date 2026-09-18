@@ -1,7 +1,5 @@
 package com.odys.mototriptracker.domain
 
-import com.odys.mototriptracker.data.road.SpeedLimitCacheStore
-import com.odys.mototriptracker.data.road.SpeedLimitRegionPackStore
 import com.odys.mototriptracker.util.AppLogger
 import com.odys.mototriptracker.util.LogThrottle
 import kotlinx.coroutines.CoroutineScope
@@ -14,8 +12,8 @@ import javax.inject.Singleton
 class SpeedLimitResolver @Inject constructor(
     private val speedLimitProvider: SpeedLimitProvider,
     private val tripManager: TripManager,
-    private val cacheStore: SpeedLimitCacheStore,
-    private val regionPackStore: SpeedLimitRegionPackStore
+    private val cacheStore: SpeedLimitCache,
+    private val regionPackStore: SpeedLimitRegionPacks
 ) {
     private val cache: MutableMap<String, Int?> = mutableMapOf<String, Int?>().apply {
         putAll(cacheStore.load())
@@ -30,7 +28,7 @@ class SpeedLimitResolver @Inject constructor(
     init {
         AppLogger.i(
             AppLogger.Category.SPEED_LIMIT,
-            "Loaded ${cache.size} cached speed-limit cells; ${regionPackStore.packs.size} region pack(s)"
+            "Loaded ${cache.size} cached speed-limit cells; ${regionPackStore.packCount} region pack(s)"
         )
     }
 
@@ -58,14 +56,14 @@ class SpeedLimitResolver @Inject constructor(
     ) {
         // Bundled city packs first (offline). Empty cells and implausible hits fall through.
         if (regionPackStore.isInsideBundledRegion(latitude, longitude)) {
-            val hit = regionPackStore.limit(latitude, longitude)
+            val hit = regionPackStore.lookup(latitude, longitude)
             if (hit != null) {
-                val (pack, kmh) = hit
+                val kmh = hit.limitKmh
                 tripManager.updateRoadSpeedLimit(kmh)
-                if (LogThrottle.shouldLog("speedLimit.pack.${pack.id}", 20_000L)) {
+                if (LogThrottle.shouldLog("speedLimit.pack.${hit.packId}", 20_000L)) {
                     AppLogger.d(
                         AppLogger.Category.SPEED_LIMIT,
-                        "Region pack ${pack.id} → $kmh km/h"
+                        "Region pack ${hit.packId} → $kmh km/h"
                     )
                 }
                 if (SpeedLimitLogic.limitLooksPlausible(kmh, speedMps)) {

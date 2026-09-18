@@ -3,6 +3,7 @@ package com.odys.mototriptracker.data.trip
 import android.content.Context
 import android.content.Intent
 import androidx.core.content.ContextCompat
+import com.odys.mototriptracker.domain.TripServiceController
 import com.odys.mototriptracker.service.TripForegroundService
 import com.odys.mototriptracker.util.AppLogger
 import dagger.hilt.android.qualifiers.ApplicationContext

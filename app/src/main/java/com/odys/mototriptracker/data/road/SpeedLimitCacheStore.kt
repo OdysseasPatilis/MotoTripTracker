@@ -2,6 +2,7 @@ package com.odys.mototriptracker.data.road
 
 import android.content.Context
 import androidx.core.content.edit
+import com.odys.mototriptracker.domain.SpeedLimitCache
 import dagger.hilt.android.qualifiers.ApplicationContext
 import org.json.JSONObject
 import javax.inject.Inject
@@ -13,10 +14,10 @@ import javax.inject.Singleton
 @Singleton
 class SpeedLimitCacheStore @Inject constructor(
     @ApplicationContext context: Context
-) {
+) : SpeedLimitCache {
     private val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
-    fun load(): MutableMap<String, Int> {
+    override fun load(): MutableMap<String, Int> {
         val raw = prefs.getString(KEY_CACHE, null) ?: return mutableMapOf()
         return runCatching {
             val json = JSONObject(raw)
@@ -29,7 +30,7 @@ class SpeedLimitCacheStore @Inject constructor(
         }.getOrDefault(mutableMapOf())
     }
 
-    fun save(cache: Map<String, Int?>) {
+    override fun save(cache: Map<String, Int?>) {
         val json = JSONObject()
         cache.entries
             .asSequence()

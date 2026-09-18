@@ -1,6 +1,8 @@
 package com.odys.mototriptracker.data.road
 
 import android.content.Context
+import com.odys.mototriptracker.domain.RegionPackHit
+import com.odys.mototriptracker.domain.SpeedLimitRegionPacks
 import com.odys.mototriptracker.util.AppLogger
 import dagger.hilt.android.qualifiers.ApplicationContext
 import org.json.JSONObject
@@ -45,14 +47,25 @@ data class SpeedLimitRegionPack(
 @Singleton
 class SpeedLimitRegionPackStore @Inject constructor(
     @ApplicationContext context: Context
-) {
+) : SpeedLimitRegionPacks {
     private val context = context
     val packs: List<SpeedLimitRegionPack> by lazy {
         listOfNotNull(loadBundled("athens_speed_limits"))
     }
 
-    fun isInsideBundledRegion(latitude: Double, longitude: Double): Boolean =
+    override val packCount: Int get() = packs.size
+
+    override fun isInsideBundledRegion(latitude: Double, longitude: Double): Boolean =
         packs.any { it.contains(latitude, longitude) }
+
+    override fun lookup(latitude: Double, longitude: Double): RegionPackHit? {
+        for (pack in packs) {
+            if (!pack.contains(latitude, longitude)) continue
+            val kmh = pack.limit(latitude, longitude) ?: continue
+            return RegionPackHit(packId = pack.id, limitKmh = kmh)
+        }
+        return null
+    }
 
     fun limit(latitude: Double, longitude: Double): Pair<SpeedLimitRegionPack, Int>? {
         for (pack in packs) {
