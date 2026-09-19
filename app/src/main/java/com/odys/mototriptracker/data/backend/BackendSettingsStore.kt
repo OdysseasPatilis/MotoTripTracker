@@ -2,6 +2,7 @@ package com.odys.mototriptracker.data.backend
 
 import android.content.Context
 import com.odys.mototriptracker.BuildConfig
+import com.odys.mototriptracker.domain.CloudBackendSettings
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -13,20 +14,20 @@ import javax.inject.Singleton
 @Singleton
 class BackendSettingsStore @Inject constructor(
     @ApplicationContext context: Context,
-) {
+) : CloudBackendSettings {
     private val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
-    val baseUrl: String
+    override val baseUrl: String
         get() {
             val fromPrefs = prefs.getString(KEY_BASE_URL, null)
             if (!fromPrefs.isNullOrBlank()) return normalize(fromPrefs)
             return normalize(BuildConfig.BACKEND_BASE_URL)
         }
 
-    val isEnabled: Boolean
+    override val isEnabled: Boolean
         get() = baseUrl.isNotBlank()
 
-    fun setBaseUrl(raw: String) {
+    override fun setBaseUrl(raw: String) {
         prefs.edit().putString(KEY_BASE_URL, normalize(raw)).apply()
     }
 

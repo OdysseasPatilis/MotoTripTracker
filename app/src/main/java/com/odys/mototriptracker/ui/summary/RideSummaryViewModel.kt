@@ -3,11 +3,11 @@ package com.odys.mototriptracker.ui.summary
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.odys.mototriptracker.data.backend.BackendSettingsStore
-import com.odys.mototriptracker.data.backend.BackendUserIdStore
 import com.odys.mototriptracker.domain.RideMomentsCalculator
 import com.odys.mototriptracker.domain.usecase.DeleteTripUseCase
 import com.odys.mototriptracker.domain.usecase.GetTripRouteUseCase
+import com.odys.mototriptracker.domain.usecase.ObserveCloudBackendUseCase
+import com.odys.mototriptracker.domain.usecase.SaveCloudBackendSettingsUseCase
 import com.odys.mototriptracker.domain.usecase.ToggleFavoriteUseCase
 import com.odys.mototriptracker.domain.usecase.UpdateTripTitleUseCase
 import com.odys.mototriptracker.domain.usecase.UploadTripToCloudUseCase
@@ -28,8 +28,8 @@ class RideSummaryViewModel @Inject constructor(
     private val updateTripTitleUseCase: UpdateTripTitleUseCase,
     private val toggleFavoriteUseCase: ToggleFavoriteUseCase,
     private val uploadTripToCloudUseCase: UploadTripToCloudUseCase,
-    private val backendSettings: BackendSettingsStore,
-    private val userIdStore: BackendUserIdStore,
+    private val observeCloudBackend: ObserveCloudBackendUseCase,
+    private val saveCloudBackendSettings: SaveCloudBackendSettingsUseCase,
 ) : ViewModel() {
 
     private val tripId: Long = checkNotNull(savedStateHandle[Routes.TRIP_ID_ARG])
@@ -44,6 +44,7 @@ class RideSummaryViewModel @Inject constructor(
     private fun loadTrip() {
         viewModelScope.launch(Dispatchers.IO) {
             val details = getTripRouteUseCase(tripId)
+            val backend = observeCloudBackend()
             _uiState.value = if (details == null) {
                 RideSummaryUiState(isLoading = false, notFound = true)
             } else {
@@ -57,8 +58,8 @@ class RideSummaryViewModel @Inject constructor(
                     routePoints = details.routePoints,
                     moments = moments,
                     isLoading = false,
-                    backendUrl = backendSettings.baseUrl,
-                    displayName = userIdStore.displayName,
+                    backendUrl = backend.baseUrl,
+                    displayName = backend.displayName,
                 )
             }
         }
@@ -81,32 +82,24 @@ class RideSummaryViewModel @Inject constructor(
     private fun reloadTripMeta() {
         val details = getTripRouteUseCase(tripId) ?: return
         val moments = RideMomentsCalculator.calculate(details.trip, details.routePoints)
+        val backend = observeCloudBackend()
         _uiState.value = RideSummaryUiState(
             trip = details.trip,
             routePoints = details.routePoints,
             moments = moments,
             isLoading = false,
-            backendUrl = backendSettings.baseUrl,
-            displayName = userIdStore.displayName,
+            backendUrl = backend.baseUrl,
+            displayName = backend.displayName,
             uploadStatus = _uiState.value.uploadStatus,
         )
     }
 
     fun saveBackendSettings(url: String, displayName: String) {
         viewModelScope.launch(Dispatchers.IO) {
-            backendSettings.setBaseUrl(url)
-            userIdStore.setDisplayNameLocal(displayName)
-            val baseUrl = backendSettings.baseUrl
-            if (baseUrl.isNotBlank()) {
-                runCatching {
-                    userIdStore.updateDisplayName(baseUrl, userIdStore.displayName)
-                }.onFailure {
-                    AppLogger.e(AppLogger.Category.APP, "Profile sync on save failed", it)
-                }
-            }
+            val backend = saveCloudBackendSettings(url, displayName)
             _uiState.value = _uiState.value.copy(
-                backendUrl = baseUrl,
-                displayName = userIdStore.displayName,
+                backendUrl = backend.baseUrl,
+                displayName = backend.displayName,
                 uploadStatus = CloudUploadStatus.Idle,
             )
         }
@@ -114,7 +107,8 @@ class RideSummaryViewModel @Inject constructor(
 
     fun uploadToCloud() {
         if (_uiState.value.uploadStatus is CloudUploadStatus.Uploading) return
-        if (!backendSettings.isEnabled) {
+        val backend = observeCloudBackend()
+        if (!backend.isEnabled) {
             _uiState.value = _uiState.value.copy(
                 uploadStatus = CloudUploadStatus.Error("Set a server URL first"),
             )
@@ -134,7 +128,7 @@ class RideSummaryViewModel @Inject constructor(
                         CloudUploadStatus.Error(it.message ?: "Upload failed")
                     },
                 ),
-                displayName = userIdStore.displayName,
+                displayName = observeCloudBackend().displayName,
             )
         }
     }

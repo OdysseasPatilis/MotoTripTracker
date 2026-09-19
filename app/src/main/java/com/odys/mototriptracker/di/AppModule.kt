@@ -2,12 +2,16 @@ package com.odys.mototriptracker.di
 
 import android.content.Context
 import com.odys.mototriptracker.data.MyObjectBox
+import com.odys.mototriptracker.data.backend.BackendSettingsStore
+import com.odys.mototriptracker.data.backend.BackendUserIdStore
 import com.odys.mototriptracker.data.backend.TripCloudUploader
 import com.odys.mototriptracker.data.sensor.AndroidGForceTracker
 import com.odys.mototriptracker.data.trip.AndroidTripServiceController
 import com.odys.mototriptracker.data.trip.ObjectBoxTripRepository
 import com.odys.mototriptracker.data.trip.PolyUtilRoutePolylineReconstructor
 import com.odys.mototriptracker.data.waypoint.AndroidWaypointRoadNameResolver
+import com.odys.mototriptracker.domain.CloudBackendSettings
+import com.odys.mototriptracker.domain.CloudRiderProfile
 import com.odys.mototriptracker.domain.GForceTracker
 import com.odys.mototriptracker.domain.RoutePolylineReconstructor
 import com.odys.mototriptracker.domain.TripCloudUpload
@@ -75,4 +79,16 @@ abstract class ServiceBindingsModule {
     abstract fun bindWaypointRoadNameResolver(
         impl: AndroidWaypointRoadNameResolver
     ): WaypointRoadNameResolver
+
+    @Binds
+    @Singleton
+    abstract fun bindCloudBackendSettings(
+        impl: BackendSettingsStore
+    ): CloudBackendSettings
+
+    @Binds
+    @Singleton
+    abstract fun bindCloudRiderProfile(
+        impl: BackendUserIdStore
+    ): CloudRiderProfile
 }

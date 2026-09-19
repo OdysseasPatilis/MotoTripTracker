@@ -1,6 +1,7 @@
 package com.odys.mototriptracker.data.backend
 
 import android.content.Context
+import com.odys.mototriptracker.domain.CloudRiderProfile
 import com.odys.mototriptracker.util.AppLogger
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
@@ -22,7 +23,7 @@ import javax.inject.Singleton
 @Singleton
 class BackendUserIdStore @Inject constructor(
     @ApplicationContext context: Context,
-) {
+) : CloudRiderProfile {
     private val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
     private val client = OkHttpClient.Builder()
         .connectTimeout(15, TimeUnit.SECONDS)
@@ -37,12 +38,16 @@ class BackendUserIdStore @Inject constructor(
             null
         }
 
-    val displayName: String
+    override val displayName: String
         get() = prefs.getString(KEY_DISPLAY_NAME, null)?.takeIf { it.isNotBlank() } ?: DEFAULT_DISPLAY_NAME
 
-    fun setDisplayNameLocal(name: String) {
+    override fun setDisplayNameLocal(name: String) {
         val trimmed = name.trim().ifEmpty { DEFAULT_DISPLAY_NAME }
         prefs.edit().putString(KEY_DISPLAY_NAME, trimmed).apply()
+    }
+
+    override suspend fun syncDisplayName(baseUrl: String) {
+        updateDisplayName(baseUrl, displayName)
     }
 
     /**
