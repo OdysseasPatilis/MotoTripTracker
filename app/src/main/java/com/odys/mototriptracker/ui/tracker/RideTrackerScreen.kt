@@ -78,7 +78,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextOverflow
 import com.odys.mototriptracker.application.TrafficCameraAlert
 import com.odys.mototriptracker.application.TrafficCameraKind
-import com.odys.mototriptracker.data.camera.TrafficCameraPackDownloadStatus
+import com.odys.mototriptracker.domain.TrafficCameraPackDownloadStatus
 import com.odys.mototriptracker.application.PickedMapPlace
 import androidx.compose.material.icons.filled.Business
 import androidx.compose.material.icons.filled.Language

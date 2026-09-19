@@ -1,4 +1,4 @@
-package com.odys.mototriptracker.data.petrol
+package com.odys.mototriptracker.domain
 
 import org.junit.Assert.assertEquals
 import org.junit.Test

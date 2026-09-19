@@ -8,7 +8,7 @@ import com.odys.mototriptracker.application.RankedPetrolStation
 import com.odys.mototriptracker.application.RouteWeatherState
 import com.odys.mototriptracker.application.TrafficCamera
 import com.odys.mototriptracker.application.TrafficCameraAlert
-import com.odys.mototriptracker.data.camera.TrafficCameraPackDownloadStatus
+import com.odys.mototriptracker.domain.TrafficCameraPackDownloadStatus
 import com.odys.mototriptracker.domain.RouteCoordinate
 import com.odys.mototriptracker.domain.TripStats
 

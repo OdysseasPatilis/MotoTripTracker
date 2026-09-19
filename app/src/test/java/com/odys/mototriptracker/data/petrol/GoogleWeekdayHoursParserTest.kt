@@ -1,5 +1,6 @@
 package com.odys.mototriptracker.data.petrol
 
+import com.odys.mototriptracker.domain.OpeningHoursEvaluator
 import org.junit.Assert.assertEquals
 import org.junit.Test
 import java.util.Calendar

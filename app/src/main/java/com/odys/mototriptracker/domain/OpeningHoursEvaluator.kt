@@ -1,4 +1,4 @@
-package com.odys.mototriptracker.data.petrol
+package com.odys.mototriptracker.domain
 
 import java.util.Calendar
 import java.util.Date

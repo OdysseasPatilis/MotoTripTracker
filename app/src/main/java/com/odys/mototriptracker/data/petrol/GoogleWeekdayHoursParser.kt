@@ -1,5 +1,7 @@
 package com.odys.mototriptracker.data.petrol
 
+import com.odys.mototriptracker.domain.OpeningHoursEvaluator
+
 import java.util.Calendar
 import java.util.Locale
 

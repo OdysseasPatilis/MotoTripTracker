@@ -1,5 +1,7 @@
 package com.odys.mototriptracker.data.petrol
 
+import com.odys.mototriptracker.domain.OpeningHoursEvaluator
+
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory

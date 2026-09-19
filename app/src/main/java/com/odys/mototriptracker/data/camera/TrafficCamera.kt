@@ -2,19 +2,11 @@ package com.odys.mototriptracker.data.camera
 
 import com.odys.mototriptracker.data.navigation.NavigationState
 import com.odys.mototriptracker.domain.Geo
+import com.odys.mototriptracker.domain.TrafficCameraPackDownloadStatus
 
 enum class TrafficCameraKind {
     Speed,
     RedLight,
-}
-
-sealed class TrafficCameraPackDownloadStatus {
-    data object Idle : TrafficCameraPackDownloadStatus()
-    data class Downloading(
-        val countryCode: String,
-        val countryName: String?,
-    ) : TrafficCameraPackDownloadStatus()
-    data class Failed(val message: String) : TrafficCameraPackDownloadStatus()
 }
 
 data class TrafficCamera(

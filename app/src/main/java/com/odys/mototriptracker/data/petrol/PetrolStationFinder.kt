@@ -1,5 +1,7 @@
 package com.odys.mototriptracker.data.petrol
 
+import com.odys.mototriptracker.domain.OpeningHoursEvaluator
+
 import com.odys.mototriptracker.data.network.OverpassClient
 import com.odys.mototriptracker.domain.Geo
 import com.odys.mototriptracker.util.AppLogger

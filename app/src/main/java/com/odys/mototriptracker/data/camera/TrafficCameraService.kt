@@ -1,5 +1,7 @@
 package com.odys.mototriptracker.data.camera
 
+import com.odys.mototriptracker.domain.TrafficCameraPackDownloadStatus
+
 import android.content.Context
 import android.location.Location
 import android.os.Build

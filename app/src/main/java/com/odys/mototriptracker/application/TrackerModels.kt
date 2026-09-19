@@ -17,11 +17,10 @@ typealias RankedPetrolStation = com.odys.mototriptracker.data.petrol.RankedPetro
 typealias PetrolSearchPlan = com.odys.mototriptracker.data.petrol.PetrolSearchPlan
 typealias PetrolStationRecommendation = com.odys.mototriptracker.data.petrol.PetrolStationRecommendation
 typealias GooglePetrolDetails = com.odys.mototriptracker.data.petrol.GooglePetrolDetails
-typealias OpeningHoursEvaluator = com.odys.mototriptracker.data.petrol.OpeningHoursEvaluator
+typealias OpeningHoursEvaluator = com.odys.mototriptracker.domain.OpeningHoursEvaluator
 typealias PetrolSearchResult = com.odys.mototriptracker.data.petrol.PetrolSearchResult
 
 typealias TrafficCamera = com.odys.mototriptracker.data.camera.TrafficCamera
 typealias TrafficCameraAlert = com.odys.mototriptracker.data.camera.TrafficCameraAlert
 typealias TrafficCameraKind = com.odys.mototriptracker.data.camera.TrafficCameraKind
-typealias TrafficCameraPackDownloadStatus =
-    com.odys.mototriptracker.data.camera.TrafficCameraPackDownloadStatus
+typealias TrafficCameraPackDownloadStatus = com.odys.mototriptracker.domain.TrafficCameraPackDownloadStatus

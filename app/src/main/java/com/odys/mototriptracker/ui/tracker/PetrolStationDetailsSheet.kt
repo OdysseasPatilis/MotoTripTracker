@@ -35,7 +35,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.net.toUri
 import com.odys.mototriptracker.application.GooglePetrolDetails
-import com.odys.mototriptracker.data.petrol.OpeningHoursEvaluator
+import com.odys.mototriptracker.domain.OpeningHoursEvaluator
 import com.odys.mototriptracker.application.RideTrackerFacade
 import com.odys.mototriptracker.application.PetrolStationRecommendation
 import com.odys.mototriptracker.ui.theme.AppPalette
