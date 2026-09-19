@@ -19,8 +19,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.odys.mototriptracker.data.weather.RouteWeatherSegment
-import com.odys.mototriptracker.data.weather.RouteWeatherState
+import com.odys.mototriptracker.application.RouteWeatherSegment
+import com.odys.mototriptracker.application.RouteWeatherState
 import com.odys.mototriptracker.ui.theme.AppPalette
 import com.odys.mototriptracker.ui.theme.LocalAppPalette
 import java.text.SimpleDateFormat

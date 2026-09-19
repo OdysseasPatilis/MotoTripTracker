@@ -19,8 +19,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.odys.mototriptracker.data.camera.TrafficCameraAlert
-import com.odys.mototriptracker.data.camera.TrafficCameraKind
+import com.odys.mototriptracker.application.TrafficCameraAlert
+import com.odys.mototriptracker.application.TrafficCameraKind
 import com.odys.mototriptracker.ui.theme.AppPalette
 
 @Composable

@@ -35,7 +35,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.net.toUri
-import com.odys.mototriptracker.data.navigation.PickedMapPlace
+import com.odys.mototriptracker.application.PickedMapPlace
 import com.odys.mototriptracker.ui.theme.AppPalette
 
 @Composable

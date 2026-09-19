@@ -1,9 +1,14 @@
 package com.odys.mototriptracker.ui.tracker
 
-import com.odys.mototriptracker.data.navigation.NavigationState
-import com.odys.mototriptracker.data.petrol.PetrolSearchPlan
-import com.odys.mototriptracker.data.petrol.RankedPetrolStation
-import com.odys.mototriptracker.data.weather.RouteWeatherState
+import com.odys.mototriptracker.application.GooglePetrolDetails
+import com.odys.mototriptracker.application.NavigationState
+import com.odys.mototriptracker.application.PetrolSearchPlan
+import com.odys.mototriptracker.application.PickedMapPlace
+import com.odys.mototriptracker.application.RankedPetrolStation
+import com.odys.mototriptracker.application.RouteWeatherState
+import com.odys.mototriptracker.application.TrafficCamera
+import com.odys.mototriptracker.application.TrafficCameraAlert
+import com.odys.mototriptracker.data.camera.TrafficCameraPackDownloadStatus
 import com.odys.mototriptracker.domain.RouteCoordinate
 import com.odys.mototriptracker.domain.TripStats
 
@@ -22,7 +27,7 @@ data class RideTrackerUiState(
     val petrolStations: List<RankedPetrolStation> = emptyList(),
     val petrolPlan: PetrolSearchPlan? = null,
     val petrolLoading: Boolean = false,
-    val petrolDetails: com.odys.mototriptracker.data.petrol.GooglePetrolDetails? = null,
+    val petrolDetails: GooglePetrolDetails? = null,
     val petrolDetailsLoading: Boolean = false,
     val petrolMessage: String? = null,
     val tankCapacityLiters: Double = 16.0,
@@ -36,9 +41,9 @@ data class RideTrackerUiState(
     val lastLongitude: Double? = null,
     val lastBearing: Float = 0f,
     val lastSpeedMps: Float = 0f,
-    val nearbyTrafficCameras: List<com.odys.mototriptracker.data.camera.TrafficCamera> = emptyList(),
-    val trafficCameraAlert: com.odys.mototriptracker.data.camera.TrafficCameraAlert? = null,
-    val trafficCameraDownloadStatus: com.odys.mototriptracker.data.camera.TrafficCameraPackDownloadStatus =
-        com.odys.mototriptracker.data.camera.TrafficCameraPackDownloadStatus.Idle,
-    val selectedMapPlace: com.odys.mototriptracker.data.navigation.PickedMapPlace? = null,
+    val nearbyTrafficCameras: List<TrafficCamera> = emptyList(),
+    val trafficCameraAlert: TrafficCameraAlert? = null,
+    val trafficCameraDownloadStatus: TrafficCameraPackDownloadStatus =
+        TrafficCameraPackDownloadStatus.Idle,
+    val selectedMapPlace: PickedMapPlace? = null,
 )

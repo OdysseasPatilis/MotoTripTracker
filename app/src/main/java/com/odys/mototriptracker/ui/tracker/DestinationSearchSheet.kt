@@ -47,8 +47,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.odys.mototriptracker.data.navigation.DestinationHistoryEntry
-import com.odys.mototriptracker.data.navigation.NavigationSearchResult
+import com.odys.mototriptracker.application.DestinationHistoryEntry
+import com.odys.mototriptracker.application.NavigationSearchResult
 import com.odys.mototriptracker.ui.theme.AppPalette
 import com.odys.mototriptracker.ui.theme.LocalAppPalette
 

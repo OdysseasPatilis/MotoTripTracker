@@ -43,7 +43,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.odys.mototriptracker.data.navigation.NavigationState
+import com.odys.mototriptracker.application.NavigationState
 import com.odys.mototriptracker.ui.theme.AppPalette
 
 @Composable

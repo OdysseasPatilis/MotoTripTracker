@@ -48,9 +48,9 @@ import com.google.maps.android.compose.Marker
 import com.google.maps.android.compose.MarkerState
 import com.google.maps.android.compose.Polyline
 import com.google.maps.android.compose.rememberCameraPositionState
-import com.odys.mototriptracker.data.camera.TrafficCamera
-import com.odys.mototriptracker.data.camera.TrafficCameraKind
-import com.odys.mototriptracker.data.navigation.NavRouteOption
+import com.odys.mototriptracker.application.TrafficCamera
+import com.odys.mototriptracker.application.TrafficCameraKind
+import com.odys.mototriptracker.application.NavRouteOption
 import com.odys.mototriptracker.domain.RideFollowCameraPolicy
 import com.odys.mototriptracker.domain.RouteCoordinate
 import com.odys.mototriptracker.ui.components.map.LIVE_DARK_MAP_STYLE_JSON
