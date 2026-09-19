@@ -57,7 +57,7 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.ui.draw.alpha
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.input.pointer.pointerInput
-import com.odys.mototriptracker.data.navigation.NavigationState
+import com.odys.mototriptracker.application.NavigationState
 import com.odys.mototriptracker.ui.tracker.DestinationSearchSheet
 import com.odys.mototriptracker.ui.tracker.LiveRideMapView
 import com.odys.mototriptracker.ui.tracker.RideTrackerUiState
@@ -76,10 +76,10 @@ import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Traffic
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextOverflow
-import com.odys.mototriptracker.data.camera.TrafficCameraAlert
-import com.odys.mototriptracker.data.camera.TrafficCameraKind
+import com.odys.mototriptracker.application.TrafficCameraAlert
+import com.odys.mototriptracker.application.TrafficCameraKind
 import com.odys.mototriptracker.data.camera.TrafficCameraPackDownloadStatus
-import com.odys.mototriptracker.data.navigation.PickedMapPlace
+import com.odys.mototriptracker.application.PickedMapPlace
 import androidx.compose.material.icons.filled.Business
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Phone
@@ -104,7 +104,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
-import com.odys.mototriptracker.data.navigation.NavigationSearchResult
+import com.odys.mototriptracker.application.NavigationSearchResult
+import com.odys.mototriptracker.application.DestinationHistoryEntry
+import com.odys.mototriptracker.application.PetrolStationRecommendation
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
@@ -168,14 +170,15 @@ fun RideTrackerScreen(
     onDismissRouteWeather: () -> Unit,
     onShowPetrolStations: () -> Unit,
     onDismissPetrolStations: () -> Unit,
-    onSelectPetrolStation: (com.odys.mototriptracker.data.petrol.PetrolStationRecommendation) -> Unit,
-    onLoadPetrolDetails: (com.odys.mototriptracker.data.petrol.PetrolStationRecommendation) -> Unit,
+    onSelectPetrolStation: (PetrolStationRecommendation) -> Unit,
+    onLoadPetrolDetails: (PetrolStationRecommendation) -> Unit,
     onClearPetrolDetails: () -> Unit,
-    petrolPreferences: com.odys.mototriptracker.data.petrol.PetrolPreferences,
+    isPreferredBrand: (String?) -> Boolean,
+    brandCatalog: List<String>,
     onNavigationQueryChange: (String) -> Unit,
     onSelectNavigationResult: (NavigationSearchResult) -> Unit,
-    historyDestinations: List<com.odys.mototriptracker.data.navigation.DestinationHistoryEntry> = emptyList(),
-    onSelectHistoryDestination: (com.odys.mototriptracker.data.navigation.DestinationHistoryEntry) -> Unit = {},
+    historyDestinations: List<DestinationHistoryEntry> = emptyList(),
+    onSelectHistoryDestination: (DestinationHistoryEntry) -> Unit = {},
     onRemoveHistoryDestination: (String) -> Unit = {},
     onClearNavigation: () -> Unit,
     onConfirmStartNavigation: () -> Unit = {},
@@ -244,6 +247,7 @@ fun RideTrackerScreen(
             consumption = uiState.fuelConsumption,
             preferredBrands = uiState.preferredBrands,
             preferredOctanes = uiState.preferredOctanes,
+            brandCatalog = brandCatalog,
             onToggleBrand = onToggleFuelBrand,
             onToggleOctane = onToggleFuelOctane,
             onFillUp = onFillUpFuel,
@@ -262,7 +266,7 @@ fun RideTrackerScreen(
             stations = uiState.petrolStations,
             plan = uiState.petrolPlan,
             isLoading = uiState.petrolLoading,
-            preferences = petrolPreferences,
+            isPreferredBrand = isPreferredBrand,
             preferredOctanes = uiState.preferredOctanes,
             googleDetails = uiState.petrolDetails,
             googleDetailsLoading = uiState.petrolDetailsLoading,

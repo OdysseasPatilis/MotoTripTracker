@@ -1,20 +1,14 @@
 package com.odys.mototriptracker.application
 
 import android.location.Location
-import com.odys.mototriptracker.data.camera.TrafficCamera
-import com.odys.mototriptracker.data.camera.TrafficCameraAlert
-import com.odys.mototriptracker.data.camera.TrafficCameraPackDownloadStatus
 import com.odys.mototriptracker.data.camera.TrafficCameraService
 import com.odys.mototriptracker.data.fuel.FuelService
 import com.odys.mototriptracker.data.location.LocationRepository
-import com.odys.mototriptracker.data.navigation.DestinationHistoryEntry
 import com.odys.mototriptracker.data.navigation.DestinationSearchHistory
-import com.odys.mototriptracker.data.navigation.NavigationSearchResult
 import com.odys.mototriptracker.data.navigation.NavigationService
-import com.odys.mototriptracker.data.navigation.NavigationState
 import com.odys.mototriptracker.data.petrol.PetrolPreferences
+import com.odys.mototriptracker.data.petrol.PetrolStationFinder
 import com.odys.mototriptracker.data.weather.RouteWeatherService
-import com.odys.mototriptracker.data.weather.RouteWeatherState
 import com.odys.mototriptracker.domain.RouteCoordinate
 import com.odys.mototriptracker.domain.usecase.ObserveRouteCoordinatesUseCase
 import com.odys.mototriptracker.domain.usecase.PauseRideUseCase
@@ -29,7 +23,7 @@ import javax.inject.Singleton
 
 /**
  * Application façade for the live ride tracker: wires data services and ride
- * use cases so the UI ViewModel does not depend on them directly.
+ * use cases so the UI ViewModel / coordinators do not depend on them directly.
  */
 @Singleton
 class RideTrackerFacade @Inject constructor(
@@ -40,6 +34,7 @@ class RideTrackerFacade @Inject constructor(
     private val routeWeatherService: RouteWeatherService,
     private val fuelService: FuelService,
     private val petrolPreferences: PetrolPreferences,
+    private val petrolStationFinder: PetrolStationFinder,
     private val locationRepository: LocationRepository,
     private val startRideUseCase: StartRideUseCase,
     private val stopRideUseCase: StopRideUseCase,
@@ -98,6 +93,9 @@ class RideTrackerFacade @Inject constructor(
     val isLowFuel: Boolean
         get() = fuelService.isLowFuel
 
+    val petrolBrandCatalog: List<String>
+        get() = PetrolPreferences.CATALOG
+
     fun startRide() {
         fuelService.resetRideConsumption()
         trafficCameraService.reset()
@@ -153,6 +151,18 @@ class RideTrackerFacade @Inject constructor(
         )
     }
 
+    suspend fun resolveMapPlace(
+        placeId: String,
+        fallbackName: String,
+        latitude: Double,
+        longitude: Double,
+    ): PickedMapPlace = navigationService.resolveMapPlace(
+        placeId = placeId,
+        fallbackName = fallbackName,
+        latitude = latitude,
+        longitude = longitude,
+    )
+
     fun updateSearchQuery(query: String) = navigationService.updateSearchQuery(query)
 
     fun selectSearchResult(result: NavigationSearchResult) =
@@ -176,6 +186,7 @@ class RideTrackerFacade @Inject constructor(
     fun toggleFuelBrand(brand: String) = petrolPreferences.toggleBrand(brand)
     fun toggleFuelOctane(octane: Int) = petrolPreferences.toggleOctane(octane)
     fun fillUpFuel() = fuelService.fillUp()
+    fun isPreferredBrand(rawBrand: String?): Boolean = petrolPreferences.isPreferredBrand(rawBrand)
 
     fun saveFuelSettings(
         capacityLiters: Double?,
@@ -187,5 +198,41 @@ class RideTrackerFacade @Inject constructor(
         consumptionLPer100Km?.let(fuelService::setConsumptionLPer100Km)
     }
 
-    fun petrolPreferences(): PetrolPreferences = petrolPreferences
+    fun currentLatLng(): Pair<Double, Double>? {
+        val location = locationRepository.lastLocation.value ?: return null
+        return location.latitude to location.longitude
+    }
+
+    fun currentCourseDegrees(): Float? {
+        val location = locationRepository.lastLocation.value ?: return null
+        return location.bearing.takeIf { location.hasBearing() && it >= 0f }
+    }
+
+    fun currentSpeedKmh(): Double {
+        val location = locationRepository.lastLocation.value ?: return 0.0
+        return (location.speed * 3.6).toDouble()
+    }
+
+    suspend fun searchPetrolStations(
+        latitude: Double,
+        longitude: Double,
+        speedKmh: Double,
+        courseDegrees: Float?,
+    ): PetrolSearchResult = petrolStationFinder.search(
+        latitude = latitude,
+        longitude = longitude,
+        preferences = petrolPreferences,
+        speedKmh = speedKmh,
+        courseDegrees = courseDegrees,
+    )
+
+    suspend fun fetchPetrolDetails(
+        placeId: String?,
+        latitude: Double,
+        longitude: Double,
+    ): GooglePetrolDetails? = petrolStationFinder.fetchGoogleDetails(
+        placeId = placeId,
+        latitude = latitude,
+        longitude = longitude,
+    )
 }

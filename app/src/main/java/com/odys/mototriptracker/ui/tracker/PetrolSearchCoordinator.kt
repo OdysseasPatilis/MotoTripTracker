@@ -1,12 +1,10 @@
 package com.odys.mototriptracker.ui.tracker
 
-import com.odys.mototriptracker.data.petrol.GooglePetrolDetails
-import com.odys.mototriptracker.data.petrol.PetrolPreferences
-import com.odys.mototriptracker.data.petrol.PetrolSearchPlan
-import com.odys.mototriptracker.data.petrol.PetrolStationFinder
-import com.odys.mototriptracker.data.petrol.PetrolStationRecommendation
-import com.odys.mototriptracker.data.petrol.RankedPetrolStation
-import com.odys.mototriptracker.data.location.LocationRepository
+import com.odys.mototriptracker.application.GooglePetrolDetails
+import com.odys.mototriptracker.application.PetrolSearchPlan
+import com.odys.mototriptracker.application.PetrolStationRecommendation
+import com.odys.mototriptracker.application.RankedPetrolStation
+import com.odys.mototriptracker.application.RideTrackerFacade
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -18,9 +16,7 @@ import javax.inject.Inject
 
 /** Owns petrol-sheet visibility, search, and station-details state for the ride tracker. */
 class PetrolSearchCoordinator @Inject constructor(
-    private val petrolStationFinder: PetrolStationFinder,
-    private val petrolPreferences: PetrolPreferences,
-    private val locationRepository: LocationRepository,
+    private val facade: RideTrackerFacade,
 ) {
     private val _showSheet = MutableStateFlow(false)
     private val _stations = MutableStateFlow<List<RankedPetrolStation>>(emptyList())
@@ -75,7 +71,7 @@ class PetrolSearchCoordinator @Inject constructor(
         scope.launch {
             _detailsLoading.value = true
             _details.value = null
-            _details.value = petrolStationFinder.fetchGoogleDetails(
+            _details.value = facade.fetchPetrolDetails(
                 placeId = station.googlePlaceId,
                 latitude = station.latitude,
                 longitude = station.longitude,
@@ -99,24 +95,18 @@ class PetrolSearchCoordinator @Inject constructor(
             _loading.value = true
             _stations.value = emptyList()
             _plan.value = null
-            val location = locationRepository.lastLocation.value
-                ?: fallbackLatLng()?.let { (lat, lng) ->
-                    android.location.Location("manual").apply {
-                        latitude = lat
-                        longitude = lng
-                    }
-                }
-            if (location == null) {
+            val latLng = facade.currentLatLng() ?: fallbackLatLng()
+            if (latLng == null) {
                 _loading.value = false
                 _message.value = "Waiting for GPS…"
                 return@launch
             }
-            val course = location.bearing.takeIf { location.hasBearing() && it >= 0f }
-            val result = petrolStationFinder.search(
-                latitude = location.latitude,
-                longitude = location.longitude,
-                preferences = petrolPreferences,
-                speedKmh = speedKmh().takeIf { it > 0 } ?: (location.speed * 3.6),
+            val (latitude, longitude) = latLng
+            val course = facade.currentCourseDegrees()
+            val result = facade.searchPetrolStations(
+                latitude = latitude,
+                longitude = longitude,
+                speedKmh = speedKmh().takeIf { it > 0 } ?: facade.currentSpeedKmh(),
                 courseDegrees = course,
             )
             _plan.value = result.plan

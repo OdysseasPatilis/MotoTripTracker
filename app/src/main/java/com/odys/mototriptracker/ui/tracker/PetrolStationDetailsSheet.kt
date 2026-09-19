@@ -34,10 +34,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.net.toUri
-import com.odys.mototriptracker.data.petrol.GooglePetrolDetails
+import com.odys.mototriptracker.application.GooglePetrolDetails
 import com.odys.mototriptracker.data.petrol.OpeningHoursEvaluator
-import com.odys.mototriptracker.data.petrol.PetrolPreferences
-import com.odys.mototriptracker.data.petrol.PetrolStationRecommendation
+import com.odys.mototriptracker.application.RideTrackerFacade
+import com.odys.mototriptracker.application.PetrolStationRecommendation
 import com.odys.mototriptracker.ui.theme.AppPalette
 import java.util.Locale
 
@@ -45,7 +45,7 @@ import java.util.Locale
 @Composable
 internal fun PetrolStationDetailsSheet(
     station: PetrolStationRecommendation,
-    preferences: PetrolPreferences,
+    isPreferredBrand: (String?) -> Boolean,
     preferredOctanes: Set<Int>,
     googleDetails: GooglePetrolDetails?,
     googleDetailsLoading: Boolean,
@@ -110,7 +110,7 @@ internal fun PetrolStationDetailsSheet(
                     if (station.hoursFromGoogle || googleDetails != null) {
                         StatusChip(label = "Google", tint = palette.neonBlue)
                     }
-                    if (preferences.isPreferredBrand(station.brand ?: station.name)) {
+                    if (isPreferredBrand(station.brand ?: station.name)) {
                         StatusChip(label = "Preferred", tint = palette.neonGreen)
                     }
                     if (station.isHighwayAccessible) {

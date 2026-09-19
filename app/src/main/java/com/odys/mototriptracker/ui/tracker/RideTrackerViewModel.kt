@@ -3,15 +3,14 @@ package com.odys.mototriptracker.ui.tracker
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.odys.mototriptracker.application.RideTrackerFacade
-import com.odys.mototriptracker.data.navigation.DestinationHistoryEntry
-import com.odys.mototriptracker.data.navigation.NavigationSearchResult
-import com.odys.mototriptracker.data.navigation.NavigationState
-import com.odys.mototriptracker.data.petrol.GooglePetrolDetails
-import com.odys.mototriptracker.data.petrol.PetrolPreferences
-import com.odys.mototriptracker.data.petrol.PetrolSearchPlan
-import com.odys.mototriptracker.data.petrol.PetrolStationRecommendation
-import com.odys.mototriptracker.data.petrol.RankedPetrolStation
-import com.odys.mototriptracker.data.weather.RouteWeatherState
+import com.odys.mototriptracker.application.DestinationHistoryEntry
+import com.odys.mototriptracker.application.NavigationSearchResult
+import com.odys.mototriptracker.application.NavigationState
+import com.odys.mototriptracker.application.GooglePetrolDetails
+import com.odys.mototriptracker.application.PetrolSearchPlan
+import com.odys.mototriptracker.application.PetrolStationRecommendation
+import com.odys.mototriptracker.application.RankedPetrolStation
+import com.odys.mototriptracker.application.RouteWeatherState
 import com.odys.mototriptracker.domain.GpsQuality
 import com.odys.mototriptracker.domain.RideSessionState
 import com.odys.mototriptracker.domain.RouteCoordinate
@@ -317,7 +316,9 @@ class RideTrackerViewModel @Inject constructor(
         facade.saveFuelSettings(capacityLiters, remainingLiters, consumptionLPer100Km)
     }
 
-    fun petrolPreferences(): PetrolPreferences = facade.petrolPreferences()
+    fun isPreferredBrand(rawBrand: String?): Boolean = facade.isPreferredBrand(rawBrand)
+
+    fun petrolBrandCatalog(): List<String> = facade.petrolBrandCatalog
 
     private data class RideInputs(
         val session: RideSessionState,

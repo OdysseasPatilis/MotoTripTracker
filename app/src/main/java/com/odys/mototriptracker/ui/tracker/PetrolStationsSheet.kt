@@ -37,11 +37,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.odys.mototriptracker.data.petrol.GooglePetrolDetails
-import com.odys.mototriptracker.data.petrol.PetrolPreferences
-import com.odys.mototriptracker.data.petrol.PetrolSearchPlan
-import com.odys.mototriptracker.data.petrol.PetrolStationRecommendation
-import com.odys.mototriptracker.data.petrol.RankedPetrolStation
+import com.odys.mototriptracker.application.GooglePetrolDetails
+import com.odys.mototriptracker.application.RideTrackerFacade
+import com.odys.mototriptracker.application.PetrolSearchPlan
+import com.odys.mototriptracker.application.PetrolStationRecommendation
+import com.odys.mototriptracker.application.RankedPetrolStation
 import com.odys.mototriptracker.ui.theme.AppPalette
 import com.odys.mototriptracker.ui.theme.LocalAppPalette
 
@@ -51,7 +51,7 @@ fun PetrolStationsSheet(
     stations: List<RankedPetrolStation>,
     plan: PetrolSearchPlan?,
     isLoading: Boolean,
-    preferences: PetrolPreferences,
+    isPreferredBrand: (String?) -> Boolean,
     preferredOctanes: Set<Int>,
     googleDetails: GooglePetrolDetails?,
     googleDetailsLoading: Boolean,
@@ -202,7 +202,7 @@ fun PetrolStationsSheet(
                             StationCard(
                                 rank = index + 1,
                                 station = ranked.recommendation,
-                                preferences = preferences,
+                                isPreferredBrand = isPreferredBrand,
                                 preferredOctanes = preferredOctanes,
                                 palette = palette,
                                 onGo = { onGo(ranked.recommendation) },
@@ -226,7 +226,7 @@ fun PetrolStationsSheet(
     detailsStation?.let { station ->
         PetrolStationDetailsSheet(
             station = station,
-            preferences = preferences,
+            isPreferredBrand = isPreferredBrand,
             preferredOctanes = preferredOctanes,
             googleDetails = googleDetails,
             googleDetailsLoading = googleDetailsLoading,

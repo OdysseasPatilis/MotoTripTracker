@@ -29,7 +29,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.odys.mototriptracker.data.petrol.PetrolPreferences
 import com.odys.mototriptracker.ui.theme.AppPalette
 import com.odys.mototriptracker.ui.theme.LocalAppPalette
 
@@ -41,6 +40,7 @@ fun FuelSettingsSheet(
     consumption: Double,
     preferredBrands: List<String>,
     preferredOctanes: Set<Int>,
+    brandCatalog: List<String>,
     onToggleBrand: (String) -> Unit,
     onToggleOctane: (Int) -> Unit,
     onFillUp: () -> Unit,
@@ -108,7 +108,7 @@ fun FuelSettingsSheet(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                PetrolPreferences.CATALOG.forEach { brand ->
+                brandCatalog.forEach { brand ->
                     val selected = brand in preferredBrands
                     FilterChip(
                         selected = selected,

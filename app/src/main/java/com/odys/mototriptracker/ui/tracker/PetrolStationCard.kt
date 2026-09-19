@@ -35,8 +35,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.odys.mototriptracker.data.petrol.OpeningHoursEvaluator
-import com.odys.mototriptracker.data.petrol.PetrolPreferences
-import com.odys.mototriptracker.data.petrol.PetrolStationRecommendation
+import com.odys.mototriptracker.application.RideTrackerFacade
+import com.odys.mototriptracker.application.PetrolStationRecommendation
 import com.odys.mototriptracker.ui.theme.AppPalette
 import java.util.Locale
 
@@ -45,14 +45,14 @@ import java.util.Locale
 internal fun StationCard(
     rank: Int,
     station: PetrolStationRecommendation,
-    preferences: PetrolPreferences,
+    isPreferredBrand: (String?) -> Boolean,
     preferredOctanes: Set<Int>,
     palette: AppPalette,
     onGo: () -> Unit,
     onDetails: () -> Unit
 ) {
     val dimmed = station.openStatus == OpeningHoursEvaluator.Status.CLOSED
-    val preferred = preferences.isPreferredBrand(station.brand ?: station.name)
+    val preferred = isPreferredBrand(station.brand ?: station.name)
     val accent = if (preferred) palette.neonGreen else palette.neonBlue
 
     Row(

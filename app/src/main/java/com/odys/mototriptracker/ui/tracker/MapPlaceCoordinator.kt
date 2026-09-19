@@ -1,7 +1,7 @@
 package com.odys.mototriptracker.ui.tracker
 
-import com.odys.mototriptracker.data.navigation.NavigationService
-import com.odys.mototriptracker.data.navigation.PickedMapPlace
+import com.odys.mototriptracker.application.PickedMapPlace
+import com.odys.mototriptracker.application.RideTrackerFacade
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -12,7 +12,7 @@ import javax.inject.Inject
 
 /** Owns map-POI pick / resolve / navigate-to-place for the ride tracker. */
 class MapPlaceCoordinator @Inject constructor(
-    private val navigationService: NavigationService,
+    private val facade: RideTrackerFacade,
 ) {
     private val _selected = MutableStateFlow<PickedMapPlace?>(null)
     private var resolveJob: Job? = null
@@ -38,7 +38,7 @@ class MapPlaceCoordinator @Inject constructor(
         )
         resolveJob?.cancel()
         resolveJob = scope.launch {
-            val resolved = navigationService.resolveMapPlace(
+            val resolved = facade.resolveMapPlace(
                 placeId = placeId,
                 fallbackName = name,
                 latitude = latitude,
@@ -60,7 +60,7 @@ class MapPlaceCoordinator @Inject constructor(
         val place = _selected.value ?: return
         if (place.isResolving) return
         dismiss()
-        navigationService.setDestination(
+        facade.setDestination(
             latitude = place.latitude,
             longitude = place.longitude,
             name = place.name,
