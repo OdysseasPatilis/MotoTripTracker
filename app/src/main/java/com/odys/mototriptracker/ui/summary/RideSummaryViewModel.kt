@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.odys.mototriptracker.domain.RideMomentsCalculator
 import com.odys.mototriptracker.domain.usecase.DeleteTripUseCase
+import com.odys.mototriptracker.domain.usecase.ExportGpxUseCase
 import com.odys.mototriptracker.domain.usecase.GetTripRouteUseCase
 import com.odys.mototriptracker.domain.usecase.ObserveCloudBackendUseCase
 import com.odys.mototriptracker.domain.usecase.SaveCloudBackendSettingsUseCase
@@ -30,6 +31,7 @@ class RideSummaryViewModel @Inject constructor(
     private val uploadTripToCloudUseCase: UploadTripToCloudUseCase,
     private val observeCloudBackend: ObserveCloudBackendUseCase,
     private val saveCloudBackendSettings: SaveCloudBackendSettingsUseCase,
+    private val exportGpxUseCase: ExportGpxUseCase,
 ) : ViewModel() {
 
     private val tripId: Long = checkNotNull(savedStateHandle[Routes.TRIP_ID_ARG])
@@ -139,5 +141,12 @@ class RideSummaryViewModel @Inject constructor(
             AppLogger.i(AppLogger.Category.UI, "Delete requested for trip id=$tripId")
             _uiState.value = _uiState.value.copy(isDeleted = true)
         }
+    }
+
+    /** Builds GPX XML for the loaded trip, or null if the trip is missing. */
+    fun exportGpx(): String? {
+        val state = _uiState.value
+        val trip = state.trip ?: return null
+        return exportGpxUseCase(trip, state.routePoints)
     }
 }

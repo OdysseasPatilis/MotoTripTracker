@@ -1,4 +1,4 @@
-package com.odys.mototriptracker.data.export
+package com.odys.mototriptracker.domain
 
 import com.odys.mototriptracker.domain.model.RoutePoint
 import com.odys.mototriptracker.domain.model.Trip
@@ -7,6 +7,7 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
 
+/** Builds a GPX 1.1 document from a trip and its route points. */
 object GpxExporter {
 
     fun build(trip: Trip, points: List<RoutePoint>): String {

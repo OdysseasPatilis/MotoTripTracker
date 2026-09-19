@@ -206,7 +206,10 @@ fun RideSummaryRoute(
                         TextButton(
                             onClick = {
                                 showShareOptions = false
-                                GpxShare.share(context, trip, uiState.routePoints)
+                                val gpx = viewModel.exportGpx()
+                                if (gpx != null) {
+                                    GpxShare.share(context, trip, gpx)
+                                }
                             }
                         ) {
                             Text("Export GPX")
