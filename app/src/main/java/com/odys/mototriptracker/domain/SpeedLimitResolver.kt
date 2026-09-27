@@ -13,7 +13,9 @@ class SpeedLimitResolver @Inject constructor(
     private val speedLimitProvider: SpeedLimitProvider,
     private val tripManager: TripManager,
     private val cacheStore: SpeedLimitCache,
-    private val regionPackStore: SpeedLimitRegionPacks
+    private val regionPackStore: SpeedLimitRegionPacks,
+    private val roadSnapper: RoadSnapper,
+    private val postedSpeedLimits: PostedSpeedLimitSource,
 ) {
     private val cache: MutableMap<String, Int?> = mutableMapOf<String, Int?>().apply {
         putAll(cacheStore.load())
@@ -24,6 +26,7 @@ class SpeedLimitResolver @Inject constructor(
     private var lastQueryTimeMs: Long = 0L
     private var lookupJob: Job? = null
     private var dirty = false
+    private var holdState = SpeedLimitHoldLogic.HoldState()
 
     init {
         AppLogger.i(
@@ -35,11 +38,12 @@ class SpeedLimitResolver @Inject constructor(
     fun reset() {
         lookupJob?.cancel()
         lookupJob = null
-        // Keep disk cache — only clear in-memory "none" misses for this ride.
         cache.keys.filter { cache[it] == null }.forEach { cache.remove(it) }
         lastQueryLat = null
         lastQueryLng = null
         lastQueryTimeMs = 0L
+        holdState = SpeedLimitHoldLogic.HoldState()
+        roadSnapper.reset()
         persistIfNeeded()
         AppLogger.d(AppLogger.Category.SPEED_LIMIT, "Resolver reset (kept ${cache.size} offline cells)")
     }
@@ -54,22 +58,57 @@ class SpeedLimitResolver @Inject constructor(
         speedMps: Float,
         scope: CoroutineScope
     ) {
-        // Bundled city packs first (offline). Empty cells and implausible hits fall through.
-        if (regionPackStore.isInsideBundledRegion(latitude, longitude)) {
-            val hit = regionPackStore.lookup(latitude, longitude)
+        val nowMs = System.currentTimeMillis()
+        roadSnapper.onRawLocation(latitude, longitude, nowMs)
+
+        val snap = roadSnapper.latestFresh(nowMs)
+        val queryLat = snap?.latitude ?: latitude
+        val queryLng = snap?.longitude ?: longitude
+        val placeId = snap?.placeId
+
+        if (!SpeedLimitLogic.shouldQuery(
+                queryLat,
+                queryLng,
+                lastQueryLat,
+                lastQueryLng,
+                lastQueryTimeMs,
+                nowMs,
+            )
+        ) {
+            return
+        }
+
+        // Optional Google Roads speedLimits (Asset Tracking). Soft-fail if unlicensed.
+        if (placeId != null && !postedSpeedLimits.isDisabled) {
+            val placeKey = placeIdCacheKey(placeId)
+            if (placeKey in cache) {
+                val cached = cache[placeKey]
+                if (cached != null && SpeedLimitLogic.limitLooksPlausible(cached, speedMps)) {
+                    lastQueryLat = queryLat
+                    lastQueryLng = queryLng
+                    lastQueryTimeMs = nowMs
+                    publishCandidate(cached, speedMps, nowMs)
+                    return
+                }
+            }
+        }
+
+        // Bundled city packs (offline) — throttle + plausibility before UI.
+        if (regionPackStore.isInsideBundledRegion(queryLat, queryLng)) {
+            val hit = regionPackStore.lookup(queryLat, queryLng)
             if (hit != null) {
                 val kmh = hit.limitKmh
-                tripManager.updateRoadSpeedLimit(kmh)
-                if (LogThrottle.shouldLog("speedLimit.pack.${hit.packId}", 20_000L)) {
-                    AppLogger.d(
-                        AppLogger.Category.SPEED_LIMIT,
-                        "Region pack ${hit.packId} → $kmh km/h"
-                    )
-                }
                 if (SpeedLimitLogic.limitLooksPlausible(kmh, speedMps)) {
-                    lastQueryLat = latitude
-                    lastQueryLng = longitude
-                    lastQueryTimeMs = System.currentTimeMillis()
+                    lastQueryLat = queryLat
+                    lastQueryLng = queryLng
+                    lastQueryTimeMs = nowMs
+                    if (LogThrottle.shouldLog("speedLimit.pack.${hit.packId}", 20_000L)) {
+                        AppLogger.d(
+                            AppLogger.Category.SPEED_LIMIT,
+                            "Region pack ${hit.packId} → $kmh km/h (snapped=${snap != null})"
+                        )
+                    }
+                    publishCandidate(kmh, speedMps, nowMs)
                     return
                 }
                 if (LogThrottle.shouldLog("speedLimit.packMismatch", 20_000L)) {
@@ -81,45 +120,35 @@ class SpeedLimitResolver @Inject constructor(
             } else if (LogThrottle.shouldLog("speedLimit.pack.miss", 30_000L)) {
                 AppLogger.d(
                     AppLogger.Category.SPEED_LIMIT,
-                    "Inside region pack with no cell @ ${AppLogger.coordinate(latitude, longitude)}"
+                    "Inside region pack with no cell @ ${AppLogger.coordinate(queryLat, queryLng)}"
                 )
             }
-            // Miss or implausible → Overpass below.
         }
 
-        if (!SpeedLimitLogic.shouldQuery(
-                latitude,
-                longitude,
-                lastQueryLat,
-                lastQueryLng,
-                lastQueryTimeMs,
-            )
-        ) return
-
-        val cacheKey = SpeedLimitLogic.gridKey(latitude, longitude)
+        val cacheKey = placeId?.let { placeIdCacheKey(it) }
+            ?: SpeedLimitLogic.gridKey(queryLat, queryLng)
         if (cacheKey in cache) {
             val cached = cache[cacheKey]
             if (cached != null && SpeedLimitLogic.limitLooksPlausible(cached, speedMps)) {
-                tripManager.updateRoadSpeedLimit(cached)
-                lastQueryLat = latitude
-                lastQueryLng = longitude
-                lastQueryTimeMs = System.currentTimeMillis()
+                lastQueryLat = queryLat
+                lastQueryLng = queryLng
+                lastQueryTimeMs = nowMs
+                publishCandidate(cached, speedMps, nowMs)
                 AppLogger.d(
                     AppLogger.Category.SPEED_LIMIT,
-                    "Cache hit key=$cacheKey limit=$cached @ ${AppLogger.coordinate(latitude, longitude)}"
+                    "Cache hit key=$cacheKey limit=$cached @ ${AppLogger.coordinate(queryLat, queryLng)}"
                 )
                 return
             }
         }
 
-        // Soft offline fallback: nearest neighbouring cell with a known limit.
-        nearestCachedLimit(latitude, longitude)
+        nearestCachedLimit(queryLat, queryLng)
             ?.takeIf { SpeedLimitLogic.limitLooksPlausible(it, speedMps) }
             ?.let { nearby ->
-                tripManager.updateRoadSpeedLimit(nearby)
+                publishCandidate(nearby, speedMps, nowMs)
                 AppLogger.d(
                     AppLogger.Category.SPEED_LIMIT,
-                    "Offline neighbour limit=$nearby @ ${AppLogger.coordinate(latitude, longitude)}"
+                    "Offline neighbour limit=$nearby @ ${AppLogger.coordinate(queryLat, queryLng)}"
                 )
             }
 
@@ -127,33 +156,53 @@ class SpeedLimitResolver @Inject constructor(
         lookupJob = scope.launch {
             AppLogger.d(
                 AppLogger.Category.SPEED_LIMIT,
-                "Lookup start @ ${AppLogger.coordinate(latitude, longitude)}"
+                "Lookup start @ ${AppLogger.coordinate(queryLat, queryLng)} placeId=$placeId"
             )
-            val limit = try {
-                speedLimitProvider.getSpeedLimitKmh(latitude, longitude)
-            } catch (t: Throwable) {
-                AppLogger.e(AppLogger.Category.SPEED_LIMIT, "Lookup failed", t)
-                null
+
+            var limit: Int? = null
+            if (placeId != null && !postedSpeedLimits.isDisabled) {
+                when (val roads = postedSpeedLimits.lookupPlaceId(placeId)) {
+                    is PostedSpeedLimitLookup.Value -> limit = roads.kmh
+                    PostedSpeedLimitLookup.Unavailable,
+                    PostedSpeedLimitLookup.Missing,
+                    PostedSpeedLimitLookup.Failed,
+                    -> Unit
+                }
             }
+            if (limit == null) {
+                limit = try {
+                    speedLimitProvider.getSpeedLimitKmh(queryLat, queryLng)
+                } catch (t: Throwable) {
+                    AppLogger.e(AppLogger.Category.SPEED_LIMIT, "Lookup failed", t)
+                    null
+                }
+            }
+
             cache[cacheKey] = limit
             dirty = true
-            lastQueryLat = latitude
-            lastQueryLng = longitude
+            lastQueryLat = queryLat
+            lastQueryLng = queryLng
             lastQueryTimeMs = System.currentTimeMillis()
             if (limit != null) {
-                tripManager.updateRoadSpeedLimit(limit)
+                publishCandidate(limit, speedMps, System.currentTimeMillis())
                 persistIfNeeded()
                 AppLogger.i(
                     AppLogger.Category.SPEED_LIMIT,
-                    "Lookup ok → $limit km/h @ ${AppLogger.coordinate(latitude, longitude)}"
+                    "Lookup ok → $limit km/h @ ${AppLogger.coordinate(queryLat, queryLng)}"
                 )
             } else {
                 AppLogger.w(
                     AppLogger.Category.SPEED_LIMIT,
-                    "No maxspeed @ ${AppLogger.coordinate(latitude, longitude)}"
+                    "No maxspeed @ ${AppLogger.coordinate(queryLat, queryLng)}"
                 )
             }
         }
+    }
+
+    private fun publishCandidate(kmh: Int, speedMps: Float, nowMs: Long) {
+        val decision = SpeedLimitHoldLogic.onCandidate(holdState, kmh, speedMps, nowMs)
+        holdState = decision.state
+        decision.publishKmh?.let { tripManager.updateRoadSpeedLimit(it) }
     }
 
     private fun nearestCachedLimit(latitude: Double, longitude: Double): Int? {
@@ -167,5 +216,9 @@ class SpeedLimitResolver @Inject constructor(
         if (!dirty) return
         cacheStore.save(cache)
         dirty = false
+    }
+
+    companion object {
+        fun placeIdCacheKey(placeId: String): String = "pid:$placeId"
     }
 }
