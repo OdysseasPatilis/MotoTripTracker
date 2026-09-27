@@ -58,6 +58,7 @@ class NavigationService @Inject constructor(
     private var approachedStepId: String? = null
     private var announcedStepId: String? = null
     private var routeRequestGeneration = 0L
+    private var consecutiveOffRouteTicks = 0
 
     fun updateSearchQuery(query: String) {
         if (query == _state.value.searchQuery) return
@@ -259,6 +260,7 @@ class NavigationService @Inject constructor(
         nearestRouteDistanceMeters = 0.0
         approachedStepId = null
         announcedStepId = null
+        consecutiveOffRouteTicks = 0
         if (stopVoice) voice.stop()
         val voiceEnabled = _state.value.isVoiceEnabled
         val timing = _state.value.lastTimingResult
@@ -426,6 +428,7 @@ class NavigationService @Inject constructor(
         nearestRouteDistanceMeters = 0.0
         approachedStepId = null
         announcedStepId = null
+        consecutiveOffRouteTicks = 0
         voice.stop()
         if (isRecalculation) lastRecalculateAtMs = System.currentTimeMillis()
 
@@ -642,17 +645,21 @@ class NavigationService @Inject constructor(
         val state = _state.value
         if (!state.hasDestination || !state.hasRoute || state.isRouting || state.isRecalculating) return
 
-        if (NavigationProgressLogic.isOffRoute(nearestRouteDistanceMeters)) {
-            _state.update { it.copy(isOffRoute = true) }
+        val dwell = NavigationProgressLogic.offRouteDwellTick(
+            nearestRouteDistanceMeters = nearestRouteDistanceMeters,
+            consecutiveOffRouteTicks = consecutiveOffRouteTicks,
+            currentlyFlaggedOffRoute = state.isOffRoute,
+        )
+        consecutiveOffRouteTicks = dwell.consecutiveOffRouteTicks
+        if (dwell.isOffRoute != state.isOffRoute) {
+            _state.update { it.copy(isOffRoute = dwell.isOffRoute) }
+        }
+        if (dwell.shouldRecalculate) {
             val now = System.currentTimeMillis()
             if (now - lastRecalculateAtMs >= RECALCULATE_COOLDOWN_MS) {
                 lastRecalculateAtMs = now
                 computeRoute(isRecalculation = true)
             }
-        } else if (state.isOffRoute &&
-            NavigationProgressLogic.shouldClearOffRoute(nearestRouteDistanceMeters)
-        ) {
-            _state.update { it.copy(isOffRoute = false) }
         }
     }
 

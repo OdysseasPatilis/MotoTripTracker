@@ -10,6 +10,7 @@ import com.odys.mototriptracker.data.petrol.PetrolPreferences
 import com.odys.mototriptracker.data.petrol.PetrolStationFinder
 import com.odys.mototriptracker.data.weather.RouteWeatherService
 import com.odys.mototriptracker.domain.RouteCoordinate
+import com.odys.mototriptracker.domain.RoadSnapper
 import com.odys.mototriptracker.domain.usecase.ObserveRouteCoordinatesUseCase
 import com.odys.mototriptracker.domain.usecase.PauseRideUseCase
 import com.odys.mototriptracker.domain.usecase.ResumeRideUseCase
@@ -36,6 +37,7 @@ class RideTrackerFacade @Inject constructor(
     private val petrolPreferences: PetrolPreferences,
     private val petrolStationFinder: PetrolStationFinder,
     private val locationRepository: LocationRepository,
+    private val roadSnapper: RoadSnapper,
     private val startRideUseCase: StartRideUseCase,
     private val stopRideUseCase: StopRideUseCase,
     private val pauseRideUseCase: PauseRideUseCase,
@@ -119,7 +121,13 @@ class RideTrackerFacade @Inject constructor(
     }
 
     fun updateNavigationOrigin(latitude: Double, longitude: Double) {
-        navigationService.updateOrigin(latitude, longitude)
+        roadSnapper.onRawLocation(latitude, longitude)
+        val snap = roadSnapper.latestFresh()
+        if (snap != null) {
+            navigationService.updateOrigin(snap.latitude, snap.longitude)
+        } else {
+            navigationService.updateOrigin(latitude, longitude)
+        }
     }
 
     fun refreshTrafficCameras(location: Location, alertsEnabled: Boolean) {

@@ -132,4 +132,54 @@ class NavigationProgressLogicTest {
         assertTrue(NavigationProgressLogic.shouldClearOffRoute(30.0))
         assertFalse(NavigationProgressLogic.shouldClearOffRoute(50.0))
     }
+
+    @Test
+    fun segmentProjectionPrefersMidSegmentOverFarVertex() {
+        // Horizontal segment ~111 m; rider slightly off to the side at midpoint.
+        val coords = route(
+            37.9800 to 23.7200,
+            37.9810 to 23.7200,
+            37.9820 to 23.7200,
+        )
+        val midLat = 37.9805
+        val midLng = 23.7205 // ~40 m east of the road
+        val near = NavigationProgressLogic.nearestOnRoute(midLat, midLng, coords)
+        assertNotNull(near)
+        assertEquals(0, near!!.index)
+        assertTrue(near.distanceMeters in 30.0..60.0)
+        // Remaining ≈ half of first segment (~55 m) + full second (~111 m) ≈ 166 m
+        assertTrue(near.remainingMeters in 140.0..200.0)
+    }
+
+    @Test
+    fun offRouteDwellRequiresConsecutiveTicks() {
+        var ticks = 0
+        var flagged = false
+        repeat(NavigationProgressLogic.OFF_ROUTE_CONFIRM_TICKS - 1) {
+            val d = NavigationProgressLogic.offRouteDwellTick(
+                nearestRouteDistanceMeters = 100.0,
+                consecutiveOffRouteTicks = ticks,
+                currentlyFlaggedOffRoute = flagged,
+            )
+            ticks = d.consecutiveOffRouteTicks
+            flagged = d.isOffRoute
+            assertFalse(d.shouldRecalculate)
+            assertFalse(flagged)
+        }
+        val confirmed = NavigationProgressLogic.offRouteDwellTick(
+            nearestRouteDistanceMeters = 100.0,
+            consecutiveOffRouteTicks = ticks,
+            currentlyFlaggedOffRoute = flagged,
+        )
+        assertTrue(confirmed.isOffRoute)
+        assertTrue(confirmed.shouldRecalculate)
+
+        val cleared = NavigationProgressLogic.offRouteDwellTick(
+            nearestRouteDistanceMeters = 20.0,
+            consecutiveOffRouteTicks = confirmed.consecutiveOffRouteTicks,
+            currentlyFlaggedOffRoute = true,
+        )
+        assertFalse(cleared.isOffRoute)
+        assertEquals(0, cleared.consecutiveOffRouteTicks)
+    }
 }
