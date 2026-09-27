@@ -62,22 +62,25 @@ Progress is not “fraction of time elapsed.” It is **geometry first**: find w
 
 ### 4. Snapping and remaining distance
 
-Commercial SDKs often project the rider onto the nearest *segment* (perpendicular foot). This app uses a simpler, robust approach that is easy to test:
+Live GPS is first map-matched with **Google Roads `snapToRoads`** (`RoadSnapService`) when the network/key allow it. Navigation progress and speed-limit lookups prefer that snapped position (fresh &lt; 5 s); trip recording still stores raw GPS.
 
-1. Find the **nearest vertex** on the route polyline to the current GPS fix.
-2. Remaining distance ≈ distance from rider to that vertex **plus** the sum of edge lengths from that vertex to the end.
+Along the active route polyline, progress uses **nearest segment projection** (`NavigationProgressLogic.nearestOnRoute`):
+
+1. Project the (preferably snapped) fix onto the closest route segment.
+2. Remaining distance = distance along that segment to its end + sum of following edges.
+3. Off-route distance = perpendicular (or endpoint) distance to that projection.
 
 Trade-offs:
 
-- Cheap and deterministic (`NavigationProgressLogic.nearestOnRoute`).
-- Vertex density depends on the overview polyline; sparse polylines can slightly over/under-estimate remaining meters.
-- Off-route uses the same nearest-vertex distance (not segment distance).
+- Much more stable than raw GPS + nearest vertex alone.
+- Still depends on Directions overview-polyline density.
+- Requires Roads API enabled on the Maps Cloud project.
 
 ### 5. Off-route detection and hysteresis
 
 GPS noise and brief cut-throughs should not thrash recalculation.
 
-- **Off-route** when nearest-vertex distance **> 80 m**.
+- **Off-route** when nearest-segment distance **> 80 m** for **3 consecutive** GPS ticks.
 - **Clear off-route flag** only when distance **≤ 40 m** (half threshold) — classic hysteresis so the flag does not flicker around the boundary.
 - Recalculation itself is further rate-limited (**12 s** cooldown) so a noisy stretch does not spam Directions.
 

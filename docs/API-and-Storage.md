@@ -56,11 +56,24 @@ Not a REST call you write by hand — Google Maps Compose / Maps SDK loads tiles
 | Driving route | `maps/api/directions/json` (`alternatives=true` in preview, `departure_time=now` for traffic) | `NavigationService.fetchDirections` | Preview routes / Start navigation / off-route recalculate |
 | Fallback | OSRM (not Google) | `fetchOsrmDirections` | Google Directions fails |
 
-**Recalculate:** if rider is **>80 m** off the polyline, cooldown **12 s** (`RECALCULATE_COOLDOWN_MS`).
+**Recalculate:** if rider is **>80 m** off the polyline for **3 consecutive** GPS ticks, cooldown **12 s** (`RECALCULATE_COOLDOWN_MS`). Progress uses segment projection; origin prefers Google Roads snap when fresh.
 
 ---
 
-### 1.4 Geocoding
+### 1.4 Roads API (map-matching)
+
+Enable **Roads API** on the same Cloud project as `MAPS_API_KEY`.
+
+| Call | Endpoint | File | Trigger |
+|------|----------|------|---------|
+| Snap to Roads | `roads.googleapis.com/v1/snapToRoads` | `data/road/GoogleRoadsClient.kt` → `RoadSnapService` | Live GPS buffer (≈ every **25 m** or **2.5 s**); used by speed-limit lookup + nav origin |
+| Speed Limits | `roads.googleapis.com/v1/speedLimits` | same | Optional after snap (`placeId`). Requires **Asset Tracking** license; on 403 the app disables this call for the session and falls back to pack/Overpass |
+
+**Flow:** raw GPS → snap → speed limit / navigation use snapped lat/lng (+ `placeId` when present). Trip recording still stores **raw** GPS. Speed-limit UI also applies a hold/confirm so a single wrong hit cannot flash (e.g. 90↔40).
+
+---
+
+### 1.5 Geocoding
 
 | Call | Endpoint | File | Trigger |
 |------|----------|------|---------|
@@ -72,7 +85,7 @@ Not a REST call you write by hand — Google Maps Compose / Maps SDK loads tiles
 
 | Service | Endpoint(s) | File | Purpose | When |
 |---------|-------------|------|---------|------|
-| **OpenStreetMap Overpass** | `lz4.overpass-api.de`, `z.overpass-api.de`, `overpass.kumi.systems`, `overpass-api.de` | `data/road/OverpassSpeedLimitProvider.kt` | Road `maxspeed` | Speed-limit miss / implausible Athens pack hit |
+| **OpenStreetMap Overpass** | `lz4.overpass-api.de`, `z.overpass-api.de`, `overpass.kumi.systems`, `overpass-api.de` | `data/road/OverpassSpeedLimitProvider.kt` | Road `maxspeed` at snapped coords | After snap; pack miss / Roads speedLimits unavailable |
 | **Overpass** (petrol) | same mirrors | `data/petrol/PetrolStationFinder.kt` (+ helpers in `NavigationService`) | OSM fuel stations | Petrol search (merged with Google Places) |
 | **Overpass** (traffic cameras) | same mirrors | `data/camera/TrafficCameraService.kt` | Speed / red-light cameras | Active/idle map fill-in; throttled |
 | **speedcams.world** | `speedcams.world/downloads/{cc}/{cc}-all.csv` | `data/camera/TrafficCameraPackDownloader.kt` | Country speed-camera CSV packs | Auto while GPS updates; TTL / LRU cache |
