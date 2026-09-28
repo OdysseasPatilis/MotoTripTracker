@@ -3,19 +3,14 @@ package com.odys.mototriptracker.ui.tracker
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.VolumeOff
-import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Flag
 import androidx.compose.material.icons.filled.Navigation
@@ -26,7 +21,6 @@ import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material.icons.filled.TurnLeft
 import androidx.compose.material.icons.filled.TurnRight
 import androidx.compose.material.icons.filled.UTurnLeft
-import androidx.compose.material.icons.filled.WbSunny
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -123,6 +117,7 @@ internal fun RoutePreviewCard(
                         Column(
                             modifier = Modifier
                                 .weight(1f)
+                                .heightIn(min = RideTouchTarget)
                                 .clip(RoundedCornerShape(10.dp))
                                 .background(
                                     if (selected) palette.neonBlue.copy(alpha = 0.18f)
@@ -163,7 +158,9 @@ internal fun RoutePreviewCard(
         ) {
             Button(
                 onClick = onCancel,
-                modifier = Modifier.weight(1f),
+                modifier = Modifier
+                    .weight(1f)
+                    .heightIn(min = RideTouchTarget),
                 colors = ButtonDefaults.buttonColors(containerColor = palette.bgCard),
                 shape = RoundedCornerShape(12.dp)
             ) {
@@ -172,7 +169,9 @@ internal fun RoutePreviewCard(
             Button(
                 onClick = onStart,
                 enabled = canStart,
-                modifier = Modifier.weight(1f),
+                modifier = Modifier
+                    .weight(1f)
+                    .heightIn(min = RideTouchTarget),
                 colors = ButtonDefaults.buttonColors(containerColor = palette.neonGreen),
                 shape = RoundedCornerShape(12.dp)
             ) {
@@ -210,180 +209,13 @@ internal fun TimingResultBanner(
             fontWeight = FontWeight.SemiBold,
             modifier = Modifier.weight(1f)
         )
-        IconButton(onClick = onDismiss, modifier = Modifier.size(28.dp)) {
+        IconButton(onClick = onDismiss, modifier = Modifier.size(RideTouchTarget)) {
             Icon(
                 Icons.Filled.Close,
                 contentDescription = "Dismiss timing summary",
                 tint = palette.textSecondary,
                 modifier = Modifier.size(18.dp)
             )
-        }
-    }
-}
-
-@Composable
-internal fun ActiveRouteChip(
-    navigation: NavigationState,
-    palette: AppPalette,
-    onOpenInMaps: () -> Unit,
-    onClear: () -> Unit,
-    onToggleVoice: () -> Unit,
-    onShowWeather: (() -> Unit)? = null
-) {
-    val summary = when {
-        navigation.isRouting -> "Routing…"
-        navigation.isRecalculating -> "Recalculating…"
-        else -> navigation.summaryText
-    }
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(999.dp))
-            .background(palette.bgPanel.copy(alpha = 0.88f))
-            .padding(horizontal = 12.dp, vertical = 6.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(4.dp)
-    ) {
-        Text(
-            summary,
-            color = palette.textPrimary,
-            fontSize = 12.sp,
-            fontWeight = FontWeight.SemiBold,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f)
-        )
-        if (onShowWeather != null && navigation.hasRoute && !navigation.isRouting) {
-            IconButton(onClick = onShowWeather, modifier = Modifier.size(32.dp)) {
-                Icon(
-                    Icons.Filled.WbSunny,
-                    contentDescription = "Route weather",
-                    tint = palette.neonBlue,
-                    modifier = Modifier.size(18.dp)
-                )
-            }
-        }
-        IconButton(onClick = onToggleVoice, modifier = Modifier.size(32.dp)) {
-            Icon(
-                imageVector = if (navigation.isVoiceEnabled) {
-                    Icons.AutoMirrored.Filled.VolumeUp
-                } else {
-                    Icons.AutoMirrored.Filled.VolumeOff
-                },
-                contentDescription = if (navigation.isVoiceEnabled) {
-                    "Mute voice guidance"
-                } else {
-                    "Enable voice guidance"
-                },
-                tint = if (navigation.isVoiceEnabled) palette.neonGreen else palette.textSecondary,
-                modifier = Modifier.size(18.dp)
-            )
-        }
-        IconButton(onClick = onOpenInMaps, modifier = Modifier.size(32.dp)) {
-            Icon(
-                Icons.Filled.Navigation,
-                contentDescription = "Open in Google Maps",
-                tint = palette.neonGreen,
-                modifier = Modifier.size(18.dp)
-            )
-        }
-        IconButton(onClick = onClear, modifier = Modifier.size(32.dp)) {
-            Icon(
-                Icons.Filled.Close,
-                contentDescription = "Clear destination",
-                tint = palette.textSecondary,
-                modifier = Modifier.size(18.dp)
-            )
-        }
-    }
-}
-
-@Composable
-internal fun ManeuverBanner(
-    navigation: NavigationState,
-    palette: AppPalette,
-    modifier: Modifier = Modifier
-) {
-    val accent = if (navigation.isOffRoute || navigation.isRecalculating) palette.routeAmber else palette.neonBlue
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
-            .background(palette.bgPanel.copy(alpha = 0.92f))
-            .padding(horizontal = 14.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(14.dp)
-    ) {
-        Box(
-            modifier = Modifier
-                .size(56.dp)
-                .clip(RoundedCornerShape(14.dp))
-                .background(accent),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                imageVector = maneuverIcon(navigation),
-                contentDescription = null,
-                tint = palette.bgDeep,
-                modifier = Modifier.size(28.dp)
-            )
-        }
-        Column(
-            modifier = Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(4.dp)
-        ) {
-            when {
-                navigation.isRecalculating -> {
-                    Text(
-                        "Recalculating…",
-                        color = palette.textPrimary,
-                        fontWeight = FontWeight.SemiBold,
-                        fontSize = 18.sp
-                    )
-                }
-                navigation.isOffRoute -> {
-                    Text(
-                        "Off route",
-                        color = palette.textPrimary,
-                        fontWeight = FontWeight.SemiBold,
-                        fontSize = 18.sp
-                    )
-                }
-                navigation.currentStep != null -> {
-                    Text(
-                        NavigationState.formatDistance(navigation.distanceToNextManeuverMeters),
-                        color = palette.textPrimary,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 22.sp
-                    )
-                    Text(
-                        navigation.currentStep.instruction,
-                        color = palette.textSecondary,
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-                navigation.isRouting -> {
-                    Text(
-                        "Calculating route…",
-                        color = palette.textPrimary,
-                        fontWeight = FontWeight.SemiBold,
-                        fontSize = 18.sp
-                    )
-                }
-                else -> {
-                    Text(
-                        navigation.destinationName ?: "Destination",
-                        color = palette.textPrimary,
-                        fontWeight = FontWeight.SemiBold,
-                        fontSize = 18.sp,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-            }
         }
     }
 }

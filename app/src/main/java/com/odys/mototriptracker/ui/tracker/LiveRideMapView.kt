@@ -119,7 +119,11 @@ fun LiveRideMapView(
     }
 
     val showRecenter = !isFollowingUser && !isPreviewing
-    val recenterBottomPadding = if (hasSelectedPlace) 250.dp else 100.dp
+    val recenterBottomPadding = when {
+        isNavigating -> 248.dp
+        hasSelectedPlace -> 250.dp
+        else -> 100.dp
+    }
 
     LaunchedEffect(isPreviewing) {
         if (isPreviewing) {
@@ -372,7 +376,7 @@ fun LiveRideMapView(
                     cameraPositionState.move(CameraUpdateFactory.newCameraPosition(camera))
                 },
                 modifier = Modifier
-                    .size(44.dp)
+                    .size(RideTouchTarget)
                     .background(palette.bgPanel.copy(alpha = 0.92f), CircleShape),
             ) {
                 Icon(
