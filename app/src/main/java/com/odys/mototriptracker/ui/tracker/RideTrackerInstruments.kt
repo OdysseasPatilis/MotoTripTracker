@@ -10,6 +10,7 @@ import android.os.BatteryManager
 import android.view.WindowManager
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.animateIntAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
@@ -41,9 +42,11 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Paint
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.nativeCanvas
@@ -144,7 +147,9 @@ fun SpeedometerArc(
     isAutoLimit: Boolean = false,
     flashPhase: SpeedLimitFlashPhase = rememberSpeedLimitFlashPhase(speedKmh > speedLimitKmh),
     palette: AppPalette = LocalAppPalette.current,
-    dialSize: Dp = 260.dp
+    dialSize: Dp = 260.dp,
+    drawReadoutScrim: Boolean = false,
+    modifier: Modifier = Modifier,
 ) {
     val isOverLimit = speedKmh > speedLimitKmh
     val limitPercent = (speedLimitKmh / maxSpeedKmh).coerceIn(0f, 1f)
@@ -152,13 +157,22 @@ fun SpeedometerArc(
     val startAngle = 135f
     val totalSweep = 270f
 
+    val animatedFraction by animateFloatAsState(
+        targetValue = speedPercent,
+        animationSpec = tween(450, easing = FastOutSlowInEasing),
+        label = "needle"
+    )
+
     val speedNumColor by animateColorAsState(
         targetValue = if (isOverLimit) palette.stopRed else palette.textPrimary,
         animationSpec = tween(300),
         label = "speedNum"
     )
 
-    Box(modifier = Modifier.size(dialSize), contentAlignment = Alignment.Center) {
+    val speedSp = (dialSize.value * 0.20f).coerceIn(40f, 52f).sp
+    val unitSp = if (dialSize < 220.dp) 12.sp else 14.sp
+
+    Box(modifier = modifier.size(dialSize), contentAlignment = Alignment.Center) {
         Canvas(modifier = Modifier.fillMaxSize()) {
             val padding = 20.dp.toPx()
             val radius = (minOf(size.width, size.height) - padding * 2) / 2f
@@ -166,6 +180,22 @@ fun SpeedometerArc(
             val trackStyle = Stroke(width = 4.dp.toPx(), cap = StrokeCap.Round)
             val mainWidth = 9.dp.toPx()
             val mainStyle = Stroke(width = mainWidth, cap = StrokeCap.Round)
+
+            if (drawReadoutScrim) {
+                drawCircle(
+                    brush = Brush.radialGradient(
+                        colors = listOf(
+                            palette.bgDeep.copy(alpha = 0.82f),
+                            palette.bgDeep.copy(alpha = 0.35f),
+                            Color.Transparent
+                        ),
+                        center = center,
+                        radius = radius * 0.78f
+                    ),
+                    radius = radius * 0.78f,
+                    center = center
+                )
+            }
 
             drawArc(
                 color = palette.arcTrack,
@@ -231,36 +261,61 @@ fun SpeedometerArc(
                 }
             }
 
-            val limitAngleRad = Math.toRadians((startAngle + totalSweep * limitPercent).toDouble())
-            val notchInner = radius - 9.dp.toPx()
-            val notchOuter = radius + 9.dp.toPx()
+            // Tick marks only. Numeric labels (20, 40, 60…) stay off the dial.
+            val majorCount = (maxSpeedKmh / 20f).toInt().coerceAtLeast(1)
+            repeat(majorCount + 1) { index ->
+                val fraction = index / majorCount.toFloat()
+                drawDialTick(
+                    center = center,
+                    angleDegrees = startAngle + totalSweep * fraction,
+                    inner = radius - 8.dp.toPx(),
+                    outer = radius + 7.dp.toPx(),
+                    color = palette.textSecondary.copy(alpha = 0.9f),
+                    stroke = 2.dp.toPx()
+                )
+                if (index < majorCount) {
+                    val mid = (index + 0.5f) / majorCount.toFloat()
+                    drawDialTick(
+                        center = center,
+                        angleDegrees = startAngle + totalSweep * mid,
+                        inner = radius - 2.dp.toPx(),
+                        outer = radius + 7.dp.toPx(),
+                        color = palette.textMuted.copy(alpha = 0.95f),
+                        stroke = 1.25.dp.toPx()
+                    )
+                }
+            }
+
+            drawDialTick(
+                center = center,
+                angleDegrees = startAngle + totalSweep * limitPercent,
+                inner = radius - 11.dp.toPx(),
+                outer = radius + 9.dp.toPx(),
+                color = palette.textPrimary.copy(alpha = 0.95f),
+                stroke = 2.5.dp.toPx()
+            )
+
+            val needleAngle = Math.toRadians((startAngle + totalSweep * animatedFraction).toDouble())
+            val needleLength = radius - 18.dp.toPx()
+            val tip = Offset(
+                center.x + cos(needleAngle).toFloat() * needleLength,
+                center.y + sin(needleAngle).toFloat() * needleLength
+            )
             drawLine(
-                color = palette.textPrimary.copy(alpha = 0.9f),
-                start = Offset(
-                    center.x + notchInner * cos(limitAngleRad).toFloat(),
-                    center.y + notchInner * sin(limitAngleRad).toFloat()
-                ),
-                end = Offset(
-                    center.x + notchOuter * cos(limitAngleRad).toFloat(),
-                    center.y + notchOuter * sin(limitAngleRad).toFloat()
-                ),
-                strokeWidth = 2.5.dp.toPx(),
+                color = palette.textPrimary,
+                start = center,
+                end = tip,
+                strokeWidth = 3.dp.toPx(),
                 cap = StrokeCap.Round
             )
+            drawCircle(color = palette.neonBlue, radius = 5.dp.toPx(), center = center)
+            drawCircle(color = palette.bgCard, radius = 2.4.dp.toPx(), center = center)
         }
 
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(6.dp)
+            verticalArrangement = Arrangement.spacedBy(0.dp)
         ) {
-            SpeedLimitSign(
-                limitKmh = speedLimitKmh.toInt(),
-                isOverLimit = isOverLimit,
-                isLive = isAutoLimit,
-                flashPhase = flashPhase,
-                palette = palette
-            )
-
             val animatedSpeed by animateIntAsState(
                 targetValue = speedKmh.toInt(),
                 animationSpec = tween(1000, easing = FastOutSlowInEasing),
@@ -269,18 +324,49 @@ fun SpeedometerArc(
             Text(
                 text = animatedSpeed.toString(),
                 color = speedNumColor,
-                fontSize = 52.sp,
+                fontSize = speedSp,
                 fontWeight = FontWeight.Bold,
-                lineHeight = 52.sp
+                lineHeight = speedSp
             )
             Text(
                 "km/h",
                 color = palette.textSecondary,
-                fontSize = 14.sp,
+                fontSize = unitSp,
                 fontWeight = FontWeight.Medium
             )
         }
+
+        SpeedLimitSign(
+            limitKmh = speedLimitKmh.toInt(),
+            isOverLimit = isOverLimit,
+            isLive = isAutoLimit,
+            flashPhase = flashPhase,
+            palette = palette,
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .padding(top = 4.dp, end = 2.dp)
+        )
     }
+}
+
+private fun DrawScope.drawDialTick(
+    center: Offset,
+    angleDegrees: Float,
+    inner: Float,
+    outer: Float,
+    color: Color,
+    stroke: Float,
+) {
+    val angle = Math.toRadians(angleDegrees.toDouble())
+    val cosA = cos(angle).toFloat()
+    val sinA = sin(angle).toFloat()
+    drawLine(
+        color = color,
+        start = Offset(center.x + cosA * inner, center.y + sinA * inner),
+        end = Offset(center.x + cosA * outer, center.y + sinA * outer),
+        strokeWidth = stroke,
+        cap = StrokeCap.Round
+    )
 }
 @Composable
 fun GForceBar(

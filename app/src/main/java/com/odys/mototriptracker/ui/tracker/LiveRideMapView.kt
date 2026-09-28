@@ -110,16 +110,21 @@ fun LiveRideMapView(
         }
     }
 
-    val previewContentPadding = remember(isPreviewing) {
-        if (isPreviewing) {
-            PaddingValues(start = 48.dp, top = 72.dp, end = 48.dp, bottom = 240.dp)
-        } else {
-            PaddingValues(0.dp)
+    val mapContentPadding = remember(isPreviewing, isNavigating) {
+        when {
+            isPreviewing -> PaddingValues(start = 48.dp, top = 72.dp, end = 48.dp, bottom = 240.dp)
+            // Keep the framed road ahead of the turn chip, side rail, and floating dial.
+            isNavigating -> PaddingValues(start = 64.dp, top = 132.dp, end = 56.dp, bottom = 200.dp)
+            else -> PaddingValues(0.dp)
         }
     }
 
     val showRecenter = !isFollowingUser && !isPreviewing
-    val recenterBottomPadding = if (hasSelectedPlace) 250.dp else 100.dp
+    val recenterBottomPadding = when {
+        hasSelectedPlace -> 250.dp
+        isNavigating -> 24.dp
+        else -> 100.dp
+    }
 
     LaunchedEffect(isPreviewing) {
         if (isPreviewing) {
@@ -235,7 +240,7 @@ fun LiveRideMapView(
         GoogleMap(
             modifier = Modifier.fillMaxSize(),
             cameraPositionState = cameraPositionState,
-            contentPadding = previewContentPadding,
+            contentPadding = mapContentPadding,
             properties = MapProperties(
                 isMyLocationEnabled = true,
                 isTrafficEnabled = true,
@@ -372,7 +377,7 @@ fun LiveRideMapView(
                     cameraPositionState.move(CameraUpdateFactory.newCameraPosition(camera))
                 },
                 modifier = Modifier
-                    .size(44.dp)
+                    .size(48.dp)
                     .background(palette.bgPanel.copy(alpha = 0.92f), CircleShape),
             ) {
                 Icon(
