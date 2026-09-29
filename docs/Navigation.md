@@ -210,7 +210,8 @@ UI / application wiring:
 | `application/TrackerModels.kt` | Typealiases so UI imports application types, not `data.*` |
 | `ui/tracker/RideTrackerViewModel.kt` | Combines `facade.navigation` into UI state; GPS → `updateNavigationOrigin` |
 | `ui/tracker/RideTrackerScreen.kt` | Composes search / preview / maneuver / active chip / timing overlays |
-| `ui/tracker/RideTrackerNavOverlays.kt` | `RoutePreviewCard`, `ManeuverBanner`, `ActiveRouteChip`, `TimingResultBanner` |
+| `ui/tracker/RideTrackerNavOverlays.kt` | `RoutePreviewCard`, `TimingResultBanner`, shared maneuver icons |
+| `ui/tracker/RideTrackerMapHud.kt` | Navigating HUD: `CompactTurnChip`, utility rail, glance stats, end-ride / stats sheets |
 | `ui/tracker/DestinationSearchSheet.kt` | Search + history UI |
 | `ui/tracker/LiveRideMapView.kt` | Polylines, dest marker, POI click |
 | `ui/tracker/MapPlaceCoordinator.kt` | POI resolve → Go → `setDestination` |
@@ -439,7 +440,7 @@ Haptics in `NavigationService`: light one-shot on step advance; waveform on arri
 - Prefer `google.navigation:q=lat,lng&mode=d` with Maps package.
 - Fallback browser Directions URL with `travelmode=driving`.
 
-Does not stop in-app navigation by itself; the ActiveRouteChip clear / cancel does.
+Does not stop in-app navigation by itself; the CompactTurnChip clear control (or preview cancel) does.
 
 ### 26. Concurrency and staleness
 

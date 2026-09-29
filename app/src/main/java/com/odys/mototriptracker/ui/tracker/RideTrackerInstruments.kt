@@ -10,7 +10,6 @@ import android.os.BatteryManager
 import android.view.WindowManager
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.animateIntAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
@@ -25,9 +24,11 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -44,9 +45,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Paint
 import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.nativeCanvas
@@ -58,6 +57,9 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.odys.mototriptracker.domain.GpsQuality
+import com.odys.mototriptracker.domain.TripStats
+import com.odys.mototriptracker.domain.TwistinessCalculator
+import com.odys.mototriptracker.ui.components.formatSecondsToTime
 import com.odys.mototriptracker.ui.theme.AppPalette
 import com.odys.mototriptracker.ui.theme.LocalAppPalette
 import java.util.Locale
@@ -139,63 +141,61 @@ fun StatCard(
     }
 }
 
+/**
+ * Needle gauge with a large digital speed and the speed-limit badge.
+ * Tick marks are unlabeled — numeric labels (20, 40, 60…) stay off the dial.
+ */
 @Composable
 fun SpeedometerArc(
     speedKmh: Float,
-    maxSpeedKmh: Float = 260f,
+    maxSpeedKmh: Float = 180f,
     speedLimitKmh: Float = 50f,
     isAutoLimit: Boolean = false,
     flashPhase: SpeedLimitFlashPhase = rememberSpeedLimitFlashPhase(speedKmh > speedLimitKmh),
     palette: AppPalette = LocalAppPalette.current,
     dialSize: Dp = 260.dp,
-    drawReadoutScrim: Boolean = false,
-    modifier: Modifier = Modifier,
+    floating: Boolean = false,
+    speedReadoutColor: Color? = null,
 ) {
+    val scaleMax = maxSpeedKmh.coerceAtLeast(1f)
     val isOverLimit = speedKmh > speedLimitKmh
-    val limitPercent = (speedLimitKmh / maxSpeedKmh).coerceIn(0f, 1f)
-    val speedPercent = (speedKmh / maxSpeedKmh).coerceIn(0f, 1f)
+    val limitPercent = (speedLimitKmh / scaleMax).coerceIn(0f, 1f)
+    val speedPercent = (speedKmh / scaleMax).coerceIn(0f, 1f)
     val startAngle = 135f
     val totalSweep = 270f
-
-    val animatedFraction by animateFloatAsState(
-        targetValue = speedPercent,
-        animationSpec = tween(450, easing = FastOutSlowInEasing),
-        label = "needle"
-    )
+    val speedFontSize = if (dialSize < 200.dp) 40.sp else 52.sp
+    val unitFontSize = if (dialSize < 200.dp) 12.sp else 14.sp
 
     val speedNumColor by animateColorAsState(
-        targetValue = if (isOverLimit) palette.stopRed else palette.textPrimary,
+        targetValue = if (isOverLimit) palette.stopRed else (speedReadoutColor ?: palette.textPrimary),
         animationSpec = tween(300),
         label = "speedNum"
     )
 
-    val speedSp = (dialSize.value * 0.20f).coerceIn(40f, 52f).sp
-    val unitSp = if (dialSize < 220.dp) 12.sp else 14.sp
-
-    Box(modifier = modifier.size(dialSize), contentAlignment = Alignment.Center) {
+    Box(modifier = Modifier.size(dialSize), contentAlignment = Alignment.Center) {
+        if (floating) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(
+                        Brush.radialGradient(
+                            listOf(
+                                palette.bgDeep.copy(alpha = 0.82f),
+                                palette.bgDeep.copy(alpha = 0.45f),
+                                Color.Transparent,
+                            )
+                        ),
+                        CircleShape,
+                    )
+            )
+        }
         Canvas(modifier = Modifier.fillMaxSize()) {
-            val padding = 20.dp.toPx()
+            val padding = if (dialSize < 200.dp) 16.dp.toPx() else 20.dp.toPx()
             val radius = (minOf(size.width, size.height) - padding * 2) / 2f
             val center = Offset(size.width / 2f, size.height / 2f)
             val trackStyle = Stroke(width = 4.dp.toPx(), cap = StrokeCap.Round)
-            val mainWidth = 9.dp.toPx()
+            val mainWidth = if (dialSize < 200.dp) 7.dp.toPx() else 9.dp.toPx()
             val mainStyle = Stroke(width = mainWidth, cap = StrokeCap.Round)
-
-            if (drawReadoutScrim) {
-                drawCircle(
-                    brush = Brush.radialGradient(
-                        colors = listOf(
-                            palette.bgDeep.copy(alpha = 0.82f),
-                            palette.bgDeep.copy(alpha = 0.35f),
-                            Color.Transparent
-                        ),
-                        center = center,
-                        radius = radius * 0.78f
-                    ),
-                    radius = radius * 0.78f,
-                    center = center
-                )
-            }
 
             drawArc(
                 color = palette.arcTrack,
@@ -206,6 +206,28 @@ fun SpeedometerArc(
                 size = Size(radius * 2, radius * 2),
                 style = trackStyle
             )
+
+            val tickStep = 20f
+            val tickCount = (scaleMax / tickStep).toInt().coerceAtLeast(1)
+            for (index in 0..tickCount) {
+                val fraction = (index * tickStep / scaleMax).coerceIn(0f, 1f)
+                val tickAngle = Math.toRadians((startAngle + totalSweep * fraction).toDouble())
+                val inner = radius - 7.dp.toPx()
+                val outer = radius + 1.dp.toPx()
+                drawLine(
+                    color = palette.textMuted.copy(alpha = 0.9f),
+                    start = Offset(
+                        center.x + inner * cos(tickAngle).toFloat(),
+                        center.y + inner * sin(tickAngle).toFloat()
+                    ),
+                    end = Offset(
+                        center.x + outer * cos(tickAngle).toFloat(),
+                        center.y + outer * sin(tickAngle).toFloat()
+                    ),
+                    strokeWidth = 1.5.dp.toPx(),
+                    cap = StrokeCap.Round
+                )
+            }
 
             if (speedPercent > 0f) {
                 val accent = if (isOverLimit) palette.stopRed else palette.neonGreen
@@ -252,7 +274,7 @@ fun SpeedometerArc(
                     drawArc(
                         color = palette.stopRed,
                         startAngle = startAngle + totalSweep * limitPercent,
-                        sweepAngle = totalSweep * (speedPercent - limitPercent),
+                        sweepAngle = totalSweep * (speedPercent - limitPercent).coerceAtLeast(0f),
                         useCenter = false,
                         topLeft = Offset(center.x - radius, center.y - radius),
                         size = Size(radius * 2, radius * 2),
@@ -261,55 +283,50 @@ fun SpeedometerArc(
                 }
             }
 
-            // Tick marks only. Numeric labels (20, 40, 60…) stay off the dial.
-            val majorCount = (maxSpeedKmh / 20f).toInt().coerceAtLeast(1)
-            repeat(majorCount + 1) { index ->
-                val fraction = index / majorCount.toFloat()
-                drawDialTick(
-                    center = center,
-                    angleDegrees = startAngle + totalSweep * fraction,
-                    inner = radius - 8.dp.toPx(),
-                    outer = radius + 7.dp.toPx(),
-                    color = palette.textSecondary.copy(alpha = 0.9f),
-                    stroke = 2.dp.toPx()
-                )
-                if (index < majorCount) {
-                    val mid = (index + 0.5f) / majorCount.toFloat()
-                    drawDialTick(
-                        center = center,
-                        angleDegrees = startAngle + totalSweep * mid,
-                        inner = radius - 2.dp.toPx(),
-                        outer = radius + 7.dp.toPx(),
-                        color = palette.textMuted.copy(alpha = 0.95f),
-                        stroke = 1.25.dp.toPx()
-                    )
-                }
-            }
-
-            drawDialTick(
-                center = center,
-                angleDegrees = startAngle + totalSweep * limitPercent,
-                inner = radius - 11.dp.toPx(),
-                outer = radius + 9.dp.toPx(),
-                color = palette.textPrimary.copy(alpha = 0.95f),
-                stroke = 2.5.dp.toPx()
-            )
-
-            val needleAngle = Math.toRadians((startAngle + totalSweep * animatedFraction).toDouble())
-            val needleLength = radius - 18.dp.toPx()
-            val tip = Offset(
-                center.x + cos(needleAngle).toFloat() * needleLength,
-                center.y + sin(needleAngle).toFloat() * needleLength
-            )
+            val limitAngleRad = Math.toRadians((startAngle + totalSweep * limitPercent).toDouble())
+            val notchInner = radius - 9.dp.toPx()
+            val notchOuter = radius + 9.dp.toPx()
             drawLine(
-                color = palette.textPrimary,
+                color = palette.textPrimary.copy(alpha = 0.9f),
+                start = Offset(
+                    center.x + notchInner * cos(limitAngleRad).toFloat(),
+                    center.y + notchInner * sin(limitAngleRad).toFloat()
+                ),
+                end = Offset(
+                    center.x + notchOuter * cos(limitAngleRad).toFloat(),
+                    center.y + notchOuter * sin(limitAngleRad).toFloat()
+                ),
+                strokeWidth = 2.5.dp.toPx(),
+                cap = StrokeCap.Round
+            )
+
+            val needleColor = if (isOverLimit) palette.stopRed else palette.neonBlue
+            val needleAngle = Math.toRadians((startAngle + totalSweep * speedPercent).toDouble())
+            val needleLength = radius - 6.dp.toPx()
+            val tip = Offset(
+                center.x + needleLength * cos(needleAngle).toFloat(),
+                center.y + needleLength * sin(needleAngle).toFloat()
+            )
+            drawIntoCanvas { canvas ->
+                val glowPaint = android.graphics.Paint().apply {
+                    isAntiAlias = true
+                    color = needleColor.copy(alpha = 0.65f).toArgb()
+                    strokeWidth = 7.dp.toPx()
+                    style = android.graphics.Paint.Style.STROKE
+                    strokeCap = android.graphics.Paint.Cap.ROUND
+                    maskFilter = BlurMaskFilter(6f, BlurMaskFilter.Blur.NORMAL)
+                }
+                canvas.nativeCanvas.drawLine(center.x, center.y, tip.x, tip.y, glowPaint)
+            }
+            drawLine(
+                color = needleColor,
                 start = center,
                 end = tip,
                 strokeWidth = 3.dp.toPx(),
                 cap = StrokeCap.Round
             )
-            drawCircle(color = palette.neonBlue, radius = 5.dp.toPx(), center = center)
-            drawCircle(color = palette.bgCard, radius = 2.4.dp.toPx(), center = center)
+            drawCircle(color = palette.bgCard, radius = 6.dp.toPx(), center = center)
+            drawCircle(color = needleColor, radius = 3.5.dp.toPx(), center = center)
         }
 
         Column(
@@ -324,14 +341,14 @@ fun SpeedometerArc(
             Text(
                 text = animatedSpeed.toString(),
                 color = speedNumColor,
-                fontSize = speedSp,
+                fontSize = speedFontSize,
                 fontWeight = FontWeight.Bold,
-                lineHeight = speedSp
+                lineHeight = speedFontSize
             )
             Text(
                 "km/h",
                 color = palette.textSecondary,
-                fontSize = unitSp,
+                fontSize = unitFontSize,
                 fontWeight = FontWeight.Medium
             )
         }
@@ -344,29 +361,117 @@ fun SpeedometerArc(
             palette = palette,
             modifier = Modifier
                 .align(Alignment.TopEnd)
-                .padding(top = 4.dp, end = 2.dp)
+                .offset(x = 4.dp, y = 6.dp)
         )
     }
 }
 
-private fun DrawScope.drawDialTick(
-    center: Offset,
-    angleDegrees: Float,
-    inner: Float,
-    outer: Float,
-    color: Color,
-    stroke: Float,
+@Composable
+fun RideStatsGrid(
+    stats: TripStats,
+    palette: AppPalette,
+    modifier: Modifier = Modifier,
 ) {
-    val angle = Math.toRadians(angleDegrees.toDouble())
-    val cosA = cos(angle).toFloat()
-    val sinA = sin(angle).toFloat()
-    drawLine(
-        color = color,
-        start = Offset(center.x + cosA * inner, center.y + sinA * inner),
-        end = Offset(center.x + cosA * outer, center.y + sinA * outer),
-        strokeWidth = stroke,
-        cap = StrokeCap.Round
-    )
+    Column(
+        modifier = modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            StatCard(
+                "DISTANCE",
+                String.format(Locale.US, "%.1f km", stats.distanceKm),
+                Modifier.weight(1f),
+                palette = palette
+            )
+            StatCard(
+                "TOTAL TIME",
+                formatSecondsToTime(stats.tripTime),
+                Modifier.weight(1f),
+                palette = palette
+            )
+        }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            StatCard(
+                "MOVING",
+                formatSecondsToTime(stats.movingTime),
+                Modifier.weight(1f),
+                valueColor = palette.neonGreen,
+                palette = palette
+            )
+            StatCard(
+                "STOPPED",
+                formatSecondsToTime(stats.stoppedTime),
+                Modifier.weight(1f),
+                valueColor = palette.neonRed,
+                palette = palette
+            )
+        }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            StatCard(
+                "AVG SPEED",
+                "${stats.avgSpeed.toInt()} km/h",
+                Modifier.weight(1f),
+                palette = palette
+            )
+            StatCard(
+                "MAX SPEED",
+                "${stats.maxSpeed.toInt()} km/h",
+                Modifier.weight(1f),
+                palette = palette
+            )
+        }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            StatCard(
+                "ELEVATION",
+                "${stats.totalElevationGain.toInt()} m",
+                Modifier.weight(1f),
+                palette = palette
+            )
+            StatCard(
+                "MAX G",
+                String.format(Locale.US, "%.2f G", stats.maxGForce),
+                Modifier.weight(1f),
+                valueColor = palette.neonBlue,
+                palette = palette
+            )
+        }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            StatCard(
+                "TWISTINESS",
+                TwistinessCalculator.formattedScore(
+                    TwistinessCalculator.score(
+                        stats.cornerCount,
+                        stats.distanceKm.toDouble(),
+                        stats.maxLateralGForce.toDouble()
+                    )
+                ),
+                Modifier.weight(1f),
+                valueColor = palette.neonBlue,
+                palette = palette
+            )
+            StatCard(
+                "CORNERS",
+                "${stats.cornerCount}",
+                Modifier.weight(1f),
+                palette = palette
+            )
+        }
+    }
 }
 @Composable
 fun GForceBar(
