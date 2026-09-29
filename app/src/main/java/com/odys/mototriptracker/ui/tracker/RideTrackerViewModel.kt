@@ -290,6 +290,12 @@ class RideTrackerViewModel @Inject constructor(
     }
 
     fun onMapPoiClick(placeId: String, name: String, latitude: Double, longitude: Double) {
+        // Map HUD hides the Go card while navigating — ignore POI picks so we
+        // don't leave a selected place with no way to dismiss/go.
+        if (facade.navigation.value.isNavigating) {
+            mapPlace.dismiss()
+            return
+        }
         mapPlace.onPoiClick(viewModelScope, placeId, name, latitude, longitude)
     }
 
@@ -297,7 +303,10 @@ class RideTrackerViewModel @Inject constructor(
     fun goToSelectedMapPlace() = mapPlace.goToSelected()
 
     fun clearNavigation() = facade.clearNavigation()
-    fun confirmStartNavigation() = facade.confirmStartNavigation()
+    fun confirmStartNavigation() {
+        mapPlace.dismiss()
+        facade.confirmStartNavigation()
+    }
     fun cancelNavigationPreview() = facade.cancelNavigationPreview()
     fun selectPreviewRoute(id: String) = facade.selectPreviewRoute(id)
     fun dismissTimingResult() = facade.dismissTimingResult()

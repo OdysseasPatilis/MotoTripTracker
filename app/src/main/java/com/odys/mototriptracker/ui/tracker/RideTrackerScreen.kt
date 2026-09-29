@@ -512,6 +512,7 @@ fun RideTrackerScreen(
 
                     if (isTracking || mapHud) {
                         val previewRiding = navigation.isPreviewing && !mapHud
+                        val weatherEnabled = uiState.weather.hasData || navigation.hasRoute
                         RideUtilityRail(
                             isLowFuel = uiState.isLowFuel,
                             palette = palette,
@@ -520,6 +521,7 @@ fun RideTrackerScreen(
                             onShowWeather = onShowRouteWeather,
                             onShowDestination = onShowDestinationSearch,
                             showDestination = mapHud,
+                            weatherEnabled = weatherEnabled,
                             modifier = if (previewRiding) {
                                 Modifier
                                     .align(Alignment.TopEnd)
@@ -537,6 +539,7 @@ fun RideTrackerScreen(
                     }
 
                     if (mapHud) {
+                        val hudDialMax = maxOf(180f, dialSpeedKmh, effectiveSpeedLimitKmh)
                         Column(
                             modifier = Modifier
                                 .align(Alignment.BottomCenter)
@@ -547,7 +550,7 @@ fun RideTrackerScreen(
                         ) {
                             SpeedometerArc(
                                 speedKmh = dialSpeedKmh,
-                                maxSpeedKmh = 180f,
+                                maxSpeedKmh = hudDialMax,
                                 speedLimitKmh = effectiveSpeedLimitKmh,
                                 isAutoLimit = isAutoLimit,
                                 flashPhase = flashPhase,
@@ -562,6 +565,8 @@ fun RideTrackerScreen(
                                     tripTimeSeconds = stats.tripTime,
                                     onMoreStats = { showMoreStats = true },
                                     palette = palette,
+                                    fuelRangeSummary = uiState.fuelRangeSummary,
+                                    isLowFuel = uiState.isLowFuel,
                                 )
                             }
                         }
@@ -694,7 +699,7 @@ fun RideTrackerScreen(
                             ) {
                                 SpeedometerArc(
                                     speedKmh = dialSpeedKmh,
-                                    maxSpeedKmh = 180f,
+                                    maxSpeedKmh = maxOf(stats.maxSpeed, 260f),
                                     speedLimitKmh = effectiveSpeedLimitKmh,
                                     isAutoLimit = isAutoLimit,
                                     flashPhase = flashPhase,

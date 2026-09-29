@@ -95,75 +95,97 @@ internal fun CompactTurnChip(
         navigation.currentStep != null -> navigation.currentStep.instruction
         else -> null
     }
+    val routeSummary = navigation.summaryText.takeIf {
+        navigation.hasRoute && !navigation.isRecalculating && !navigation.isRouting
+    }
 
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .height(TurnChipHeight)
-            .clip(RoundedCornerShape(14.dp))
-            .background(palette.bgPanel.copy(alpha = 0.92f))
-            .padding(start = 10.dp, end = 2.dp),
-        verticalAlignment = Alignment.CenterVertically,
+    Column(
+        modifier = modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        Icon(
-            imageVector = maneuverIcon(navigation),
-            contentDescription = null,
-            tint = accent,
-            modifier = Modifier.size(28.dp),
-        )
-        Column(
+        Row(
             modifier = Modifier
-                .weight(1f)
-                .padding(horizontal = 8.dp),
-            verticalArrangement = Arrangement.Center,
+                .fillMaxWidth()
+                .height(TurnChipHeight)
+                .clip(RoundedCornerShape(14.dp))
+                .background(palette.bgPanel.copy(alpha = 0.92f))
+                .padding(start = 10.dp, end = 2.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(
-                text = distance,
-                color = palette.textPrimary,
-                fontWeight = FontWeight.Bold,
-                fontSize = 18.sp,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                lineHeight = 20.sp,
+            Icon(
+                imageVector = maneuverIcon(navigation),
+                contentDescription = null,
+                tint = accent,
+                modifier = Modifier.size(28.dp),
             )
-            if (!maneuver.isNullOrBlank()) {
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(horizontal = 8.dp),
+                verticalArrangement = Arrangement.Center,
+            ) {
                 Text(
-                    text = maneuver,
-                    color = palette.textSecondary,
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Medium,
+                    text = distance,
+                    color = palette.textPrimary,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 18.sp,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
-                    lineHeight = 14.sp,
+                    lineHeight = 20.sp,
                 )
+                if (!maneuver.isNullOrBlank()) {
+                    Text(
+                        text = maneuver,
+                        color = palette.textSecondary,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        lineHeight = 14.sp,
+                    )
+                }
             }
+            HudIconButton(
+                onClick = onToggleVoice,
+                icon = if (navigation.isVoiceEnabled) {
+                    Icons.AutoMirrored.Filled.VolumeUp
+                } else {
+                    Icons.AutoMirrored.Filled.VolumeOff
+                },
+                contentDescription = if (navigation.isVoiceEnabled) {
+                    "Mute voice guidance"
+                } else {
+                    "Enable voice guidance"
+                },
+                tint = if (navigation.isVoiceEnabled) palette.neonGreen else palette.textSecondary,
+            )
+            HudIconButton(
+                onClick = onOpenInMaps,
+                icon = Icons.Filled.Navigation,
+                contentDescription = "Open in Google Maps",
+                tint = palette.neonGreen,
+            )
+            HudIconButton(
+                onClick = onClear,
+                icon = Icons.Filled.Close,
+                contentDescription = "End navigation",
+                tint = palette.textSecondary,
+            )
         }
-        HudIconButton(
-            onClick = onToggleVoice,
-            icon = if (navigation.isVoiceEnabled) {
-                Icons.AutoMirrored.Filled.VolumeUp
-            } else {
-                Icons.AutoMirrored.Filled.VolumeOff
-            },
-            contentDescription = if (navigation.isVoiceEnabled) {
-                "Mute voice guidance"
-            } else {
-                "Enable voice guidance"
-            },
-            tint = if (navigation.isVoiceEnabled) palette.neonGreen else palette.textSecondary,
-        )
-        HudIconButton(
-            onClick = onOpenInMaps,
-            icon = Icons.Filled.Navigation,
-            contentDescription = "Open in Google Maps",
-            tint = palette.neonGreen,
-        )
-        HudIconButton(
-            onClick = onClear,
-            icon = Icons.Filled.Close,
-            contentDescription = "End navigation",
-            tint = palette.textSecondary,
-        )
+        if (routeSummary != null) {
+            Text(
+                text = routeSummary,
+                color = palette.textPrimary,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(999.dp))
+                    .background(palette.bgPanel.copy(alpha = 0.82f))
+                    .padding(horizontal = 10.dp, vertical = 4.dp),
+            )
+        }
     }
 }
 
@@ -177,6 +199,7 @@ internal fun RideUtilityRail(
     onShowDestination: () -> Unit,
     modifier: Modifier = Modifier,
     showDestination: Boolean = true,
+    weatherEnabled: Boolean = true,
 ) {
     var fuelMenu by remember { mutableStateOf(false) }
     Column(
@@ -222,9 +245,13 @@ internal fun RideUtilityRail(
         HudRailButton(
             icon = Icons.Filled.WbSunny,
             label = "Weather",
-            contentDescription = "Route weather",
-            tint = palette.neonBlue,
-            onClick = onShowWeather,
+            contentDescription = if (weatherEnabled) {
+                "Route weather"
+            } else {
+                "Route weather unavailable"
+            },
+            tint = if (weatherEnabled) palette.neonBlue else palette.textSecondary,
+            onClick = { if (weatherEnabled) onShowWeather() },
             palette = palette,
         )
         if (showDestination) {
@@ -247,6 +274,8 @@ internal fun NavGlanceStats(
     onMoreStats: () -> Unit,
     palette: AppPalette,
     modifier: Modifier = Modifier,
+    fuelRangeSummary: String? = null,
+    isLowFuel: Boolean = false,
 ) {
     Surface(
         onClick = onMoreStats,
@@ -257,34 +286,51 @@ internal fun NavGlanceStats(
         shape = RoundedCornerShape(12.dp),
         color = palette.bgPanel.copy(alpha = 0.9f),
     ) {
-        Row(
+        Column(
             modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalArrangement = Arrangement.spacedBy(2.dp),
         ) {
-            Text(
-                text = "Dist ${String.format(Locale.US, "%.1f km", distanceKm)}",
-                color = palette.textPrimary,
-                fontWeight = FontWeight.Bold,
-                fontSize = 15.sp,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f),
-            )
-            Text(
-                text = formatSecondsToTime(tripTimeSeconds),
-                color = palette.textPrimary,
-                fontWeight = FontWeight.Bold,
-                fontSize = 15.sp,
-                maxLines = 1,
-            )
-            Text(
-                text = "More stats",
-                color = palette.neonBlue,
-                fontWeight = FontWeight.SemiBold,
-                fontSize = 13.sp,
-                maxLines = 1,
-            )
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Text(
+                    text = "Dist ${String.format(Locale.US, "%.1f km", distanceKm)}",
+                    color = palette.textPrimary,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 15.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f),
+                )
+                Text(
+                    text = formatSecondsToTime(tripTimeSeconds),
+                    color = palette.textPrimary,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 15.sp,
+                    maxLines = 1,
+                )
+                Text(
+                    text = "More stats",
+                    color = palette.neonBlue,
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 13.sp,
+                    maxLines = 1,
+                )
+            }
+            if (!fuelRangeSummary.isNullOrBlank()) {
+                Text(
+                    text = buildString {
+                        append(fuelRangeSummary)
+                        if (isLowFuel) append(" · Low")
+                    },
+                    color = if (isLowFuel) palette.neonRed else palette.textSecondary,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
         }
     }
 }
