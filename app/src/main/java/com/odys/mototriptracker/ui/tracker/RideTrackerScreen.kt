@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -84,7 +85,6 @@ import androidx.compose.material.icons.filled.Business
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Phone
 import androidx.core.net.toUri
-import com.odys.mototriptracker.domain.TwistinessCalculator
 import com.odys.mototriptracker.ui.tracker.FuelSettingsSheet
 import com.odys.mototriptracker.ui.tracker.PetrolStationsSheet
 import com.odys.mototriptracker.ui.tracker.RouteWeatherSheet
@@ -146,7 +146,6 @@ import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import android.graphics.BlurMaskFilter
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
-import com.odys.mototriptracker.ui.components.formatSecondsToTime
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -208,11 +207,16 @@ fun RideTrackerScreen(
     val isOverLimit = isTracking && !isPaused && stats.speed > effectiveSpeedLimitKmh
     val shouldFlashScreen = isTracking && !isPaused &&
         stats.speed >= effectiveSpeedLimitKmh + SCREEN_FLASH_TOLERANCE_KMH
-    val flashPhase = rememberSpeedLimitFlashPhase(isOverLimit)
+    val mapHud = navigation.isNavigating
+    val dialSpeedKmh = if (mapHud && !isTracking) uiState.lastSpeedMps * 3.6f else stats.speed
+    val dialOverLimit = !isPaused && dialSpeedKmh > effectiveSpeedLimitKmh
+    val flashPhase = rememberSpeedLimitFlashPhase(dialOverLimit || isOverLimit)
     val isRiding = isTracking && !isPaused
 
     var optionsExpanded by remember { mutableStateOf(false) }
     var timingBanner by remember { mutableStateOf<String?>(null) }
+    var confirmEndRide by remember { mutableStateOf(false) }
+    var showMoreStats by remember { mutableStateOf(false) }
 
     LaunchedEffect(navigation.lastTimingResult) {
         val result = navigation.lastTimingResult ?: return@LaunchedEffect
@@ -261,6 +265,21 @@ fun RideTrackerScreen(
             onDismiss = onDismissRouteWeather
         )
     }
+    if (confirmEndRide) {
+        EndRideConfirmSheet(
+            onSaveRide = {
+                confirmEndRide = false
+                onStopRide()
+            },
+            onKeepRiding = { confirmEndRide = false },
+        )
+    }
+    if (showMoreStats) {
+        RideStatsSheet(
+            stats = stats,
+            onDismiss = { showMoreStats = false },
+        )
+    }
     if (uiState.showPetrolStations) {
         PetrolStationsSheet(
             stations = uiState.petrolStations,
@@ -288,7 +307,7 @@ fun RideTrackerScreen(
                     isLocationEnabled = isLocationEnabled,
                     palette = palette,
                     onPauseRide = onPauseRide,
-                    onStopRide = onStopRide,
+                    onStopRide = { confirmEndRide = true },
                     onStartRide = onStartRide
                 )
             }
@@ -301,7 +320,7 @@ fun RideTrackerScreen(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .weight(0.56f)
+                        .weight(if (mapHud) 1f else 0.56f)
                 ) {
                     LiveRideMapView(
                         traveledRoute = uiState.routeCoordinates,
@@ -370,7 +389,7 @@ fun RideTrackerScreen(
                                     IconButton(
                                         onClick = { optionsExpanded = true },
                                         modifier = Modifier
-                                            .size(42.dp)
+                                            .size(RideTouchTarget)
                                             .clip(
                                                 RoundedCornerShape(
                                                     topStart = 14.dp,
@@ -443,11 +462,27 @@ fun RideTrackerScreen(
                         }
 
                         if (navigation.isNavigating) {
-                            ManeuverBanner(
+                            CompactTurnChip(
                                 navigation = navigation,
                                 palette = palette,
-                                modifier = Modifier.padding(horizontal = 10.dp)
+                                onToggleVoice = onToggleNavigationVoice,
+                                onOpenInMaps = onOpenNavigationInMaps,
+                                onClear = onClearNavigation,
+                                modifier = Modifier.padding(horizontal = 10.dp),
                             )
+                            navigation.trafficHintText?.let { hint ->
+                                Text(
+                                    hint,
+                                    color = palette.routeAmber,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    modifier = Modifier
+                                        .padding(horizontal = 10.dp)
+                                        .clip(RoundedCornerShape(999.dp))
+                                        .background(palette.bgPanel.copy(alpha = 0.82f))
+                                        .padding(horizontal = 10.dp, vertical = 4.dp)
+                                )
+                            }
                         }
                         uiState.trafficCameraAlert?.let { alert ->
                             TrafficCameraBanner(
@@ -475,7 +510,69 @@ fun RideTrackerScreen(
                         }
                     }
 
-                    Column(
+                    if (isTracking || mapHud) {
+                        val previewRiding = navigation.isPreviewing && !mapHud
+                        val weatherEnabled = uiState.weather.hasData || navigation.hasRoute
+                        RideUtilityRail(
+                            isLowFuel = uiState.isLowFuel,
+                            palette = palette,
+                            onShowFuelSettings = onShowFuelSettings,
+                            onShowPetrolStations = onShowPetrolStations,
+                            onShowWeather = onShowRouteWeather,
+                            onShowDestination = onShowDestinationSearch,
+                            showDestination = mapHud,
+                            weatherEnabled = weatherEnabled,
+                            modifier = if (previewRiding) {
+                                Modifier
+                                    .align(Alignment.TopEnd)
+                                    .statusBarsPadding()
+                                    .padding(top = 56.dp, end = 8.dp)
+                            } else {
+                                Modifier
+                                    .align(Alignment.CenterStart)
+                                    .padding(
+                                        start = 8.dp,
+                                        bottom = if (mapHud) 120.dp else 96.dp,
+                                    )
+                            },
+                        )
+                    }
+
+                    if (mapHud) {
+                        val hudDialMax = maxOf(180f, dialSpeedKmh, effectiveSpeedLimitKmh)
+                        Column(
+                            modifier = Modifier
+                                .align(Alignment.BottomCenter)
+                                .fillMaxWidth()
+                                .padding(bottom = 8.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(6.dp),
+                        ) {
+                            SpeedometerArc(
+                                speedKmh = dialSpeedKmh,
+                                maxSpeedKmh = hudDialMax,
+                                speedLimitKmh = effectiveSpeedLimitKmh,
+                                isAutoLimit = isAutoLimit,
+                                flashPhase = flashPhase,
+                                palette = palette,
+                                dialSize = MapHudDialSize,
+                                floating = true,
+                                speedReadoutColor = palette.neonBlue,
+                            )
+                            if (isTracking) {
+                                NavGlanceStats(
+                                    distanceKm = stats.distanceKm,
+                                    tripTimeSeconds = stats.tripTime,
+                                    onMoreStats = { showMoreStats = true },
+                                    palette = palette,
+                                    fuelRangeSummary = uiState.fuelRangeSummary,
+                                    isLowFuel = uiState.isLowFuel,
+                                )
+                            }
+                        }
+                    }
+
+                    if (!mapHud) Column(
                         modifier = Modifier
                             .align(Alignment.BottomCenter)
                             .fillMaxWidth()
@@ -502,36 +599,6 @@ fun RideTrackerScreen(
                                     onCancel = onCancelNavigationPreview,
                                 )
                             }
-                            navigation.isNavigating -> {
-                                Column(
-                                    verticalArrangement = Arrangement.spacedBy(6.dp)
-                                ) {
-                                    navigation.trafficHintText?.let { hint ->
-                                        Text(
-                                            hint,
-                                            color = palette.routeAmber,
-                                            fontSize = 11.sp,
-                                            fontWeight = FontWeight.SemiBold,
-                                            modifier = Modifier
-                                                .clip(RoundedCornerShape(999.dp))
-                                                .background(palette.bgPanel.copy(alpha = 0.82f))
-                                                .padding(horizontal = 10.dp, vertical = 4.dp)
-                                        )
-                                    }
-                                    ActiveRouteChip(
-                                        navigation = navigation,
-                                        palette = palette,
-                                        onOpenInMaps = onOpenNavigationInMaps,
-                                        onClear = onClearNavigation,
-                                        onToggleVoice = onToggleNavigationVoice,
-                                        onShowWeather = if (uiState.weather.hasData || navigation.hasRoute) {
-                                            onShowRouteWeather
-                                        } else {
-                                            null
-                                        }
-                                    )
-                                }
-                            }
                             else -> {
                             timingBanner?.let { banner ->
                                 TimingResultBanner(
@@ -552,7 +619,9 @@ fun RideTrackerScreen(
                                     onClick = onShowDestinationSearch,
                                     shape = RoundedCornerShape(999.dp),
                                     color = palette.bgPanel.copy(alpha = 0.82f),
-                                    modifier = Modifier.weight(1f)
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .heightIn(min = RideTouchTarget)
                                 ) {
                                     Row(
                                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
@@ -576,7 +645,7 @@ fun RideTrackerScreen(
                                 IconButton(
                                     onClick = onShowPetrolStations,
                                     modifier = Modifier
-                                        .size(44.dp)
+                                        .size(RideTouchTarget)
                                         .clip(CircleShape)
                                         .background(palette.bgPanel.copy(alpha = 0.82f))
                                 ) {
@@ -608,145 +677,50 @@ fun RideTrackerScreen(
                     }
                 }
 
-                Column(
-                    modifier = Modifier
-                        .weight(0.44f)
-                        .verticalScroll(rememberScrollState())
-                        .background(palette.bgDeep),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    // Speedometer sits flush above Start / Pause / Stop; stats scroll below.
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp))
-                            .background(palette.bgCard)
-                            .padding(start = 12.dp, end = 12.dp, top = 4.dp, bottom = 0.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(2.dp)
-                        ) {
-                            SpeedometerArc(
-                                speedKmh = stats.speed,
-                                maxSpeedKmh = maxOf(stats.maxSpeed, 260f),
-                                speedLimitKmh = effectiveSpeedLimitKmh,
-                                isAutoLimit = isAutoLimit,
-                                flashPhase = flashPhase,
-                                palette = palette,
-                                dialSize = 260.dp
-                            )
-                            GForceBar(
-                                value = stats.currentGForce,
-                                maxValue = maxOf(stats.maxGForce, 0.01f),
-                                palette = palette
-                            )
-                        }
-                    }
-
+                if (!mapHud) {
                     Column(
                         modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp)
-                            .padding(bottom = 8.dp),
+                            .weight(0.44f)
+                            .verticalScroll(rememberScrollState())
+                            .background(palette.bgDeep),
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp))
+                                .background(palette.bgCard)
+                                .padding(start = 12.dp, end = 12.dp, top = 4.dp, bottom = 0.dp),
+                            contentAlignment = Alignment.Center
                         ) {
-                            StatCard(
-                                "DISTANCE",
-                                "${String.format(Locale.US, "%.1f km", stats.distanceKm)}",
-                                Modifier.weight(1f),
-                                palette = palette
-                            )
-                            StatCard(
-                                "TOTAL TIME",
-                                formatSecondsToTime(stats.tripTime),
-                                Modifier.weight(1f),
-                                palette = palette
-                            )
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(2.dp)
+                            ) {
+                                SpeedometerArc(
+                                    speedKmh = dialSpeedKmh,
+                                    maxSpeedKmh = maxOf(stats.maxSpeed, 260f),
+                                    speedLimitKmh = effectiveSpeedLimitKmh,
+                                    isAutoLimit = isAutoLimit,
+                                    flashPhase = flashPhase,
+                                    palette = palette,
+                                    dialSize = 260.dp
+                                )
+                                GForceBar(
+                                    value = stats.currentGForce,
+                                    maxValue = maxOf(stats.maxGForce, 0.01f),
+                                    palette = palette
+                                )
+                            }
                         }
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(12.dp)
-                        ) {
-                            StatCard(
-                                "MOVING",
-                                formatSecondsToTime(stats.movingTime),
-                                Modifier.weight(1f),
-                                valueColor = palette.neonGreen,
-                                palette = palette
-                            )
-                            StatCard(
-                                "STOPPED",
-                                formatSecondsToTime(stats.stoppedTime),
-                                Modifier.weight(1f),
-                                valueColor = palette.neonRed,
-                                palette = palette
-                            )
-                        }
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(12.dp)
-                        ) {
-                            StatCard(
-                                "AVG SPEED",
-                                "${stats.avgSpeed.toInt()} km/h",
-                                Modifier.weight(1f),
-                                palette = palette
-                            )
-                            StatCard(
-                                "MAX SPEED",
-                                "${stats.maxSpeed.toInt()} km/h",
-                                Modifier.weight(1f),
-                                palette = palette
-                            )
-                        }
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(12.dp)
-                        ) {
-                            StatCard(
-                                "ELEVATION",
-                                "${stats.totalElevationGain.toInt()} m",
-                                Modifier.weight(1f),
-                                palette = palette
-                            )
-                            StatCard(
-                                "MAX G",
-                                String.format(Locale.US, "%.2f G", stats.maxGForce),
-                                Modifier.weight(1f),
-                                valueColor = palette.neonBlue,
-                                palette = palette
-                            )
-                        }
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(12.dp)
-                        ) {
-                            StatCard(
-                                "TWISTINESS",
-                                TwistinessCalculator.formattedScore(
-                                    TwistinessCalculator.score(
-                                        stats.cornerCount,
-                                        stats.distanceKm.toDouble(),
-                                        stats.maxLateralGForce.toDouble()
-                                    )
-                                ),
-                                Modifier.weight(1f),
-                                valueColor = palette.neonBlue,
-                                palette = palette
-                            )
-                            StatCard(
-                                "CORNERS",
-                                "${stats.cornerCount}",
-                                Modifier.weight(1f),
-                                palette = palette
-                            )
-                        }
+
+                        RideStatsGrid(
+                            stats = stats,
+                            palette = palette,
+                            modifier = Modifier
+                                .padding(horizontal = 16.dp)
+                                .padding(bottom = 8.dp),
+                        )
                     }
                 }
             }
