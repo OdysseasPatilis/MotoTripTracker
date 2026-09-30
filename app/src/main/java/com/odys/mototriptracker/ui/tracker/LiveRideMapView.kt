@@ -110,11 +110,12 @@ fun LiveRideMapView(
         }
     }
 
-    val previewContentPadding = remember(isPreviewing) {
-        if (isPreviewing) {
-            PaddingValues(start = 48.dp, top = 72.dp, end = 48.dp, bottom = 240.dp)
-        } else {
-            PaddingValues(0.dp)
+    val mapContentPadding = remember(isPreviewing, isNavigating) {
+        when {
+            isPreviewing -> PaddingValues(start = 48.dp, top = 72.dp, end = 48.dp, bottom = 240.dp)
+            // Keep road ahead of turn chip, side rail, and floating dial while navigating.
+            isNavigating -> PaddingValues(start = 64.dp, top = 132.dp, end = 56.dp, bottom = 200.dp)
+            else -> PaddingValues(0.dp)
         }
     }
 
@@ -239,7 +240,7 @@ fun LiveRideMapView(
         GoogleMap(
             modifier = Modifier.fillMaxSize(),
             cameraPositionState = cameraPositionState,
-            contentPadding = previewContentPadding,
+            contentPadding = mapContentPadding,
             properties = MapProperties(
                 isMyLocationEnabled = true,
                 isTrafficEnabled = true,
