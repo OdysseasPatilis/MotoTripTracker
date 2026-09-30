@@ -148,7 +148,7 @@ fun StatCard(
 @Composable
 fun SpeedometerArc(
     speedKmh: Float,
-    maxSpeedKmh: Float = 180f,
+    maxSpeedKmh: Float = 260f,
     speedLimitKmh: Float = 50f,
     isAutoLimit: Boolean = false,
     flashPhase: SpeedLimitFlashPhase = rememberSpeedLimitFlashPhase(speedKmh > speedLimitKmh),

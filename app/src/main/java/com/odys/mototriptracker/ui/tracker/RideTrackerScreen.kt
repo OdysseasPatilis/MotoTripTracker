@@ -17,7 +17,6 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -389,7 +388,7 @@ fun RideTrackerScreen(
                                     IconButton(
                                         onClick = { optionsExpanded = true },
                                         modifier = Modifier
-                                            .size(RideTouchTarget)
+                                            .size(if (mapHud) RideTouchTarget else 42.dp)
                                             .clip(
                                                 RoundedCornerShape(
                                                     topStart = 14.dp,
@@ -510,8 +509,7 @@ fun RideTrackerScreen(
                         }
                     }
 
-                    if (isTracking || mapHud) {
-                        val previewRiding = navigation.isPreviewing && !mapHud
+                    if (mapHud) {
                         val weatherEnabled = uiState.weather.hasData || navigation.hasRoute
                         RideUtilityRail(
                             isLowFuel = uiState.isLowFuel,
@@ -520,21 +518,11 @@ fun RideTrackerScreen(
                             onShowPetrolStations = onShowPetrolStations,
                             onShowWeather = onShowRouteWeather,
                             onShowDestination = onShowDestinationSearch,
-                            showDestination = mapHud,
+                            showDestination = true,
                             weatherEnabled = weatherEnabled,
-                            modifier = if (previewRiding) {
-                                Modifier
-                                    .align(Alignment.TopEnd)
-                                    .statusBarsPadding()
-                                    .padding(top = 56.dp, end = 8.dp)
-                            } else {
-                                Modifier
-                                    .align(Alignment.CenterStart)
-                                    .padding(
-                                        start = 8.dp,
-                                        bottom = if (mapHud) 120.dp else 96.dp,
-                                    )
-                            },
+                            modifier = Modifier
+                                .align(Alignment.CenterStart)
+                                .padding(start = 8.dp, bottom = 120.dp),
                         )
                     }
 
@@ -619,9 +607,7 @@ fun RideTrackerScreen(
                                     onClick = onShowDestinationSearch,
                                     shape = RoundedCornerShape(999.dp),
                                     color = palette.bgPanel.copy(alpha = 0.82f),
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .heightIn(min = RideTouchTarget)
+                                    modifier = Modifier.weight(1f)
                                 ) {
                                     Row(
                                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
@@ -645,7 +631,7 @@ fun RideTrackerScreen(
                                 IconButton(
                                     onClick = onShowPetrolStations,
                                     modifier = Modifier
-                                        .size(RideTouchTarget)
+                                        .size(44.dp)
                                         .clip(CircleShape)
                                         .background(palette.bgPanel.copy(alpha = 0.82f))
                                 ) {
