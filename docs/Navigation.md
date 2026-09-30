@@ -211,7 +211,7 @@ UI / application wiring:
 | `ui/tracker/RideTrackerViewModel.kt` | Combines `facade.navigation` into UI state; GPS → `updateNavigationOrigin` |
 | `ui/tracker/RideTrackerScreen.kt` | Composes search / preview / maneuver / active chip / timing overlays |
 | `ui/tracker/RideTrackerNavOverlays.kt` | `RoutePreviewCard`, `TimingResultBanner`, shared maneuver icons |
-| `ui/tracker/RideTrackerMapHud.kt` | Navigating HUD: `CompactTurnChip`, utility rail, glance stats, end-ride / stats sheets |
+| `ui/tracker/RideTrackerMapHud.kt` | Navigating-only HUD: `CompactTurnChip`, utility rail, glance stats, end-ride / stats sheets. Idle/tracking dashboard keeps the classic map + instruments layout. |
 | `ui/tracker/DestinationSearchSheet.kt` | Search + history UI |
 | `ui/tracker/LiveRideMapView.kt` | Polylines, dest marker, POI click |
 | `ui/tracker/MapPlaceCoordinator.kt` | POI resolve → Go → `setDestination` |
