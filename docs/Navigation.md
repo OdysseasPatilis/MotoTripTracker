@@ -209,7 +209,7 @@ UI / application wiring:
 | `application/RideTrackerFacade.kt` | Only nav API the ViewModel should use; wires weather callbacks |
 | `application/TrackerModels.kt` | Typealiases so UI imports application types, not `data.*` |
 | `ui/tracker/RideTrackerViewModel.kt` | Combines `facade.navigation` into UI state; GPS → `updateNavigationOrigin` |
-| `ui/tracker/RideTrackerScreen.kt` | Composes search / preview / maneuver / active chip / timing overlays |
+| `ui/tracker/RideTrackerScreen.kt` | Classic map + instruments dashboard when idle/tracking; switches to full-map navigating HUD when `phase == Navigating` |
 | `ui/tracker/RideTrackerNavOverlays.kt` | `RoutePreviewCard`, `TimingResultBanner`, shared maneuver icons |
 | `ui/tracker/RideTrackerMapHud.kt` | Navigating-only HUD: `CompactTurnChip`, utility rail, glance stats, end-ride / stats sheets. Idle/tracking dashboard keeps the classic map + instruments layout. |
 | `ui/tracker/DestinationSearchSheet.kt` | Search + history UI |

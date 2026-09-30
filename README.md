@@ -2,7 +2,7 @@
 
 Android motorcycle ride tracker. Records high-accuracy GPS rides, shows a live dashboard (speed, G-force, road speed limits, fuel range), stores trips locally, and offers history, summary, map replay, share card, and GPX export. Destination search with **route preview**, ranked petrol stops, route weather, and optional **cloud trip upload** sit alongside the tracker.
 
-The app is the Android counterpart of the iOS **MotoTripTracker** project, with feature parity for tracking, navigation (preview + history), fuel/petrol, Overpass speed limits, twistiness, ride moments, favorites, and GPX/share.
+The app is the Android counterpart of the iOS **MotoTripTracker** project, with feature parity for tracking, navigation (preview + history), fuel/petrol, road speed limits (Roads snap + OSM), twistiness, ride moments, favorites, and GPX/share.
 
 | | |
 |---|---|
@@ -38,13 +38,13 @@ The app is the Android counterpart of the iOS **MotoTripTracker** project, with 
 - **Auto-arrives** within ~45 m of the destination (with a short dwell), speaks “You have arrived”, then shows the timing banner
 - Alternate polylines on the map; bottom card with route chips + **Start** / **Cancel**
 - Map camera fits the selected preview route with extra bottom padding so the destination stays clear of the preview card
-- **Start** begins navigating: turn HUD (icon + distance + instruction), spoken steps, off-route recalculation, optional “Cars +N min” hint
+- **Start** switches to a **map-first navigating HUD** (idle/tracking keep the classic map + instruments dashboard): compact turn chip (distance, instruction, remaining + moto ETA), floating dial, fuel/weather/dest rail, spoken steps, off-route recalculation, optional “Cars +N min” hint
 - **Spoken turns** (TextToSpeech, **English** voice — prompts are English): approach within 250 m (`In {dist}, {instruction}`), instruction again on step advance; mute persists; light haptic on advance
-- Step advance at 35 m; off-route at 80 m with 12 s recalculate cooldown
+- Step advance at 35 m; off-route at 80 m (3 consecutive ticks) with 12 s recalculate cooldown; progress uses segment projection and prefers Google Roads–snapped GPS when fresh
 - Distance remaining and moto ETA update while navigating
-- **Open in Google Maps** for handoff; clear / cancel from the dashboard
+- **Open in Google Maps** for handoff; clear / mute / maps from the navigating turn chip
 - Origin is kept when clearing a destination so the next search still has a GPS fix
-- **Riding camera:** while recording with follow on, the map centers ahead of you (speed-scaled look-ahead; more when navigating) and zooms in for upcoming turns using a speed-scaled approach window; the turn HUD uses larger type and a 2-line instruction
+- **Riding camera:** while recording with follow on, the map centers ahead of you (speed-scaled look-ahead; more when navigating) and zooms in for upcoming turns using a speed-scaled approach window
 
 ### Fuel & range
 - Tank capacity, remaining liters, and L/100 km consumption (persisted)
@@ -65,10 +65,11 @@ The app is the Android counterpart of the iOS **MotoTripTracker** project, with 
 - Summary line on the tracker; tap for the full segment timeline (rain, temp, wind)
 
 ### Road speed limits
-- Live limits from OpenStreetMap via Overpass (mirrors, 30 m then 60 m radii, 35 m / 15 s throttle)
+- Live GPS is **snapped to roads** via Google Roads `snapToRoads` when available; limit lookups prefer the snapped road (`placeId` / coords)
+- Posted limits from OpenStreetMap via Overpass (and optional Roads `speedLimits` if the project has Asset Tracking); Athens region pack first offline
+- Hold/confirm before updating the sign so brief GPS jitter cannot flash the wrong limit (e.g. 90↔40)
 - On-screen speed-limit sign warns as soon as you exceed the limit; full-screen translucent flash at **+10 km/h** over the limit
-- Offline SharedPreferences grid cache + neighbour soft fallback
-- Bundled Greater Athens region pack (`athens_speed_limits.json`) — used first offline; pack miss or implausible hits (e.g. 50 while riding highway speed) fall through to Overpass
+- Offline SharedPreferences grid cache + neighbour soft fallback; pack miss or implausible hits fall through to Overpass
 - OSM tag parsing includes country implicits (`GR:urban`, etc.)
 - No manual tap-to-override (legacy preference is cleared on launch)
 
@@ -322,7 +323,7 @@ Versions live in `gradle/libs.versions.toml`.
 - `TripForegroundService` — sticky location FGS, notification channel `ride_channel`
 - `FileProvider` — `${applicationId}.fileprovider` → `res/xml/file_paths.xml`
 
-A Google Maps API key is required for map screens, Places (search / petrol details / photos), Directions, and Static Maps previews (Secrets plugin → `MAPS_API_KEY` in `local.properties`). Enable the matching APIs in Google Cloud for best results. Overpass speed limits and Open-Meteo weather use public HTTP endpoints (no Maps key).
+A Google Maps API key is required for map screens, Places (search / petrol details / photos), Directions, Roads (`snapToRoads`), and Static Maps previews (Secrets plugin → `MAPS_API_KEY` in `local.properties`). Enable the matching APIs in Google Cloud for best results. Overpass speed limits and Open-Meteo weather use public HTTP endpoints (no Maps key). Optional Roads `speedLimits` needs an Asset Tracking license; without it the app snaps roads then falls back to pack/Overpass.
 
 ---
 
@@ -350,24 +351,28 @@ Unit tests under `app/src/test/…`:
 - `StopDetectorTest` — moving / stopped accumulation, gaps up to 20 min
 - `RideDistanceFilterTest` — distance ceiling + avg-speed cap
 - `SpeedLimitParserTest` — OSM `maxspeed` parsing
+- `SpeedLimitLogicTest` / `SpeedLimitHoldLogicTest` — query throttle, plausibility, hold/confirm
+- `RoadSnapLogicTest` — snap buffer / throttle / freshness
+- `NavigationProgressLogicTest` — segment projection, arrival dwell, off-route ticks
 - `RideMomentsCalculatorTest` — moment titles / selection
 - `GpsQualityTest` — GPS bar thresholds
 - `TwistinessCalculatorTest` — score / rating bands
 - `GoogleWeekdayHoursParserTest` — Google weekday text → open/closed
-- `DestinationSearchHistoryLogicTest` — distance/duration helpers + preview selection fallback
+- `DestinationSearchHistoryLogicTest` — history dedupe / cap
 - `RoutePolylineFallbackTest` — reconstruct Full Route points from encoded polyline when DB points are missing
 - `MotoTravelEstimatorTest` — moto ETA vs car traffic delay + learning
 
 Instrumented / Compose UI tests are mostly scaffold; ride and ObjectBox flows are not fully covered by instrumentation yet.
 
-API / storage inventory: [`docs/API-and-Storage.md`](docs/API-and-Storage.md).
+API / storage inventory: [`docs/API-and-Storage.md`](docs/API-and-Storage.md).  
+Turn-by-turn theory + implementation: [`docs/Navigation.md`](docs/Navigation.md).
 
 ---
 
 ## Building
 
 1. Open the project in Android Studio (or use the Gradle wrapper).
-2. Provide a Maps API key for the Secrets plugin (e.g. `MAPS_API_KEY=…` in `local.properties`).
+2. Provide a Maps API key for the Secrets plugin (e.g. `MAPS_API_KEY=…` in `local.properties`). Enable **Maps SDK**, **Places**, **Directions**, and **Roads** on the Cloud project.
 3. In Google Cloud, enable **Maps SDK for Android**, **Places API (New)**, **Directions API**, and **Maps Static API** (for petrol detail map previews).
 4. Sync and run the `:app` debug configuration on a device or emulator with Google Play services.
 
