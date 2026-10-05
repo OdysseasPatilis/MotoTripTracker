@@ -38,7 +38,7 @@ The app is the Android counterpart of the iOS **MotoTripTracker** project, with 
 - **Auto-arrives** within ~45 m of the destination (with a short dwell), speaks “You have arrived”, then shows the timing banner
 - Alternate polylines on the map; bottom card with route chips + **Start** / **Cancel**
 - Map camera fits the selected preview route with extra bottom padding so the destination stays clear of the preview card
-- **Start** switches to a **map-first navigating HUD** (idle/tracking keep the classic map + instruments dashboard): compact turn chip (distance, instruction, remaining + moto ETA), floating dial, fuel/weather/dest rail, spoken steps, off-route recalculation, optional “Cars +N min” hint
+- **Start** switches to a **map-first navigating HUD** (idle/tracking are also map-first: full-bleed map with floating neon-arc dial, G-force, stats, and controls): compact turn chip (distance, instruction, remaining + moto ETA), floating dial, fuel/weather/dest rail, spoken steps, off-route recalculation, optional “Cars +N min” hint
 - **Spoken turns** (TextToSpeech, **English** voice — prompts are English): approach within 250 m (`In {dist}, {instruction}`), instruction again on step advance; mute persists; light haptic on advance
 - Step advance at 35 m; off-route at 80 m (3 consecutive ticks) with 12 s recalculate cooldown; progress uses segment projection and prefers Google Roads–snapped GPS when fresh
 - Distance remaining and moto ETA update while navigating

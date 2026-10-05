@@ -209,9 +209,9 @@ UI / application wiring:
 | `application/RideTrackerFacade.kt` | Only nav API the ViewModel should use; wires weather callbacks |
 | `application/TrackerModels.kt` | Typealiases so UI imports application types, not `data.*` |
 | `ui/tracker/RideTrackerViewModel.kt` | Combines `facade.navigation` into UI state; GPS → `updateNavigationOrigin` |
-| `ui/tracker/RideTrackerScreen.kt` | Classic map + instruments dashboard when idle/tracking; switches to full-map navigating HUD when `phase == Navigating` |
+| `ui/tracker/RideTrackerScreen.kt` | Map-first idle/tracking dashboard (full-bleed map + floating dial/stats/controls); switches to navigating HUD when `phase == Navigating` |
 | `ui/tracker/RideTrackerNavOverlays.kt` | `RoutePreviewCard`, `TimingResultBanner`, shared maneuver icons |
-| `ui/tracker/RideTrackerMapHud.kt` | Navigating-only HUD: `CompactTurnChip`, utility rail, glance stats, end-ride / stats sheets. Idle/tracking dashboard keeps the classic map + instruments layout. |
+| `ui/tracker/RideTrackerMapHud.kt` | Navigating-only HUD: `CompactTurnChip`, utility rail, glance stats, end-ride / stats sheets. Idle/tracking uses the map-first floating dial stack on `RideTrackerScreen`. |
 | `ui/tracker/DestinationSearchSheet.kt` | Search + history UI |
 | `ui/tracker/LiveRideMapView.kt` | Polylines, dest marker, POI click |
 | `ui/tracker/MapPlaceCoordinator.kt` | POI resolve → Go → `setDestination` |
