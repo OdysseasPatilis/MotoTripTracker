@@ -142,8 +142,8 @@ fun StatCard(
 }
 
 /**
- * Needle gauge with a large digital speed and the speed-limit badge.
- * Tick marks are unlabeled — numeric labels (20, 40, 60…) stay off the dial.
+ * Neon progress-arc speedometer (iOS parity): green up to the limit notch,
+ * red beyond it. Center shows the limit badge + large km/h — no needle.
  */
 @Composable
 fun SpeedometerArc(
@@ -163,11 +163,15 @@ fun SpeedometerArc(
     val speedPercent = (speedKmh / scaleMax).coerceIn(0f, 1f)
     val startAngle = 135f
     val totalSweep = 270f
-    val speedFontSize = if (dialSize < 200.dp) 40.sp else 52.sp
+    val speedFontSize = if (dialSize < 200.dp) 40.sp else 56.sp
     val unitFontSize = if (dialSize < 200.dp) 12.sp else 14.sp
 
     val speedNumColor by animateColorAsState(
-        targetValue = if (isOverLimit) palette.stopRed else (speedReadoutColor ?: palette.textPrimary),
+        targetValue = if (isOverLimit) {
+            palette.stopRed
+        } else {
+            speedReadoutColor ?: palette.textPrimary
+        },
         animationSpec = tween(300),
         label = "speedNum"
     )
@@ -206,28 +210,6 @@ fun SpeedometerArc(
                 size = Size(radius * 2, radius * 2),
                 style = trackStyle
             )
-
-            val tickStep = 20f
-            val tickCount = (scaleMax / tickStep).toInt().coerceAtLeast(1)
-            for (index in 0..tickCount) {
-                val fraction = (index * tickStep / scaleMax).coerceIn(0f, 1f)
-                val tickAngle = Math.toRadians((startAngle + totalSweep * fraction).toDouble())
-                val inner = radius - 7.dp.toPx()
-                val outer = radius + 1.dp.toPx()
-                drawLine(
-                    color = palette.textMuted.copy(alpha = 0.9f),
-                    start = Offset(
-                        center.x + inner * cos(tickAngle).toFloat(),
-                        center.y + inner * sin(tickAngle).toFloat()
-                    ),
-                    end = Offset(
-                        center.x + outer * cos(tickAngle).toFloat(),
-                        center.y + outer * sin(tickAngle).toFloat()
-                    ),
-                    strokeWidth = 1.5.dp.toPx(),
-                    cap = StrokeCap.Round
-                )
-            }
 
             if (speedPercent > 0f) {
                 val accent = if (isOverLimit) palette.stopRed else palette.neonGreen
@@ -299,43 +281,22 @@ fun SpeedometerArc(
                 strokeWidth = 2.5.dp.toPx(),
                 cap = StrokeCap.Round
             )
-
-            val needleColor = if (isOverLimit) palette.stopRed else palette.neonBlue
-            val needleAngle = Math.toRadians((startAngle + totalSweep * speedPercent).toDouble())
-            val needleLength = radius - 6.dp.toPx()
-            val tip = Offset(
-                center.x + needleLength * cos(needleAngle).toFloat(),
-                center.y + needleLength * sin(needleAngle).toFloat()
-            )
-            drawIntoCanvas { canvas ->
-                val glowPaint = android.graphics.Paint().apply {
-                    isAntiAlias = true
-                    color = needleColor.copy(alpha = 0.65f).toArgb()
-                    strokeWidth = 7.dp.toPx()
-                    style = android.graphics.Paint.Style.STROKE
-                    strokeCap = android.graphics.Paint.Cap.ROUND
-                    maskFilter = BlurMaskFilter(6f, BlurMaskFilter.Blur.NORMAL)
-                }
-                canvas.nativeCanvas.drawLine(center.x, center.y, tip.x, tip.y, glowPaint)
-            }
-            drawLine(
-                color = needleColor,
-                start = center,
-                end = tip,
-                strokeWidth = 3.dp.toPx(),
-                cap = StrokeCap.Round
-            )
-            drawCircle(color = palette.bgCard, radius = 6.dp.toPx(), center = center)
-            drawCircle(color = needleColor, radius = 3.5.dp.toPx(), center = center)
         }
 
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(0.dp)
+            verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
+            SpeedLimitSign(
+                limitKmh = speedLimitKmh.toInt(),
+                isOverLimit = isOverLimit,
+                isLive = isAutoLimit,
+                flashPhase = flashPhase,
+                palette = palette,
+            )
             val animatedSpeed by animateIntAsState(
                 targetValue = speedKmh.toInt(),
-                animationSpec = tween(1000, easing = FastOutSlowInEasing),
+                animationSpec = tween(350, easing = FastOutSlowInEasing),
                 label = "SpeedAnimation"
             )
             Text(
@@ -352,17 +313,6 @@ fun SpeedometerArc(
                 fontWeight = FontWeight.Medium
             )
         }
-
-        SpeedLimitSign(
-            limitKmh = speedLimitKmh.toInt(),
-            isOverLimit = isOverLimit,
-            isLive = isAutoLimit,
-            flashPhase = flashPhase,
-            palette = palette,
-            modifier = Modifier
-                .align(Alignment.TopEnd)
-                .offset(x = 4.dp, y = 6.dp)
-        )
     }
 }
 
