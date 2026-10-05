@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -207,6 +208,8 @@ fun RideTrackerScreen(
     val shouldFlashScreen = isTracking && !isPaused &&
         stats.speed >= effectiveSpeedLimitKmh + SCREEN_FLASH_TOLERANCE_KMH
     val mapHud = navigation.isNavigating
+    val showsMainDial =
+        !mapHud && !navigation.isPreviewing && uiState.selectedMapPlace == null
     val dialSpeedKmh = if (mapHud && !isTracking) uiState.lastSpeedMps * 3.6f else stats.speed
     val dialOverLimit = !isPaused && dialSpeedKmh > effectiveSpeedLimitKmh
     val flashPhase = rememberSpeedLimitFlashPhase(dialOverLimit || isOverLimit)
@@ -297,242 +300,227 @@ fun RideTrackerScreen(
 
     Box(modifier = Modifier.fillMaxSize()) {
         Scaffold(
-            containerColor = palette.bgDeep,
+            containerColor = Color.Transparent,
             contentWindowInsets = WindowInsets(0, 0, 0, 0),
-            bottomBar = {
-                TrackerBottomBar(
-                    isTracking = isTracking,
-                    isPaused = isPaused,
-                    isLocationEnabled = isLocationEnabled,
-                    palette = palette,
-                    onPauseRide = onPauseRide,
-                    onStopRide = { confirmEndRide = true },
-                    onStartRide = onStartRide
+        ) { _ ->
+            Box(modifier = Modifier.fillMaxSize()) {
+                LiveRideMapView(
+                    traveledRoute = uiState.routeCoordinates,
+                    plannedRoute = navigation.routeCoordinates,
+                    previewRoutes = navigation.previewRoutes,
+                    selectedPreviewRouteId = navigation.selectedRouteId,
+                    isPreviewing = navigation.isPreviewing,
+                    destinationLatitude = navigation.destinationLatitude,
+                    destinationLongitude = navigation.destinationLongitude,
+                    isRiding = isRiding,
+                    isNavigating = navigation.isNavigating,
+                    isRecalculating = navigation.isRecalculating,
+                    distanceToNextManeuverMeters = navigation.distanceToNextManeuverMeters,
+                    userLatitude = uiState.lastLatitude,
+                    userLongitude = uiState.lastLongitude,
+                    userBearing = uiState.lastBearing,
+                    userSpeedMps = uiState.lastSpeedMps,
+                    trafficCameras = uiState.nearbyTrafficCameras,
+                    showTrafficCameras = true,
+                    hasSelectedPlace = uiState.selectedMapPlace != null,
+                    onVisibleRegionChanged = onVisibleMapRegionChanged,
+                    onPoiClick = onMapPoiClick,
+                    onRecenter = onMapRecenter,
+                    modifier = Modifier.fillMaxSize()
                 )
-            }
-        ) { innerPadding ->
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(innerPadding)
-            ) {
-                Box(
+
+                Column(
                     modifier = Modifier
+                        .align(Alignment.TopStart)
                         .fillMaxWidth()
-                        .weight(if (mapHud) 1f else 0.56f)
+                        .statusBarsPadding(),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    LiveRideMapView(
-                        traveledRoute = uiState.routeCoordinates,
-                        plannedRoute = navigation.routeCoordinates,
-                        previewRoutes = navigation.previewRoutes,
-                        selectedPreviewRouteId = navigation.selectedRouteId,
-                        isPreviewing = navigation.isPreviewing,
-                        destinationLatitude = navigation.destinationLatitude,
-                        destinationLongitude = navigation.destinationLongitude,
-                        isRiding = isRiding,
-                        isNavigating = navigation.isNavigating,
-                        isRecalculating = navigation.isRecalculating,
-                        distanceToNextManeuverMeters = navigation.distanceToNextManeuverMeters,
-                        userLatitude = uiState.lastLatitude,
-                        userLongitude = uiState.lastLongitude,
-                        userBearing = uiState.lastBearing,
-                        userSpeedMps = uiState.lastSpeedMps,
-                        trafficCameras = uiState.nearbyTrafficCameras,
-                        showTrafficCameras = true,
-                        hasSelectedPlace = uiState.selectedMapPlace != null,
-                        onVisibleRegionChanged = onVisibleMapRegionChanged,
-                        onPoiClick = onMapPoiClick,
-                        onRecenter = onMapRecenter,
-                        modifier = Modifier.fillMaxSize()
-                    )
-
-                    Column(
-                        modifier = Modifier
-                            .align(Alignment.TopStart)
-                            .fillMaxWidth()
-                            .statusBarsPadding(),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
                     ) {
+                        // Flush to the left edge of the map.
                         Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            // Flush to the left edge of the map.
-                            Row(
-                                modifier = Modifier
-                                    .clip(
-                                        RoundedCornerShape(
-                                            topStart = 0.dp,
-                                            bottomStart = 0.dp,
-                                            topEnd = 14.dp,
-                                            bottomEnd = 14.dp
-                                        )
+                            modifier = Modifier
+                                .clip(
+                                    RoundedCornerShape(
+                                        topStart = 0.dp,
+                                        bottomStart = 0.dp,
+                                        topEnd = 14.dp,
+                                        bottomEnd = 14.dp
                                     )
-                                    .background(palette.bgPanel.copy(alpha = 0.88f))
-                                    .padding(horizontal = 12.dp, vertical = 8.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(10.dp)
-                            ) {
-                                GpsSignalIndicator(
-                                    quality = stats.gpsQuality,
-                                    accuracyMeters = stats.gpsAccuracyMeters,
-                                    palette = palette
                                 )
-                                BatteryIndicator(rememberBatteryLevel(), palette)
-                            }
+                                .background(palette.bgPanel.copy(alpha = 0.88f))
+                                .padding(horizontal = 12.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            GpsSignalIndicator(
+                                quality = stats.gpsQuality,
+                                accuracyMeters = stats.gpsAccuracyMeters,
+                                palette = palette
+                            )
+                            BatteryIndicator(rememberBatteryLevel(), palette)
+                        }
 
-                            if (!isRiding) {
-                                // Flush to the right edge of the map.
-                                Box {
-                                    IconButton(
-                                        onClick = { optionsExpanded = true },
-                                        modifier = Modifier
-                                            .size(if (mapHud) RideTouchTarget else 42.dp)
-                                            .clip(
-                                                RoundedCornerShape(
-                                                    topStart = 14.dp,
-                                                    bottomStart = 14.dp,
-                                                    topEnd = 0.dp,
-                                                    bottomEnd = 0.dp
-                                                )
+                        if (!isRiding) {
+                            // Flush to the right edge of the map.
+                            Box {
+                                IconButton(
+                                    onClick = { optionsExpanded = true },
+                                    modifier = Modifier
+                                        .size(if (mapHud) RideTouchTarget else 42.dp)
+                                        .clip(
+                                            RoundedCornerShape(
+                                                topStart = 14.dp,
+                                                bottomStart = 14.dp,
+                                                topEnd = 0.dp,
+                                                bottomEnd = 0.dp
                                             )
-                                            .background(palette.bgPanel.copy(alpha = 0.88f))
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Filled.MoreHoriz,
-                                            contentDescription = "Options",
-                                            tint = palette.textPrimary
                                         )
-                                    }
-                                    DropdownMenu(
-                                        expanded = optionsExpanded,
-                                        onDismissRequest = { optionsExpanded = false }
-                                    ) {
-                                        DropdownMenuItem(
-                                            text = { Text("Ride History") },
-                                            onClick = {
-                                                optionsExpanded = false
-                                                onViewHistory()
-                                            },
-                                            leadingIcon = { Icon(Icons.AutoMirrored.Filled.List, contentDescription = null) }
-                                        )
-                                        DropdownMenuItem(
-                                            text = { Text("Leaderboard") },
-                                            onClick = {
-                                                optionsExpanded = false
-                                                onViewLeaderboard()
-                                            },
-                                            leadingIcon = { Icon(Icons.Filled.EmojiEvents, contentDescription = null) }
-                                        )
-                                        DropdownMenuItem(
-                                            text = { Text("Fuel & Range") },
-                                            onClick = {
-                                                optionsExpanded = false
-                                                onShowFuelSettings()
-                                            },
-                                            leadingIcon = { Icon(Icons.Filled.LocalGasStation, contentDescription = null) }
-                                        )
-                                        DropdownMenuItem(
-                                            text = { Text("Find Petrol") },
-                                            onClick = {
-                                                optionsExpanded = false
-                                                onShowPetrolStations()
-                                            },
-                                            leadingIcon = { Icon(Icons.Filled.Place, contentDescription = null) }
-                                        )
-                                        DropdownMenuItem(
-                                            text = { Text("${themeMode.toggled().label} Mode") },
-                                            onClick = {
-                                                optionsExpanded = false
-                                                themeStore.toggleTheme()
-                                            },
-                                            leadingIcon = {
-                                                Icon(
-                                                    if (themeMode == ThemeMode.DARK) Icons.Filled.LightMode
-                                                    else Icons.Filled.DarkMode,
-                                                    contentDescription = null
-                                                )
-                                            }
-                                        )
-                                    }
+                                        .background(palette.bgPanel.copy(alpha = 0.88f))
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Filled.MoreHoriz,
+                                        contentDescription = "Options",
+                                        tint = palette.textPrimary
+                                    )
+                                }
+                                DropdownMenu(
+                                    expanded = optionsExpanded,
+                                    onDismissRequest = { optionsExpanded = false }
+                                ) {
+                                    DropdownMenuItem(
+                                        text = { Text("Ride History") },
+                                        onClick = {
+                                            optionsExpanded = false
+                                            onViewHistory()
+                                        },
+                                        leadingIcon = { Icon(Icons.AutoMirrored.Filled.List, contentDescription = null) }
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text("Leaderboard") },
+                                        onClick = {
+                                            optionsExpanded = false
+                                            onViewLeaderboard()
+                                        },
+                                        leadingIcon = { Icon(Icons.Filled.EmojiEvents, contentDescription = null) }
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text("Fuel & Range") },
+                                        onClick = {
+                                            optionsExpanded = false
+                                            onShowFuelSettings()
+                                        },
+                                        leadingIcon = { Icon(Icons.Filled.LocalGasStation, contentDescription = null) }
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text("Find Petrol") },
+                                        onClick = {
+                                            optionsExpanded = false
+                                            onShowPetrolStations()
+                                        },
+                                        leadingIcon = { Icon(Icons.Filled.Place, contentDescription = null) }
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text("${themeMode.toggled().label} Mode") },
+                                        onClick = {
+                                            optionsExpanded = false
+                                            themeStore.toggleTheme()
+                                        },
+                                        leadingIcon = {
+                                            Icon(
+                                                if (themeMode == ThemeMode.DARK) Icons.Filled.LightMode
+                                                else Icons.Filled.DarkMode,
+                                                contentDescription = null
+                                            )
+                                        }
+                                    )
                                 }
                             }
                         }
-
-                        if (navigation.isNavigating) {
-                            CompactTurnChip(
-                                navigation = navigation,
-                                palette = palette,
-                                onToggleVoice = onToggleNavigationVoice,
-                                onOpenInMaps = onOpenNavigationInMaps,
-                                onClear = onClearNavigation,
-                                modifier = Modifier.padding(horizontal = 10.dp),
-                            )
-                            navigation.trafficHintText?.let { hint ->
-                                Text(
-                                    hint,
-                                    color = palette.routeAmber,
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.SemiBold,
-                                    modifier = Modifier
-                                        .padding(horizontal = 10.dp)
-                                        .clip(RoundedCornerShape(999.dp))
-                                        .background(palette.bgPanel.copy(alpha = 0.82f))
-                                        .padding(horizontal = 10.dp, vertical = 4.dp)
-                                )
-                            }
-                        }
-                        uiState.trafficCameraAlert?.let { alert ->
-                            TrafficCameraBanner(
-                                alert = alert,
-                                palette = palette,
-                                modifier = Modifier.padding(horizontal = 10.dp)
-                            )
-                        }
-                        when (val status = uiState.trafficCameraDownloadStatus) {
-                            TrafficCameraPackDownloadStatus.Idle -> Unit
-                            is TrafficCameraPackDownloadStatus.Downloading -> {
-                                TrafficCameraStatusBanner(
-                                    text = "Downloading cameras for ${status.countryName ?: status.countryCode}…",
-                                    palette = palette,
-                                    modifier = Modifier.padding(horizontal = 10.dp),
-                                )
-                            }
-                            is TrafficCameraPackDownloadStatus.Failed -> {
-                                TrafficCameraStatusBanner(
-                                    text = status.message,
-                                    palette = palette,
-                                    modifier = Modifier.padding(horizontal = 10.dp),
-                                )
-                            }
-                        }
                     }
 
-                    if (mapHud) {
-                        val weatherEnabled = uiState.weather.hasData || navigation.hasRoute
-                        RideUtilityRail(
-                            isLowFuel = uiState.isLowFuel,
+                    if (navigation.isNavigating) {
+                        CompactTurnChip(
+                            navigation = navigation,
                             palette = palette,
-                            onShowFuelSettings = onShowFuelSettings,
-                            onShowPetrolStations = onShowPetrolStations,
-                            onShowWeather = onShowRouteWeather,
-                            onShowDestination = onShowDestinationSearch,
-                            showDestination = true,
-                            weatherEnabled = weatherEnabled,
-                            modifier = Modifier
-                                .align(Alignment.CenterStart)
-                                .padding(start = 8.dp, bottom = 120.dp),
+                            onToggleVoice = onToggleNavigationVoice,
+                            onOpenInMaps = onOpenNavigationInMaps,
+                            onClear = onClearNavigation,
+                            modifier = Modifier.padding(horizontal = 10.dp),
+                        )
+                        navigation.trafficHintText?.let { hint ->
+                            Text(
+                                hint,
+                                color = palette.routeAmber,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                modifier = Modifier
+                                    .padding(horizontal = 10.dp)
+                                    .clip(RoundedCornerShape(999.dp))
+                                    .background(palette.bgPanel.copy(alpha = 0.82f))
+                                    .padding(horizontal = 10.dp, vertical = 4.dp)
+                            )
+                        }
+                    }
+                    uiState.trafficCameraAlert?.let { alert ->
+                        TrafficCameraBanner(
+                            alert = alert,
+                            palette = palette,
+                            modifier = Modifier.padding(horizontal = 10.dp)
                         )
                     }
+                    when (val status = uiState.trafficCameraDownloadStatus) {
+                        TrafficCameraPackDownloadStatus.Idle -> Unit
+                        is TrafficCameraPackDownloadStatus.Downloading -> {
+                            TrafficCameraStatusBanner(
+                                text = "Downloading cameras for ${status.countryName ?: status.countryCode}…",
+                                palette = palette,
+                                modifier = Modifier.padding(horizontal = 10.dp),
+                            )
+                        }
+                        is TrafficCameraPackDownloadStatus.Failed -> {
+                            TrafficCameraStatusBanner(
+                                text = status.message,
+                                palette = palette,
+                                modifier = Modifier.padding(horizontal = 10.dp),
+                            )
+                        }
+                    }
+                }
 
+                if (mapHud) {
+                    val weatherEnabled = uiState.weather.hasData || navigation.hasRoute
+                    RideUtilityRail(
+                        isLowFuel = uiState.isLowFuel,
+                        palette = palette,
+                        onShowFuelSettings = onShowFuelSettings,
+                        onShowPetrolStations = onShowPetrolStations,
+                        onShowWeather = onShowRouteWeather,
+                        onShowDestination = onShowDestinationSearch,
+                        showDestination = true,
+                        weatherEnabled = weatherEnabled,
+                        modifier = Modifier
+                            .align(Alignment.CenterStart)
+                            .padding(start = 8.dp, bottom = 120.dp),
+                    )
+                }
+
+                Column(
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .fillMaxWidth()
+                        .navigationBarsPadding(),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
                     if (mapHud) {
                         val hudDialMax = maxOf(180f, dialSpeedKmh, effectiveSpeedLimitKmh)
                         Column(
-                            modifier = Modifier
-                                .align(Alignment.BottomCenter)
-                                .fillMaxWidth()
-                                .padding(bottom = 8.dp),
+                            modifier = Modifier.fillMaxWidth(),
                             horizontalAlignment = Alignment.CenterHorizontally,
                             verticalArrangement = Arrangement.spacedBy(6.dp),
                         ) {
@@ -560,154 +548,153 @@ fun RideTrackerScreen(
                         }
                     }
 
-                    if (!mapHud) Column(
-                        modifier = Modifier
-                            .align(Alignment.BottomCenter)
-                            .fillMaxWidth()
-                            .padding(horizontal = 12.dp, vertical = 12.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        uiState.selectedMapPlace?.let { place ->
-                            if (!navigation.isPreviewing && !navigation.isNavigating) {
-                                MapPlaceGoCard(
-                                    place = place,
-                                    palette = palette,
-                                    onDismiss = onDismissMapPlace,
-                                    onGo = onGoToMapPlace,
-                                )
-                            }
+                    if (showsMainDial) {
+                        Column(
+                            modifier = Modifier
+                                .padding(horizontal = 12.dp)
+                                .fillMaxWidth()
+                                .heightIn(max = 420.dp)
+                                .verticalScroll(rememberScrollState())
+                                .clip(RoundedCornerShape(20.dp))
+                                .background(palette.bgCard.copy(alpha = 0.72f))
+                                .padding(start = 12.dp, end = 12.dp, top = 8.dp, bottom = 12.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            SpeedometerArc(
+                                speedKmh = dialSpeedKmh,
+                                maxSpeedKmh = maxOf(stats.maxSpeed, 260f),
+                                speedLimitKmh = effectiveSpeedLimitKmh,
+                                isAutoLimit = isAutoLimit,
+                                flashPhase = flashPhase,
+                                palette = palette,
+                                dialSize = 260.dp,
+                                floating = true,
+                            )
+                            GForceBar(
+                                value = stats.currentGForce,
+                                maxValue = maxOf(stats.maxGForce, 0.01f),
+                                palette = palette
+                            )
+                            RideStatsGrid(
+                                stats = stats,
+                                palette = palette,
+                            )
                         }
-                        when {
-                            navigation.isPreviewing -> {
-                                RoutePreviewCard(
-                                    navigation = navigation,
-                                    palette = palette,
-                                    onSelectRoute = onSelectPreviewRoute,
-                                    onStart = onConfirmStartNavigation,
-                                    onCancel = onCancelNavigationPreview,
-                                )
-                            }
-                            else -> {
-                            timingBanner?.let { banner ->
-                                TimingResultBanner(
-                                    text = banner,
-                                    palette = palette,
-                                    onDismiss = {
-                                        timingBanner = null
-                                        onDismissTimingResult()
-                                    }
-                                )
-                            }
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Surface(
-                                    onClick = onShowDestinationSearch,
-                                    shape = RoundedCornerShape(999.dp),
-                                    color = palette.bgPanel.copy(alpha = 0.82f),
-                                    modifier = Modifier.weight(1f)
-                                ) {
-                                    Row(
-                                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(10.dp)
-                                    ) {
-                                        Icon(
-                                            Icons.Filled.Search,
-                                            contentDescription = null,
-                                            tint = palette.textSecondary,
-                                            modifier = Modifier.size(22.dp)
-                                        )
-                                        Text(
-                                            "Set destination",
-                                            color = palette.textSecondary,
-                                            fontSize = 16.sp,
-                                            fontWeight = FontWeight.Medium
-                                        )
-                                    }
-                                }
-                                IconButton(
-                                    onClick = onShowPetrolStations,
-                                    modifier = Modifier
-                                        .size(44.dp)
-                                        .clip(CircleShape)
-                                        .background(palette.bgPanel.copy(alpha = 0.82f))
-                                ) {
-                                    Icon(
-                                        Icons.Filled.LocalGasStation,
-                                        contentDescription = "Nearest petrol",
-                                        tint = if (uiState.isLowFuel) palette.neonRed else palette.neonGreen
+                    }
+
+                    if (!mapHud) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 12.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            uiState.selectedMapPlace?.let { place ->
+                                if (!navigation.isPreviewing && !navigation.isNavigating) {
+                                    MapPlaceGoCard(
+                                        place = place,
+                                        palette = palette,
+                                        onDismiss = onDismissMapPlace,
+                                        onGo = onGoToMapPlace,
                                     )
                                 }
                             }
-                            Surface(
-                                shape = RoundedCornerShape(999.dp),
-                                color = palette.bgPanel.copy(alpha = 0.82f),
-                                modifier = Modifier.wrapContentWidth()
-                            ) {
-                                Text(
-                                    text = buildString {
-                                        append(uiState.fuelRangeSummary)
-                                        if (uiState.isLowFuel) append(" · Low")
-                                    },
-                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
-                                    color = if (uiState.isLowFuel) palette.neonRed else palette.textSecondary,
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.SemiBold
-                                )
-                            }
+                            when {
+                                navigation.isPreviewing -> {
+                                    RoutePreviewCard(
+                                        navigation = navigation,
+                                        palette = palette,
+                                        onSelectRoute = onSelectPreviewRoute,
+                                        onStart = onConfirmStartNavigation,
+                                        onCancel = onCancelNavigationPreview,
+                                    )
+                                }
+                                else -> {
+                                    timingBanner?.let { banner ->
+                                        TimingResultBanner(
+                                            text = banner,
+                                            palette = palette,
+                                            onDismiss = {
+                                                timingBanner = null
+                                                onDismissTimingResult()
+                                            }
+                                        )
+                                    }
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Surface(
+                                            onClick = onShowDestinationSearch,
+                                            shape = RoundedCornerShape(999.dp),
+                                            color = palette.bgPanel.copy(alpha = 0.82f),
+                                            modifier = Modifier.weight(1f)
+                                        ) {
+                                            Row(
+                                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                            ) {
+                                                Icon(
+                                                    Icons.Filled.Search,
+                                                    contentDescription = null,
+                                                    tint = palette.textSecondary,
+                                                    modifier = Modifier.size(22.dp)
+                                                )
+                                                Text(
+                                                    "Set destination",
+                                                    color = palette.textSecondary,
+                                                    fontSize = 16.sp,
+                                                    fontWeight = FontWeight.Medium
+                                                )
+                                            }
+                                        }
+                                        IconButton(
+                                            onClick = onShowPetrolStations,
+                                            modifier = Modifier
+                                                .size(44.dp)
+                                                .clip(CircleShape)
+                                                .background(palette.bgPanel.copy(alpha = 0.82f))
+                                        ) {
+                                            Icon(
+                                                Icons.Filled.LocalGasStation,
+                                                contentDescription = "Nearest petrol",
+                                                tint = if (uiState.isLowFuel) palette.neonRed else palette.neonGreen
+                                            )
+                                        }
+                                    }
+                                    Surface(
+                                        shape = RoundedCornerShape(999.dp),
+                                        color = palette.bgPanel.copy(alpha = 0.82f),
+                                        modifier = Modifier.wrapContentWidth()
+                                    ) {
+                                        Text(
+                                            text = buildString {
+                                                append(uiState.fuelRangeSummary)
+                                                if (uiState.isLowFuel) append(" · Low")
+                                            },
+                                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                                            color = if (uiState.isLowFuel) palette.neonRed else palette.textSecondary,
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.SemiBold
+                                        )
+                                    }
+                                }
                             }
                         }
                     }
-                }
 
-                if (!mapHud) {
-                    Column(
-                        modifier = Modifier
-                            .weight(0.44f)
-                            .verticalScroll(rememberScrollState())
-                            .background(palette.bgDeep),
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp))
-                                .background(palette.bgCard)
-                                .padding(start = 12.dp, end = 12.dp, top = 4.dp, bottom = 0.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Column(
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                verticalArrangement = Arrangement.spacedBy(2.dp)
-                            ) {
-                                SpeedometerArc(
-                                    speedKmh = dialSpeedKmh,
-                                    maxSpeedKmh = maxOf(stats.maxSpeed, 260f),
-                                    speedLimitKmh = effectiveSpeedLimitKmh,
-                                    isAutoLimit = isAutoLimit,
-                                    flashPhase = flashPhase,
-                                    palette = palette,
-                                    dialSize = 260.dp
-                                )
-                                GForceBar(
-                                    value = stats.currentGForce,
-                                    maxValue = maxOf(stats.maxGForce, 0.01f),
-                                    palette = palette
-                                )
-                            }
-                        }
-
-                        RideStatsGrid(
-                            stats = stats,
-                            palette = palette,
-                            modifier = Modifier
-                                .padding(horizontal = 16.dp)
-                                .padding(bottom = 8.dp),
-                        )
-                    }
+                    TrackerBottomBar(
+                        isTracking = isTracking,
+                        isPaused = isPaused,
+                        isLocationEnabled = isLocationEnabled,
+                        palette = palette,
+                        onPauseRide = onPauseRide,
+                        onStopRide = { confirmEndRide = true },
+                        onStartRide = onStartRide
+                    )
                 }
             }
         }
