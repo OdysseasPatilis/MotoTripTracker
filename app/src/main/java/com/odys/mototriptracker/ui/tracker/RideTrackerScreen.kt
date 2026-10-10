@@ -17,16 +17,13 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentWidth
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -509,6 +506,67 @@ fun RideTrackerScreen(
                     )
                 }
 
+                // Controls stay pinned to the bottom; dial floats just above that strip so
+                // the location stigma stays visible in the open map band.
+                val controlStripHeight = when {
+                    mapHud && isTracking -> 122.dp
+                    mapHud -> 66.dp
+                    navigation.isPreviewing || uiState.selectedMapPlace != null -> 120.dp
+                    isTracking -> 160.dp
+                    else -> 140.dp
+                }
+
+                if (mapHud) {
+                    val hudDialMax = maxOf(180f, dialSpeedKmh, effectiveSpeedLimitKmh)
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .navigationBarsPadding()
+                            .padding(bottom = controlStripHeight),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        SpeedometerArc(
+                            speedKmh = dialSpeedKmh,
+                            maxSpeedKmh = hudDialMax,
+                            speedLimitKmh = effectiveSpeedLimitKmh,
+                            isAutoLimit = isAutoLimit,
+                            flashPhase = flashPhase,
+                            palette = palette,
+                            dialSize = MapHudDialSize,
+                            floating = true,
+                            speedReadoutColor = palette.neonBlue,
+                        )
+                    }
+                }
+
+                if (showsMainDial) {
+                    Column(
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .fillMaxWidth()
+                            .navigationBarsPadding()
+                            .padding(bottom = controlStripHeight + 8.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        SpeedometerArc(
+                            speedKmh = dialSpeedKmh,
+                            maxSpeedKmh = maxOf(stats.maxSpeed, 260f),
+                            speedLimitKmh = effectiveSpeedLimitKmh,
+                            isAutoLimit = isAutoLimit,
+                            flashPhase = flashPhase,
+                            palette = palette,
+                            dialSize = 200.dp,
+                            floating = true,
+                        )
+                        GForceBar(
+                            value = stats.currentGForce,
+                            maxValue = maxOf(stats.maxGForce, 0.01f),
+                            palette = palette
+                        )
+                    }
+                }
+
                 Column(
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
@@ -517,72 +575,26 @@ fun RideTrackerScreen(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    if (mapHud) {
-                        val hudDialMax = maxOf(180f, dialSpeedKmh, effectiveSpeedLimitKmh)
-                        Column(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(6.dp),
-                        ) {
-                            SpeedometerArc(
-                                speedKmh = dialSpeedKmh,
-                                maxSpeedKmh = hudDialMax,
-                                speedLimitKmh = effectiveSpeedLimitKmh,
-                                isAutoLimit = isAutoLimit,
-                                flashPhase = flashPhase,
-                                palette = palette,
-                                dialSize = MapHudDialSize,
-                                floating = true,
-                                speedReadoutColor = palette.neonBlue,
-                            )
-                            if (isTracking) {
-                                NavGlanceStats(
-                                    distanceKm = stats.distanceKm,
-                                    tripTimeSeconds = stats.tripTime,
-                                    onMoreStats = { showMoreStats = true },
-                                    palette = palette,
-                                    fuelRangeSummary = uiState.fuelRangeSummary,
-                                    isLowFuel = uiState.isLowFuel,
-                                )
-                            }
-                        }
+                    if (mapHud && isTracking) {
+                        NavGlanceStats(
+                            distanceKm = stats.distanceKm,
+                            tripTimeSeconds = stats.tripTime,
+                            onMoreStats = { showMoreStats = true },
+                            palette = palette,
+                            fuelRangeSummary = uiState.fuelRangeSummary,
+                            isLowFuel = uiState.isLowFuel,
+                        )
                     }
-
-                    if (showsMainDial) {
-                        Column(
-                            modifier = Modifier
-                                .padding(horizontal = 12.dp)
-                                .fillMaxWidth()
-                                .heightIn(max = 420.dp)
-                                .verticalScroll(rememberScrollState())
-                                .clip(RoundedCornerShape(20.dp))
-                                .background(palette.bgCard.copy(alpha = 0.72f))
-                                .padding(start = 12.dp, end = 12.dp, top = 8.dp, bottom = 12.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(8.dp),
-                        ) {
-                            SpeedometerArc(
-                                speedKmh = dialSpeedKmh,
-                                maxSpeedKmh = maxOf(stats.maxSpeed, 260f),
-                                speedLimitKmh = effectiveSpeedLimitKmh,
-                                isAutoLimit = isAutoLimit,
-                                flashPhase = flashPhase,
-                                palette = palette,
-                                dialSize = 260.dp,
-                                floating = true,
-                            )
-                            GForceBar(
-                                value = stats.currentGForce,
-                                maxValue = maxOf(stats.maxGForce, 0.01f),
-                                palette = palette
-                            )
-                            RideStatsGrid(
-                                stats = stats,
-                                palette = palette,
-                            )
-                        }
+                    if (!mapHud && isTracking && showsMainDial) {
+                        NavGlanceStats(
+                            distanceKm = stats.distanceKm,
+                            tripTimeSeconds = stats.tripTime,
+                            onMoreStats = { showMoreStats = true },
+                            palette = palette,
+                            fuelRangeSummary = uiState.fuelRangeSummary,
+                            isLowFuel = uiState.isLowFuel,
+                        )
                     }
-
                     if (!mapHud) {
                         Column(
                             modifier = Modifier
@@ -665,21 +677,27 @@ fun RideTrackerScreen(
                                             )
                                         }
                                     }
-                                    Surface(
-                                        shape = RoundedCornerShape(999.dp),
-                                        color = palette.bgPanel.copy(alpha = 0.82f),
-                                        modifier = Modifier.wrapContentWidth()
-                                    ) {
-                                        Text(
-                                            text = buildString {
-                                                append(uiState.fuelRangeSummary)
-                                                if (uiState.isLowFuel) append(" · Low")
-                                            },
-                                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
-                                            color = if (uiState.isLowFuel) palette.neonRed else palette.textSecondary,
-                                            fontSize = 11.sp,
-                                            fontWeight = FontWeight.SemiBold
-                                        )
+                                    if (!isTracking) {
+                                        Surface(
+                                            shape = RoundedCornerShape(999.dp),
+                                            color = palette.bgPanel.copy(alpha = 0.82f),
+                                            modifier = Modifier.wrapContentWidth()
+                                        ) {
+                                            Text(
+                                                text = buildString {
+                                                    append(uiState.fuelRangeSummary)
+                                                    if (uiState.isLowFuel) append(" · Low")
+                                                },
+                                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                                                color = if (uiState.isLowFuel) {
+                                                    palette.neonRed
+                                                } else {
+                                                    palette.textSecondary
+                                                },
+                                                fontSize = 11.sp,
+                                                fontWeight = FontWeight.SemiBold
+                                            )
+                                        }
                                     }
                                 }
                             }
