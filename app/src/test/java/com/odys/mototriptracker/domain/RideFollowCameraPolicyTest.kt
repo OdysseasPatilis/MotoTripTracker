@@ -95,7 +95,7 @@ class RideFollowCameraPolicyTest {
         )
         assertEquals(37.98, framing.targetLatitude, 0.0001)
         assertEquals(23.72, framing.targetLongitude, 0.0001)
-        assertEquals(14.5f, framing.zoom, 0.01f)
+        assertEquals(16.5f, framing.zoom, 0.01f)
         assertEquals(0f, framing.bearingDegrees, 0.01f)
         assertEquals(0f, framing.tiltDegrees, 0.01f)
     }

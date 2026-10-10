@@ -24,7 +24,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -114,8 +116,9 @@ fun LiveRideMapView(
         when {
             isPreviewing -> PaddingValues(start = 48.dp, top = 72.dp, end = 48.dp, bottom = 240.dp)
             // Keep road ahead of turn chip, side rail, and floating dial while navigating.
-            isNavigating -> PaddingValues(start = 64.dp, top = 132.dp, end = 56.dp, bottom = 200.dp)
-            else -> PaddingValues(0.dp)
+            isNavigating -> PaddingValues(start = 64.dp, top = 132.dp, end = 56.dp, bottom = 220.dp)
+            // Leave the bottom overlay band clear so the blue location stigma stays visible.
+            else -> PaddingValues(top = 72.dp, bottom = 360.dp)
         }
     }
 
@@ -123,8 +126,9 @@ fun LiveRideMapView(
     val recenterBottomPadding = when {
         isNavigating -> 248.dp
         hasSelectedPlace -> 250.dp
-        else -> 100.dp
+        else -> 168.dp
     }
+    val mapScope = rememberCoroutineScope()
 
     LaunchedEffect(isPreviewing) {
         if (isPreviewing) {
@@ -357,7 +361,7 @@ fun LiveRideMapView(
             exit = fadeOut() + scaleOut(),
         ) {
             IconButton(
-                    onClick = {
+                onClick = {
                     isFollowingUser = true
                     onRecenter()
                     val lat = userLatitude ?: return@IconButton
@@ -374,7 +378,12 @@ fun LiveRideMapView(
                         isRecalculating = isRecalculating,
                         distanceToNextManeuverMeters = distanceToNextManeuverMeters,
                     )
-                    cameraPositionState.move(CameraUpdateFactory.newCameraPosition(camera))
+                    mapScope.launch {
+                        cameraPositionState.animate(
+                            CameraUpdateFactory.newCameraPosition(camera),
+                            650,
+                        )
+                    }
                 },
                 modifier = Modifier
                     .size(RideTouchTarget)

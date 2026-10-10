@@ -29,7 +29,7 @@ object RideFollowCameraPolicy {
 
     // Map camera framing (Android Maps zoom/tilt)
     private const val RIDING_TILT_DEGREES = 55f
-    private const val IDLE_ZOOM = 14.5f
+    private const val IDLE_ZOOM = 16.5f
     private const val IDLE_TILT_DEGREES = 0f
 
     data class LatLngDegrees(val latitude: Double, val longitude: Double)
