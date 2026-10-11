@@ -556,7 +556,7 @@ fun RideTrackerScreen(
                             isAutoLimit = isAutoLimit,
                             flashPhase = flashPhase,
                             palette = palette,
-                            dialSize = 200.dp,
+                            dialSize = 230.dp,
                             floating = true,
                         )
                         GForceBar(
