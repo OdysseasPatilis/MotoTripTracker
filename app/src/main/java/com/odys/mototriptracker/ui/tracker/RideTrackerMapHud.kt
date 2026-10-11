@@ -63,8 +63,8 @@ import java.util.Locale
 /** Glove-friendly minimum for map and nav controls. */
 internal val RideTouchTarget = 48.dp
 
-/** Turn chip stays a single row so the road ahead stays visible. */
-internal val TurnChipHeight = 56.dp
+/** Glanceable turn banner — tall enough for distance + two-line instruction. */
+internal val TurnChipMinHeight = 76.dp
 
 /** Floating nav dial — large enough to read, small enough to leave the road. */
 internal val MapHudDialSize = 172.dp
@@ -101,47 +101,47 @@ internal fun CompactTurnChip(
 
     Column(
         modifier = modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(4.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(TurnChipHeight)
-                .clip(RoundedCornerShape(14.dp))
-                .background(palette.bgPanel.copy(alpha = 0.92f))
-                .padding(start = 10.dp, end = 2.dp),
+                .heightIn(min = TurnChipMinHeight)
+                .clip(RoundedCornerShape(16.dp))
+                .background(palette.bgDeep.copy(alpha = 0.88f))
+                .padding(start = 12.dp, end = 4.dp, top = 10.dp, bottom = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Icon(
                 imageVector = maneuverIcon(navigation),
                 contentDescription = null,
                 tint = accent,
-                modifier = Modifier.size(28.dp),
+                modifier = Modifier.size(36.dp),
             )
             Column(
                 modifier = Modifier
                     .weight(1f)
-                    .padding(horizontal = 8.dp),
-                verticalArrangement = Arrangement.Center,
+                    .padding(horizontal = 10.dp),
+                verticalArrangement = Arrangement.spacedBy(2.dp),
             ) {
                 Text(
                     text = distance,
-                    color = palette.textPrimary,
+                    color = accent,
                     fontWeight = FontWeight.Bold,
-                    fontSize = 18.sp,
+                    fontSize = 26.sp,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
-                    lineHeight = 20.sp,
+                    lineHeight = 28.sp,
                 )
                 if (!maneuver.isNullOrBlank()) {
                     Text(
                         text = maneuver,
-                        color = palette.textSecondary,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Medium,
-                        maxLines = 1,
+                        color = palette.textPrimary,
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 2,
                         overflow = TextOverflow.Ellipsis,
-                        lineHeight = 14.sp,
+                        lineHeight = 19.sp,
                     )
                 }
             }
@@ -176,14 +176,14 @@ internal fun CompactTurnChip(
             Text(
                 text = routeSummary,
                 color = palette.textPrimary,
-                fontSize = 12.sp,
+                fontSize = 14.sp,
                 fontWeight = FontWeight.SemiBold,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier
                     .clip(RoundedCornerShape(999.dp))
-                    .background(palette.bgPanel.copy(alpha = 0.82f))
-                    .padding(horizontal = 10.dp, vertical = 4.dp),
+                    .background(palette.bgDeep.copy(alpha = 0.82f))
+                    .padding(horizontal = 12.dp, vertical = 6.dp),
             )
         }
     }

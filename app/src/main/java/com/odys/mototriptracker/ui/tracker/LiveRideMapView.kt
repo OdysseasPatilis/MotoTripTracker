@@ -116,7 +116,7 @@ fun LiveRideMapView(
         when {
             isPreviewing -> PaddingValues(start = 48.dp, top = 72.dp, end = 48.dp, bottom = 240.dp)
             // Keep road ahead of turn chip, side rail, and floating dial while navigating.
-            isNavigating -> PaddingValues(start = 64.dp, top = 132.dp, end = 56.dp, bottom = 220.dp)
+            isNavigating -> PaddingValues(start = 64.dp, top = 168.dp, end = 56.dp, bottom = 220.dp)
             // Leave the bottom overlay band clear so the blue location stigma stays visible.
             else -> PaddingValues(top = 72.dp, bottom = 360.dp)
         }
