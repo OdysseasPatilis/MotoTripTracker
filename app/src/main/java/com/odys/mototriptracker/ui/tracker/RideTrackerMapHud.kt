@@ -67,7 +67,7 @@ internal val RideTouchTarget = 48.dp
 internal val TurnChipMinHeight = 76.dp
 
 /** Floating nav dial — large enough to read, small enough to leave the road. */
-internal val MapHudDialSize = 172.dp
+internal val MapHudDialSize = 196.dp
 
 @Composable
 internal fun CompactTurnChip(
