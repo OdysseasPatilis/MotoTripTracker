@@ -63,6 +63,9 @@ import java.util.Locale
 /** Glove-friendly minimum for map and nav controls. */
 internal val RideTouchTarget = 48.dp
 
+/** Side-rail button size while navigating (slightly above generic touch target). */
+internal val HudRailButtonSize = 56.dp
+
 /** Glanceable turn banner — tall enough for distance + two-line instruction. */
 internal val TurnChipMinHeight = 76.dp
 
@@ -204,7 +207,7 @@ internal fun RideUtilityRail(
     var fuelMenu by remember { mutableStateOf(false) }
     Column(
         modifier = modifier,
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Box {
@@ -283,12 +286,12 @@ internal fun NavGlanceStats(
             .fillMaxWidth()
             .padding(horizontal = 12.dp)
             .heightIn(min = RideTouchTarget),
-        shape = RoundedCornerShape(12.dp),
-        color = palette.bgPanel.copy(alpha = 0.9f),
+        shape = RoundedCornerShape(16.dp),
+        color = palette.bgDeep.copy(alpha = 0.88f),
     ) {
         Column(
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp),
-            verticalArrangement = Arrangement.spacedBy(2.dp),
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+            verticalArrangement = Arrangement.spacedBy(3.dp),
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
@@ -298,7 +301,7 @@ internal fun NavGlanceStats(
                     text = "Dist ${String.format(Locale.US, "%.1f km", distanceKm)}",
                     color = palette.textPrimary,
                     fontWeight = FontWeight.Bold,
-                    fontSize = 15.sp,
+                    fontSize = 17.sp,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f),
@@ -307,14 +310,14 @@ internal fun NavGlanceStats(
                     text = formatSecondsToTime(tripTimeSeconds),
                     color = palette.textPrimary,
                     fontWeight = FontWeight.Bold,
-                    fontSize = 15.sp,
+                    fontSize = 17.sp,
                     maxLines = 1,
                 )
                 Text(
                     text = "More stats",
                     color = palette.neonBlue,
                     fontWeight = FontWeight.SemiBold,
-                    fontSize = 13.sp,
+                    fontSize = 14.sp,
                     maxLines = 1,
                 )
             }
@@ -325,7 +328,7 @@ internal fun NavGlanceStats(
                         if (isLowFuel) append(" · Low")
                     },
                     color = if (isLowFuel) palette.neonRed else palette.textSecondary,
-                    fontSize = 12.sp,
+                    fontSize = 13.sp,
                     fontWeight = FontWeight.SemiBold,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
@@ -468,22 +471,23 @@ private fun HudRailButton(
         IconButton(
             onClick = onClick,
             modifier = Modifier
-                .size(RideTouchTarget)
-                .clip(RoundedCornerShape(14.dp))
-                .background(palette.bgPanel.copy(alpha = 0.9f)),
+                .size(HudRailButtonSize)
+                .clip(RoundedCornerShape(16.dp))
+                .background(palette.bgDeep.copy(alpha = 0.88f)),
         ) {
             Icon(
                 imageVector = icon,
                 contentDescription = contentDescription,
                 tint = tint,
+                modifier = Modifier.size(26.dp),
             )
         }
         Text(
             text = label,
-            color = palette.textSecondary,
-            fontSize = 9.sp,
+            color = palette.textPrimary.copy(alpha = 0.85f),
+            fontSize = 11.sp,
             fontWeight = FontWeight.Bold,
-            letterSpacing = 0.4.sp,
+            letterSpacing = 0.3.sp,
             maxLines = 1,
         )
     }
