@@ -509,7 +509,7 @@ fun RideTrackerScreen(
                 // Controls stay pinned to the bottom; dial floats just above that strip so
                 // the location stigma stays visible in the open map band.
                 val controlStripHeight = when {
-                    mapHud && isTracking -> 122.dp
+                    mapHud && isTracking -> 136.dp
                     mapHud -> 66.dp
                     navigation.isPreviewing || uiState.selectedMapPlace != null -> 120.dp
                     isTracking -> 160.dp
