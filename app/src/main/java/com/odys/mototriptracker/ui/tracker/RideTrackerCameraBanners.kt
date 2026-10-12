@@ -32,11 +32,11 @@ internal fun TrafficCameraBanner(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
-            .background(palette.bgPanel.copy(alpha = 0.92f))
-            .padding(horizontal = 12.dp, vertical = 10.dp),
+            .clip(RoundedCornerShape(16.dp))
+            .background(palette.bgDeep.copy(alpha = 0.88f))
+            .padding(horizontal = 14.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp)
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         Icon(
             imageVector = if (alert.camera.kind == TrafficCameraKind.Speed) {
@@ -46,12 +46,12 @@ internal fun TrafficCameraBanner(
             },
             contentDescription = null,
             tint = palette.routeAmber,
-            modifier = Modifier.size(18.dp)
+            modifier = Modifier.size(24.dp)
         )
         Text(
             text = alert.bannerText,
             color = palette.textPrimary,
-            fontSize = 12.sp,
+            fontSize = 15.sp,
             fontWeight = FontWeight.SemiBold,
             modifier = Modifier.weight(1f)
         )
@@ -67,13 +67,12 @@ internal fun TrafficCameraStatusBanner(
     Text(
         text = text,
         color = palette.textPrimary,
-        fontSize = 12.sp,
+        fontSize = 14.sp,
         fontWeight = FontWeight.SemiBold,
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
-            .background(palette.bgPanel.copy(alpha = 0.92f))
-            .padding(horizontal = 12.dp, vertical = 8.dp),
+            .clip(RoundedCornerShape(16.dp))
+            .background(palette.bgDeep.copy(alpha = 0.88f))
+            .padding(horizontal = 14.dp, vertical = 10.dp),
     )
 }
-

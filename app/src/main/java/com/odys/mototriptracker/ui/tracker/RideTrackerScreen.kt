@@ -453,13 +453,13 @@ fun RideTrackerScreen(
                             Text(
                                 hint,
                                 color = palette.routeAmber,
-                                fontSize = 11.sp,
+                                fontSize = 14.sp,
                                 fontWeight = FontWeight.SemiBold,
                                 modifier = Modifier
                                     .padding(horizontal = 10.dp)
                                     .clip(RoundedCornerShape(999.dp))
-                                    .background(palette.bgPanel.copy(alpha = 0.82f))
-                                    .padding(horizontal = 10.dp, vertical = 4.dp)
+                                    .background(palette.bgDeep.copy(alpha = 0.88f))
+                                    .padding(horizontal = 12.dp, vertical = 6.dp)
                             )
                         }
                     }
