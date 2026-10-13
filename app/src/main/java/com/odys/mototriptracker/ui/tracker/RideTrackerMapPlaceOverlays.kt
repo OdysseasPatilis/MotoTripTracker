@@ -28,6 +28,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -49,8 +50,8 @@ internal fun MapPlaceGoCard(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(18.dp))
-            .background(palette.bgPanel.copy(alpha = 0.94f))
+            .clip(RoundedCornerShape(16.dp))
+            .background(palette.mapOverlayScrim.copy(alpha = 0.90f))
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
@@ -67,7 +68,7 @@ internal fun MapPlaceGoCard(
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     place.name,
-                    color = palette.textPrimary,
+                    color = palette.mapOverlayContent,
                     fontWeight = FontWeight.Bold,
                     fontSize = 18.sp
                 )
@@ -80,16 +81,16 @@ internal fun MapPlaceGoCard(
                         modifier = Modifier
                             .padding(top = 4.dp)
                             .clip(RoundedCornerShape(999.dp))
-                            .background(palette.neonBlue.copy(alpha = 0.14f))
+                            .background(palette.neonBlue.copy(alpha = 0.18f))
                             .padding(horizontal = 8.dp, vertical = 3.dp)
                     )
                 }
             }
-            IconButton(onClick = onDismiss, modifier = Modifier.size(28.dp)) {
+            IconButton(onClick = onDismiss, modifier = Modifier.size(RideTouchTarget)) {
                 Icon(
                     Icons.Filled.Close,
                     contentDescription = "Dismiss place",
-                    tint = palette.textSecondary,
+                    tint = palette.mapOverlayMuted,
                     modifier = Modifier.size(18.dp)
                 )
             }
@@ -137,8 +138,8 @@ internal fun MapPlaceGoCard(
                 )
                 Text(
                     "Loading place details…",
-                    color = palette.textSecondary,
-                    fontSize = 12.sp,
+                    color = palette.mapOverlayMuted,
+                    fontSize = 13.sp,
                     fontWeight = FontWeight.SemiBold
                 )
             }
@@ -151,7 +152,7 @@ internal fun MapPlaceGoCard(
             colors = ButtonDefaults.buttonColors(containerColor = palette.neonGreen),
             shape = RoundedCornerShape(12.dp)
         ) {
-            Text("Go", color = palette.bgDeep, fontWeight = FontWeight.Bold)
+            Text("Go", color = Color.Black, fontWeight = FontWeight.Bold)
         }
     }
 }
@@ -173,12 +174,12 @@ internal fun MapPlaceDetailRow(
         Icon(
             icon,
             contentDescription = null,
-            tint = palette.textSecondary,
+            tint = palette.mapOverlayMuted,
             modifier = Modifier.size(18.dp)
         )
         Text(
             text,
-            color = palette.textPrimary,
+            color = palette.mapOverlayContent,
             fontSize = 13.sp,
             modifier = Modifier.weight(1f)
         )

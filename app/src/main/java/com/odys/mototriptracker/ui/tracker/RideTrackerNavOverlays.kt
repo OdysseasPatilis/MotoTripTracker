@@ -56,8 +56,8 @@ internal fun RoutePreviewCard(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(16.dp))
-            .background(palette.bgPanel.copy(alpha = 0.92f))
-            .padding(12.dp),
+            .background(palette.mapOverlayScrim.copy(alpha = 0.90f))
+            .padding(14.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         Row(
@@ -68,12 +68,12 @@ internal fun RoutePreviewCard(
                 Icons.Filled.Flag,
                 contentDescription = null,
                 tint = palette.neonBlue,
-                modifier = Modifier.size(18.dp)
+                modifier = Modifier.size(20.dp)
             )
             Text(
                 text = navigation.destinationName ?: "Destination",
-                color = palette.textPrimary,
-                fontSize = 14.sp,
+                color = palette.mapOverlayContent,
+                fontSize = 16.sp,
                 fontWeight = FontWeight.Bold,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
@@ -93,17 +93,17 @@ internal fun RoutePreviewCard(
                     )
                     Text(
                         "Finding routes…",
-                        color = palette.textSecondary,
-                        fontSize = 12.sp,
+                        color = palette.mapOverlayMuted,
+                        fontSize = 13.sp,
                         fontWeight = FontWeight.SemiBold
                     )
                 }
             }
-                            navigation.previewErrorMessage != null -> {
+            navigation.previewErrorMessage != null -> {
                 Text(
                     navigation.previewErrorMessage.orEmpty(),
                     color = palette.routeAmber,
-                    fontSize = 12.sp,
+                    fontSize = 13.sp,
                     fontWeight = FontWeight.SemiBold
                 )
             }
@@ -118,32 +118,40 @@ internal fun RoutePreviewCard(
                             modifier = Modifier
                                 .weight(1f)
                                 .heightIn(min = RideTouchTarget)
-                                .clip(RoundedCornerShape(10.dp))
+                                .clip(RoundedCornerShape(12.dp))
                                 .background(
-                                    if (selected) palette.neonBlue.copy(alpha = 0.18f)
-                                    else Color.Transparent
+                                    if (selected) palette.neonBlue.copy(alpha = 0.22f)
+                                    else palette.mapOverlayContent.copy(alpha = 0.06f)
                                 )
                                 .clickable { onSelectRoute(option.id) }
                                 .padding(horizontal = 10.dp, vertical = 8.dp)
                         ) {
                             Text(
                                 if (index == 0) "Fastest" else "Route ${index + 1}",
-                                color = if (selected) palette.textPrimary else palette.textSecondary,
-                                fontSize = 12.sp,
+                                color = if (selected) {
+                                    palette.mapOverlayContent
+                                } else {
+                                    palette.mapOverlayMuted
+                                },
+                                fontSize = 13.sp,
                                 fontWeight = FontWeight.Bold
                             )
                             Text(
                                 "${NavigationState.formatDistance(option.distanceMeters)} · Moto " +
                                     NavigationState.formatDuration(option.motoTravelTimeSeconds),
-                                color = if (selected) palette.textPrimary else palette.textSecondary,
-                                fontSize = 11.sp,
+                                color = if (selected) {
+                                    palette.mapOverlayContent
+                                } else {
+                                    palette.mapOverlayMuted
+                                },
+                                fontSize = 12.sp,
                                 fontWeight = FontWeight.Medium
                             )
                             if (option.trafficDelaySeconds >= 90) {
                                 Text(
                                     "Cars ${NavigationState.formatDuration(option.expectedTravelTimeSeconds)}",
-                                    color = if (selected) palette.routeAmber else palette.textMuted,
-                                    fontSize = 10.sp
+                                    color = if (selected) palette.routeAmber else palette.mapOverlayMuted,
+                                    fontSize = 11.sp
                                 )
                             }
                         }
@@ -161,10 +169,12 @@ internal fun RoutePreviewCard(
                 modifier = Modifier
                     .weight(1f)
                     .heightIn(min = RideTouchTarget),
-                colors = ButtonDefaults.buttonColors(containerColor = palette.bgCard),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = palette.mapOverlayContent.copy(alpha = 0.12f)
+                ),
                 shape = RoundedCornerShape(12.dp)
             ) {
-                Text("Cancel", color = palette.textSecondary, fontWeight = FontWeight.Bold)
+                Text("Cancel", color = palette.mapOverlayMuted, fontWeight = FontWeight.Bold)
             }
             Button(
                 onClick = onStart,
@@ -175,7 +185,7 @@ internal fun RoutePreviewCard(
                 colors = ButtonDefaults.buttonColors(containerColor = palette.neonGreen),
                 shape = RoundedCornerShape(12.dp)
             ) {
-                Text("Start", color = palette.bgDeep, fontWeight = FontWeight.Bold)
+                Text("Start", color = Color.Black, fontWeight = FontWeight.Bold)
             }
         }
     }
@@ -190,9 +200,9 @@ internal fun TimingResultBanner(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
-            .background(palette.bgPanel.copy(alpha = 0.92f))
-            .padding(horizontal = 12.dp, vertical = 10.dp),
+            .clip(RoundedCornerShape(16.dp))
+            .background(palette.mapOverlayScrim.copy(alpha = 0.88f))
+            .padding(horizontal = 14.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp)
     ) {
@@ -200,12 +210,12 @@ internal fun TimingResultBanner(
             Icons.Filled.Flag,
             contentDescription = null,
             tint = palette.neonGreen,
-            modifier = Modifier.size(18.dp)
+            modifier = Modifier.size(22.dp)
         )
         Text(
             text = text,
-            color = palette.textPrimary,
-            fontSize = 12.sp,
+            color = palette.mapOverlayContent,
+            fontSize = 14.sp,
             fontWeight = FontWeight.SemiBold,
             modifier = Modifier.weight(1f)
         )
@@ -213,7 +223,7 @@ internal fun TimingResultBanner(
             Icon(
                 Icons.Filled.Close,
                 contentDescription = "Dismiss timing summary",
-                tint = palette.textSecondary,
+                tint = palette.mapOverlayMuted,
                 modifier = Modifier.size(18.dp)
             )
         }
