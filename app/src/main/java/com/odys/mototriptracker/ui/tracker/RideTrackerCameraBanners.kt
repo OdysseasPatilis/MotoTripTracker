@@ -33,7 +33,7 @@ internal fun TrafficCameraBanner(
         modifier = modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(16.dp))
-            .background(palette.bgDeep.copy(alpha = 0.88f))
+            .background(palette.mapOverlayScrim.copy(alpha = 0.88f))
             .padding(horizontal = 14.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp)
@@ -50,7 +50,7 @@ internal fun TrafficCameraBanner(
         )
         Text(
             text = alert.bannerText,
-            color = palette.textPrimary,
+            color = palette.mapOverlayContent,
             fontSize = 15.sp,
             fontWeight = FontWeight.SemiBold,
             modifier = Modifier.weight(1f)
@@ -66,13 +66,13 @@ internal fun TrafficCameraStatusBanner(
 ) {
     Text(
         text = text,
-        color = palette.textPrimary,
+        color = palette.mapOverlayContent,
         fontSize = 14.sp,
         fontWeight = FontWeight.SemiBold,
         modifier = modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(16.dp))
-            .background(palette.bgDeep.copy(alpha = 0.88f))
+            .background(palette.mapOverlayScrim.copy(alpha = 0.88f))
             .padding(horizontal = 14.dp, vertical = 10.dp),
     )
 }

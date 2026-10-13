@@ -71,13 +71,14 @@ import kotlin.math.sin
 internal fun GpsSignalIndicator(
     quality: GpsQuality,
     accuracyMeters: Float?,
-    palette: AppPalette
+    palette: AppPalette,
+    onMapOverlay: Boolean = false,
 ) {
     val tint = when (quality) {
         GpsQuality.EXCELLENT, GpsQuality.GOOD -> palette.neonGreen
         GpsQuality.FAIR -> palette.routeAmber
         GpsQuality.POOR -> palette.neonRed
-        GpsQuality.UNKNOWN -> palette.textMuted
+        GpsQuality.UNKNOWN -> if (onMapOverlay) palette.mapOverlayMuted else palette.textMuted
     }
     Row(
         verticalAlignment = Alignment.CenterVertically,
@@ -184,8 +185,8 @@ fun SpeedometerArc(
                     .background(
                         Brush.radialGradient(
                             listOf(
-                                palette.bgDeep.copy(alpha = 0.82f),
-                                palette.bgDeep.copy(alpha = 0.45f),
+                                palette.mapOverlayScrim.copy(alpha = 0.82f),
+                                palette.mapOverlayScrim.copy(alpha = 0.45f),
                                 Color.Transparent,
                             )
                         ),
@@ -504,12 +505,22 @@ fun rememberBatteryLevel(): Int {
 }
 
 @Composable
-fun BatteryIndicator(level: Int, palette: AppPalette = LocalAppPalette.current) {
+fun BatteryIndicator(
+    level: Int,
+    palette: AppPalette = LocalAppPalette.current,
+    onMapOverlay: Boolean = false,
+) {
     val color = when {
         level <= 20 -> palette.neonRed
         level <= 50 -> palette.routeAmber
-        else        -> palette.neonGreen
+        else -> palette.neonGreen
     }
+    val outline = if (onMapOverlay) {
+        palette.mapOverlayContent.copy(alpha = 0.4f)
+    } else {
+        palette.batteryOutline
+    }
+    val labelColor = if (onMapOverlay) palette.mapOverlayMuted else palette.batteryLabel
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
         Canvas(modifier = Modifier.size(width = 24.dp, height = 13.dp)) {
             val bodyW = size.width - 3.dp.toPx()
@@ -517,13 +528,13 @@ fun BatteryIndicator(level: Int, palette: AppPalette = LocalAppPalette.current) 
             val termW = 3.dp.toPx()
             val termH = 5.dp.toPx()
             drawRoundRect(
-                color = palette.batteryOutline,
+                color = outline,
                 size = Size(bodyW, bodyH),
                 cornerRadius = CornerRadius(2.dp.toPx()),
                 style = Stroke(width = 1.5.dp.toPx())
             )
             drawRoundRect(
-                color = palette.batteryOutline,
+                color = outline,
                 topLeft = Offset(bodyW, (bodyH - termH) / 2),
                 size = Size(termW, termH),
                 cornerRadius = CornerRadius(1.dp.toPx())
@@ -536,6 +547,6 @@ fun BatteryIndicator(level: Int, palette: AppPalette = LocalAppPalette.current) 
                 cornerRadius = CornerRadius(1.dp.toPx())
             )
         }
-        Text("$level%", color = palette.batteryLabel, fontSize = 11.sp)
+        Text("$level%", color = labelColor, fontSize = 11.sp)
     }
 }

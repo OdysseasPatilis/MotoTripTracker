@@ -387,7 +387,7 @@ fun LiveRideMapView(
                 },
                 modifier = Modifier
                     .size(RideTouchTarget)
-                    .background(palette.bgPanel.copy(alpha = 0.92f), CircleShape),
+                    .background(palette.mapOverlayScrim.copy(alpha = 0.90f), CircleShape),
             ) {
                 Icon(
                     Icons.Filled.MyLocation,

@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -341,15 +342,16 @@ fun RideTrackerScreen(
                         // Flush to the left edge of the map.
                         Row(
                             modifier = Modifier
+                                .heightIn(min = RideTouchTarget)
                                 .clip(
                                     RoundedCornerShape(
                                         topStart = 0.dp,
                                         bottomStart = 0.dp,
-                                        topEnd = 14.dp,
-                                        bottomEnd = 14.dp
+                                        topEnd = 16.dp,
+                                        bottomEnd = 16.dp
                                     )
                                 )
-                                .background(palette.bgPanel.copy(alpha = 0.88f))
+                                .background(palette.mapOverlayScrim.copy(alpha = 0.88f))
                                 .padding(horizontal = 12.dp, vertical = 8.dp),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(10.dp)
@@ -357,9 +359,14 @@ fun RideTrackerScreen(
                             GpsSignalIndicator(
                                 quality = stats.gpsQuality,
                                 accuracyMeters = stats.gpsAccuracyMeters,
-                                palette = palette
+                                palette = palette,
+                                onMapOverlay = true,
                             )
-                            BatteryIndicator(rememberBatteryLevel(), palette)
+                            BatteryIndicator(
+                                rememberBatteryLevel(),
+                                palette,
+                                onMapOverlay = true,
+                            )
                         }
 
                         if (!isRiding) {
@@ -368,21 +375,21 @@ fun RideTrackerScreen(
                                 IconButton(
                                     onClick = { optionsExpanded = true },
                                     modifier = Modifier
-                                        .size(if (mapHud) RideTouchTarget else 42.dp)
+                                        .size(RideTouchTarget)
                                         .clip(
                                             RoundedCornerShape(
-                                                topStart = 14.dp,
-                                                bottomStart = 14.dp,
+                                                topStart = 16.dp,
+                                                bottomStart = 16.dp,
                                                 topEnd = 0.dp,
                                                 bottomEnd = 0.dp
                                             )
                                         )
-                                        .background(palette.bgPanel.copy(alpha = 0.88f))
+                                        .background(palette.mapOverlayScrim.copy(alpha = 0.88f))
                                 ) {
                                     Icon(
                                         imageVector = Icons.Filled.MoreHoriz,
                                         contentDescription = "Options",
-                                        tint = palette.textPrimary
+                                        tint = palette.mapOverlayContent
                                     )
                                 }
                                 DropdownMenu(
@@ -458,7 +465,7 @@ fun RideTrackerScreen(
                                 modifier = Modifier
                                     .padding(horizontal = 10.dp)
                                     .clip(RoundedCornerShape(999.dp))
-                                    .background(palette.bgDeep.copy(alpha = 0.88f))
+                                    .background(palette.mapOverlayScrim.copy(alpha = 0.88f))
                                     .padding(horizontal = 12.dp, vertical = 6.dp)
                             )
                         }
@@ -641,7 +648,7 @@ fun RideTrackerScreen(
                                         Surface(
                                             onClick = onShowDestinationSearch,
                                             shape = RoundedCornerShape(999.dp),
-                                            color = palette.bgPanel.copy(alpha = 0.82f),
+                                            color = palette.mapOverlayScrim.copy(alpha = 0.88f),
                                             modifier = Modifier.weight(1f)
                                         ) {
                                             Row(
@@ -652,12 +659,12 @@ fun RideTrackerScreen(
                                                 Icon(
                                                     Icons.Filled.Search,
                                                     contentDescription = null,
-                                                    tint = palette.textSecondary,
+                                                    tint = palette.mapOverlayMuted,
                                                     modifier = Modifier.size(22.dp)
                                                 )
                                                 Text(
                                                     "Set destination",
-                                                    color = palette.textSecondary,
+                                                    color = palette.mapOverlayMuted,
                                                     fontSize = 16.sp,
                                                     fontWeight = FontWeight.Medium
                                                 )
@@ -668,7 +675,7 @@ fun RideTrackerScreen(
                                             modifier = Modifier
                                                 .size(44.dp)
                                                 .clip(CircleShape)
-                                                .background(palette.bgPanel.copy(alpha = 0.82f))
+                                                .background(palette.mapOverlayScrim.copy(alpha = 0.88f))
                                         ) {
                                             Icon(
                                                 Icons.Filled.LocalGasStation,
@@ -680,7 +687,7 @@ fun RideTrackerScreen(
                                     if (!isTracking) {
                                         Surface(
                                             shape = RoundedCornerShape(999.dp),
-                                            color = palette.bgPanel.copy(alpha = 0.82f),
+                                            color = palette.mapOverlayScrim.copy(alpha = 0.88f),
                                             modifier = Modifier.wrapContentWidth()
                                         ) {
                                             Text(
@@ -692,7 +699,7 @@ fun RideTrackerScreen(
                                                 color = if (uiState.isLowFuel) {
                                                     palette.neonRed
                                                 } else {
-                                                    palette.textSecondary
+                                                    palette.mapOverlayMuted
                                                 },
                                                 fontSize = 11.sp,
                                                 fontWeight = FontWeight.SemiBold
@@ -735,24 +742,24 @@ fun RideTrackerScreen(
             uiState.discardBanner?.let { banner ->
                 Surface(
                     shape = RoundedCornerShape(999.dp),
-                    color = palette.bgPanel.copy(alpha = 0.92f)
+                    color = palette.mapOverlayScrim.copy(alpha = 0.90f)
                 ) {
                     Text(
                         text = banner,
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
-                        color = palette.textPrimary,
+                        color = palette.mapOverlayContent,
                         fontWeight = FontWeight.SemiBold
                     )
                 }
             } ?: uiState.petrolMessage?.let { message ->
                 Surface(
                     shape = RoundedCornerShape(999.dp),
-                    color = palette.bgPanel.copy(alpha = 0.92f)
+                    color = palette.mapOverlayScrim.copy(alpha = 0.90f)
                 ) {
                     Text(
                         text = message,
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
-                        color = palette.textPrimary,
+                        color = palette.mapOverlayContent,
                         fontWeight = FontWeight.SemiBold
                     )
                 }

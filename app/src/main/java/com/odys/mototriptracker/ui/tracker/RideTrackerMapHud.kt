@@ -111,7 +111,7 @@ internal fun CompactTurnChip(
                 .fillMaxWidth()
                 .heightIn(min = TurnChipMinHeight)
                 .clip(RoundedCornerShape(16.dp))
-                .background(palette.bgDeep.copy(alpha = 0.88f))
+                .background(palette.mapOverlayScrim.copy(alpha = 0.88f))
                 .padding(start = 12.dp, end = 4.dp, top = 10.dp, bottom = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -139,7 +139,7 @@ internal fun CompactTurnChip(
                 if (!maneuver.isNullOrBlank()) {
                     Text(
                         text = maneuver,
-                        color = palette.textPrimary,
+                        color = palette.mapOverlayContent,
                         fontSize = 16.sp,
                         fontWeight = FontWeight.SemiBold,
                         maxLines = 2,
@@ -160,7 +160,7 @@ internal fun CompactTurnChip(
                 } else {
                     "Enable voice guidance"
                 },
-                tint = if (navigation.isVoiceEnabled) palette.neonGreen else palette.textSecondary,
+                tint = if (navigation.isVoiceEnabled) palette.neonGreen else palette.mapOverlayMuted,
             )
             HudIconButton(
                 onClick = onOpenInMaps,
@@ -172,20 +172,20 @@ internal fun CompactTurnChip(
                 onClick = onClear,
                 icon = Icons.Filled.Close,
                 contentDescription = "End navigation",
-                tint = palette.textSecondary,
+                tint = palette.mapOverlayMuted,
             )
         }
         if (routeSummary != null) {
             Text(
                 text = routeSummary,
-                color = palette.textPrimary,
+                color = palette.mapOverlayContent,
                 fontSize = 14.sp,
                 fontWeight = FontWeight.SemiBold,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier
                     .clip(RoundedCornerShape(999.dp))
-                    .background(palette.bgDeep.copy(alpha = 0.82f))
+                    .background(palette.mapOverlayScrim.copy(alpha = 0.82f))
                     .padding(horizontal = 12.dp, vertical = 6.dp),
             )
         }
@@ -287,7 +287,7 @@ internal fun NavGlanceStats(
             .padding(horizontal = 12.dp)
             .heightIn(min = RideTouchTarget),
         shape = RoundedCornerShape(16.dp),
-        color = palette.bgDeep.copy(alpha = 0.88f),
+        color = palette.mapOverlayScrim.copy(alpha = 0.88f),
     ) {
         Column(
             modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
@@ -299,7 +299,7 @@ internal fun NavGlanceStats(
             ) {
                 Text(
                     text = "Dist ${String.format(Locale.US, "%.1f km", distanceKm)}",
-                    color = palette.textPrimary,
+                    color = palette.mapOverlayContent,
                     fontWeight = FontWeight.Bold,
                     fontSize = 17.sp,
                     maxLines = 1,
@@ -308,7 +308,7 @@ internal fun NavGlanceStats(
                 )
                 Text(
                     text = formatSecondsToTime(tripTimeSeconds),
-                    color = palette.textPrimary,
+                    color = palette.mapOverlayContent,
                     fontWeight = FontWeight.Bold,
                     fontSize = 17.sp,
                     maxLines = 1,
@@ -327,7 +327,7 @@ internal fun NavGlanceStats(
                         append(fuelRangeSummary)
                         if (isLowFuel) append(" · Low")
                     },
-                    color = if (isLowFuel) palette.neonRed else palette.textSecondary,
+                    color = if (isLowFuel) palette.neonRed else palette.mapOverlayMuted,
                     fontSize = 13.sp,
                     fontWeight = FontWeight.SemiBold,
                     maxLines = 1,
@@ -473,7 +473,7 @@ private fun HudRailButton(
             modifier = Modifier
                 .size(HudRailButtonSize)
                 .clip(RoundedCornerShape(16.dp))
-                .background(palette.bgDeep.copy(alpha = 0.88f)),
+                .background(palette.mapOverlayScrim.copy(alpha = 0.88f)),
         ) {
             Icon(
                 imageVector = icon,
@@ -484,7 +484,7 @@ private fun HudRailButton(
         }
         Text(
             text = label,
-            color = palette.textPrimary.copy(alpha = 0.85f),
+            color = palette.mapOverlayContent.copy(alpha = 0.85f),
             fontSize = 11.sp,
             fontWeight = FontWeight.Bold,
             letterSpacing = 0.3.sp,
