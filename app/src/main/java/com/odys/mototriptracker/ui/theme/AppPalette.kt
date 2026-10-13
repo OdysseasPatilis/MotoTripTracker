@@ -44,6 +44,12 @@ data class AppPalette(
     val deleteButtonBg: Color,
     val layerActive: Color,
     val mapCardBg: Color,
+    /** Opaque base for floating map chrome; compose with ~0.88–0.92 alpha. */
+    val mapOverlayScrim: Color,
+    /** Primary text/icons drawn on [mapOverlayScrim]. */
+    val mapOverlayContent: Color,
+    /** Secondary text on [mapOverlayScrim]. */
+    val mapOverlayMuted: Color,
     val batteryOutline: Color,
     val batteryLabel: Color,
     val startButtonDisabledBg: Color,
@@ -87,6 +93,9 @@ object AppPalettes {
         deleteButtonBg = Color(0xFF3A1A1A),
         layerActive = Color(0xFF5B5FEF),
         mapCardBg = Color(0xFF1E1E24),
+        mapOverlayScrim = Color(0xFF0A0A0F),
+        mapOverlayContent = Color.White,
+        mapOverlayMuted = Color.White.copy(alpha = 0.55f),
         batteryOutline = Color.White.copy(alpha = 0.33f),
         batteryLabel = Color.White.copy(alpha = 0.5f),
         startButtonDisabledBg = Color.Gray.copy(alpha = 0.3f),
@@ -122,6 +131,10 @@ object AppPalettes {
         deleteButtonBg = Color(0xFFFFE5E5),
         layerActive = Color(0xFF5B5FEF),
         mapCardBg = Color.White,
+        // Dark scrim so floating map chrome stays readable on the light map.
+        mapOverlayScrim = Color(0xFF1A1A24),
+        mapOverlayContent = Color.White,
+        mapOverlayMuted = Color.White.copy(alpha = 0.65f),
         batteryOutline = Color(0xFF12121A).copy(alpha = 0.35f),
         batteryLabel = Color(0xFF12121A).copy(alpha = 0.45f),
         startButtonDisabledBg = Color(0xFFD8DAE4),
