@@ -37,7 +37,7 @@ import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material.icons.automirrored.filled.List
-import androidx.compose.material.icons.filled.MoreHoriz
+import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Navigation
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.LocalGasStation
@@ -370,66 +370,141 @@ fun RideTrackerScreen(
                         }
 
                         if (!isRiding) {
-                            // Flush to the right edge of the map.
+                            // Flush to the right edge — labeled capsule matching the GPS pill.
                             Box {
-                                IconButton(
+                                val menuShape = RoundedCornerShape(
+                                    topStart = 16.dp,
+                                    bottomStart = 16.dp,
+                                    topEnd = 0.dp,
+                                    bottomEnd = 0.dp,
+                                )
+                                Surface(
                                     onClick = { optionsExpanded = true },
-                                    modifier = Modifier
-                                        .size(RideTouchTarget)
-                                        .clip(
-                                            RoundedCornerShape(
-                                                topStart = 16.dp,
-                                                bottomStart = 16.dp,
-                                                topEnd = 0.dp,
-                                                bottomEnd = 0.dp
-                                            )
-                                        )
-                                        .background(palette.mapOverlayScrim.copy(alpha = 0.88f))
+                                    shape = menuShape,
+                                    color = palette.mapOverlayScrim.copy(
+                                        alpha = if (optionsExpanded) 0.96f else 0.88f
+                                    ),
+                                    border = BorderStroke(
+                                        1.dp,
+                                        palette.mapOverlayContent.copy(
+                                            alpha = if (optionsExpanded) 0.28f else 0.14f
+                                        ),
+                                    ),
+                                    modifier = Modifier.heightIn(min = RideTouchTarget),
                                 ) {
-                                    Icon(
-                                        imageVector = Icons.Filled.MoreHoriz,
-                                        contentDescription = "Options",
-                                        tint = palette.mapOverlayContent
-                                    )
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Filled.Menu,
+                                            contentDescription = "Menu",
+                                            tint = palette.neonBlue,
+                                            modifier = Modifier.size(22.dp),
+                                        )
+                                        Text(
+                                            text = "Menu",
+                                            color = palette.mapOverlayContent,
+                                            fontSize = 14.sp,
+                                            fontWeight = FontWeight.Bold,
+                                        )
+                                    }
                                 }
                                 DropdownMenu(
                                     expanded = optionsExpanded,
-                                    onDismissRequest = { optionsExpanded = false }
+                                    onDismissRequest = { optionsExpanded = false },
+                                    containerColor = palette.mapOverlayScrim,
+                                    shape = RoundedCornerShape(16.dp),
                                 ) {
                                     DropdownMenuItem(
-                                        text = { Text("Ride History") },
+                                        text = {
+                                            Text(
+                                                "Ride History",
+                                                color = palette.mapOverlayContent,
+                                                fontWeight = FontWeight.SemiBold,
+                                            )
+                                        },
                                         onClick = {
                                             optionsExpanded = false
                                             onViewHistory()
                                         },
-                                        leadingIcon = { Icon(Icons.AutoMirrored.Filled.List, contentDescription = null) }
+                                        leadingIcon = {
+                                            Icon(
+                                                Icons.AutoMirrored.Filled.List,
+                                                contentDescription = null,
+                                                tint = palette.neonBlue,
+                                            )
+                                        }
                                     )
                                     DropdownMenuItem(
-                                        text = { Text("Leaderboard") },
+                                        text = {
+                                            Text(
+                                                "Leaderboard",
+                                                color = palette.mapOverlayContent,
+                                                fontWeight = FontWeight.SemiBold,
+                                            )
+                                        },
                                         onClick = {
                                             optionsExpanded = false
                                             onViewLeaderboard()
                                         },
-                                        leadingIcon = { Icon(Icons.Filled.EmojiEvents, contentDescription = null) }
+                                        leadingIcon = {
+                                            Icon(
+                                                Icons.Filled.EmojiEvents,
+                                                contentDescription = null,
+                                                tint = palette.routeAmber,
+                                            )
+                                        }
                                     )
                                     DropdownMenuItem(
-                                        text = { Text("Fuel & Range") },
+                                        text = {
+                                            Text(
+                                                "Fuel & Range",
+                                                color = palette.mapOverlayContent,
+                                                fontWeight = FontWeight.SemiBold,
+                                            )
+                                        },
                                         onClick = {
                                             optionsExpanded = false
                                             onShowFuelSettings()
                                         },
-                                        leadingIcon = { Icon(Icons.Filled.LocalGasStation, contentDescription = null) }
+                                        leadingIcon = {
+                                            Icon(
+                                                Icons.Filled.LocalGasStation,
+                                                contentDescription = null,
+                                                tint = palette.neonGreen,
+                                            )
+                                        }
                                     )
                                     DropdownMenuItem(
-                                        text = { Text("Find Petrol") },
+                                        text = {
+                                            Text(
+                                                "Find Petrol",
+                                                color = palette.mapOverlayContent,
+                                                fontWeight = FontWeight.SemiBold,
+                                            )
+                                        },
                                         onClick = {
                                             optionsExpanded = false
                                             onShowPetrolStations()
                                         },
-                                        leadingIcon = { Icon(Icons.Filled.Place, contentDescription = null) }
+                                        leadingIcon = {
+                                            Icon(
+                                                Icons.Filled.Place,
+                                                contentDescription = null,
+                                                tint = palette.neonBlue,
+                                            )
+                                        }
                                     )
                                     DropdownMenuItem(
-                                        text = { Text("${themeMode.toggled().label} Mode") },
+                                        text = {
+                                            Text(
+                                                "${themeMode.toggled().label} Mode",
+                                                color = palette.mapOverlayContent,
+                                                fontWeight = FontWeight.SemiBold,
+                                            )
+                                        },
                                         onClick = {
                                             optionsExpanded = false
                                             themeStore.toggleTheme()
@@ -438,7 +513,8 @@ fun RideTrackerScreen(
                                             Icon(
                                                 if (themeMode == ThemeMode.DARK) Icons.Filled.LightMode
                                                 else Icons.Filled.DarkMode,
-                                                contentDescription = null
+                                                contentDescription = null,
+                                                tint = palette.neonBlue,
                                             )
                                         }
                                     )
