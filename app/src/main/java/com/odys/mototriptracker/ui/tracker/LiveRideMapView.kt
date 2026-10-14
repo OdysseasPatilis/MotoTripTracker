@@ -123,10 +123,12 @@ fun LiveRideMapView(
     }
 
     val showRecenter = !isFollowingUser && !isPreviewing
+    // Sit above Start/Pause, destination/petrol chips, and the floating dial stack.
     val recenterBottomPadding = when {
         isNavigating -> 280.dp
         hasSelectedPlace -> 250.dp
-        else -> 168.dp
+        isRiding -> 268.dp
+        else -> 232.dp
     }
     val mapScope = rememberCoroutineScope()
 
