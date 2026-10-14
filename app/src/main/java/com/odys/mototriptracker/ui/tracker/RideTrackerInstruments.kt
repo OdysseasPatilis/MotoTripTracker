@@ -185,8 +185,8 @@ fun SpeedometerArc(
                     .background(
                         Brush.radialGradient(
                             listOf(
-                                palette.mapOverlayScrim.copy(alpha = 0.82f),
-                                palette.mapOverlayScrim.copy(alpha = 0.45f),
+                                palette.mapDialScrim.copy(alpha = 0.78f),
+                                palette.mapDialScrim.copy(alpha = 0.32f),
                                 Color.Transparent,
                             )
                         ),

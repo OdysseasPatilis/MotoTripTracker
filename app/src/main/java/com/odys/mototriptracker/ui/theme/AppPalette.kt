@@ -50,6 +50,8 @@ data class AppPalette(
     val mapOverlayContent: Color,
     /** Secondary text on [mapOverlayScrim]. */
     val mapOverlayMuted: Color,
+    /** Soft radial behind the floating speedometer (theme-matched, not always dark). */
+    val mapDialScrim: Color,
     val batteryOutline: Color,
     val batteryLabel: Color,
     val startButtonDisabledBg: Color,
@@ -96,6 +98,7 @@ object AppPalettes {
         mapOverlayScrim = Color(0xFF0A0A0F),
         mapOverlayContent = Color.White,
         mapOverlayMuted = Color.White.copy(alpha = 0.55f),
+        mapDialScrim = Color(0xFF0A0A0F),
         batteryOutline = Color.White.copy(alpha = 0.33f),
         batteryLabel = Color.White.copy(alpha = 0.5f),
         startButtonDisabledBg = Color.Gray.copy(alpha = 0.3f),
@@ -135,6 +138,8 @@ object AppPalettes {
         mapOverlayScrim = Color(0xFF1A1A24),
         mapOverlayContent = Color.White,
         mapOverlayMuted = Color.White.copy(alpha = 0.65f),
+        // Soft light halo so the dial isn't a black fog on the map.
+        mapDialScrim = Color(0xFFF5F6FA),
         batteryOutline = Color(0xFF12121A).copy(alpha = 0.35f),
         batteryLabel = Color(0xFF12121A).copy(alpha = 0.45f),
         startButtonDisabledBg = Color(0xFFD8DAE4),
