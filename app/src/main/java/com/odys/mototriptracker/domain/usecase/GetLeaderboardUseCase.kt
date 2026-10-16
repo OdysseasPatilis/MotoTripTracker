@@ -90,7 +90,11 @@ class GetLeaderboardUseCase @Inject constructor(
                     )
                 }
         }
-        return ranked
+        return ranked.take(TOP_COUNT)
+    }
+
+    companion object {
+        const val TOP_COUNT = 10
     }
 
     private fun Trip.toEntry(
